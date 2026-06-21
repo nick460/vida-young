@@ -1,12 +1,19 @@
 <script setup>
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { KPIS, TRANSACTIONS } from "../data.js";
+import { apiRequest } from "../services/api.js";
 import { useAuthStore } from "../stores/authStore.js";
-import { VyAvatar, VyBarChart, VyDonut, VyIcon, VyMoney, VySparkline } from "../components/ui.js";
+import { VyAvatar, VyDonut, VyIcon, VySparkline } from "../components/ui.js";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const loadingSummary = ref(false);
+const summaryError = ref("");
+const walletSummary = ref({
+  billetera: null
+});
+const rewards = ref([]);
+const rangos = ref([]);
 
 const user = computed(() => ({
   name: authStore.usuario?.username || "Administrador Vidayoung",
@@ -22,24 +29,147 @@ const sparks = [
   [80, 92, 100, 108, 115, 122, 128, 130, 134, 136, 137, 138]
 ];
 
-const chartData = [
-  { l: "Ene", v: 4.2 },
-  { l: "Feb", v: 5.1 },
-  { l: "Mar", v: 4.8 },
-  { l: "Abr", v: 6.4 },
-  { l: "May", v: 7.8 },
-  { l: "Jun", v: 8.6 },
-  { l: "Jul", v: 9.2 },
-  { l: "Ago", v: 10.4 },
-  { l: "Sep", v: 11.1 },
-  { l: "Oct", v: 12.0 },
-  { l: "Nov", v: 11.8 },
-  { l: "Dic", v: 12.4 }
-];
+const personaId = computed(() => authStore.usuario?.persona?.id || "");
+const wallet = computed(() => walletSummary.value.billetera || {});
+const walletMovements = computed(() => walletSummary.value.movimientos || []);
+const recentMovements = computed(() => walletMovements.value.slice(0, 5));
+const currentQp = computed(() => Number(wallet.value.saldoQp || 0));
+const redeemableProducts = computed(() =>
+  rewards.value
+    .filter((reward) => reward.cobrable !== false)
+    .reduce((sum, reward) => sum + Number(reward.valorProductos || 0), 0)
+);
+const orderedRanks = computed(() =>
+  [...rangos.value].sort((left, right) => Number(left.qpMinimo || 0) - Number(right.qpMinimo || 0))
+);
+const currentRank = computed(() =>
+  [...orderedRanks.value].reverse().find((rango) => currentQp.value >= Number(rango.qpMinimo || 0)) || null
+);
+const nextRank = computed(() =>
+  orderedRanks.value.find((rango) => currentQp.value < Number(rango.qpMinimo || 0)) || null
+);
+const rankProgress = computed(() => {
+  if (!orderedRanks.value.length) {
+    return 0;
+  }
+
+  if (!nextRank.value) {
+    return currentRank.value ? 100 : 0;
+  }
+
+  const target = Math.max(1, Number(nextRank.value.qpMinimo || 0));
+  return Math.min(100, Math.max(0, Math.round((currentQp.value / target) * 100)));
+});
+const missingQp = computed(() =>
+  nextRank.value ? Math.max(0, Number(nextRank.value.qpMinimo || 0) - currentQp.value) : 0
+);
+const rankSummary = computed(() => {
+  if (!orderedRanks.value.length) {
+    return "Configura rangos para medir el avance por QP.";
+  }
+
+  if (!currentRank.value) {
+    return "Aun no alcanzas el primer rango configurado.";
+  }
+
+  return `Rango alcanzado con ${money(currentQp.value)} QP acumulados.`;
+});
+const welcomeRankMessage = computed(() => {
+  if (!orderedRanks.value.length) {
+    return "Configura rangos para calcular el avance por QP.";
+  }
+
+  if (nextRank.value) {
+    return `Vas en camino al rango ${nextRank.value.nombre}.`;
+  }
+
+  return "Estas en el rango mas alto configurado.";
+});
+
+const dashboardKpis = computed(() => [
+  {
+    label: "Efectivo por cobrar",
+    value: `Bs. ${money(wallet.value.saldoDinero)}`,
+    hint: "Disponible en tu billetera",
+    state: loadingSummary.value ? "Actualizando" : "Disponible"
+  },
+  {
+    label: "Canjeable en productos",
+    value: `Bs. ${money(redeemableProducts.value)}`,
+    hint: "Valor acumulado para productos",
+    state: loadingSummary.value ? "Actualizando" : "Canjeable"
+  },
+  {
+    label: "PV acumulados",
+    value: money(wallet.value.saldoPv),
+    hint: "Puntos de volumen del periodo",
+    state: loadingSummary.value ? "Actualizando" : "PV"
+  },
+  {
+    label: "QP acumulados",
+    value: money(wallet.value.saldoQp),
+    hint: "Puntos calificables activos",
+    state: loadingSummary.value ? "Actualizando" : "QP"
+  }
+]);
+
+function money(value) {
+  return Number(value || 0).toLocaleString("es-BO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function formatDate(value) {
+  if (!value) return "Sin fecha";
+
+  return new Date(value).toLocaleDateString("es-BO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit"
+  });
+}
+
+function formatMovementAmount(movement) {
+  const prefix = movement.tipo === "DINERO" ? "Bs. " : "";
+  return `${prefix}${money(movement.monto)}`;
+}
+
+async function loadDashboardSummary() {
+  loadingSummary.value = true;
+  summaryError.value = "";
+
+  try {
+    if (!personaId.value) {
+      await authStore.cargarPerfil();
+    }
+
+    if (!personaId.value) {
+      summaryError.value = "Tu usuario no tiene una persona asociada.";
+      return;
+    }
+
+    const [walletResponse, rewardsResponse, rangosResponse] = await Promise.all([
+      apiRequest(`/api/billeteras/persona/${personaId.value}`),
+      apiRequest(`/api/recompensas/persona/${personaId.value}`),
+      apiRequest("/api/rangos")
+    ]);
+
+    walletSummary.value = walletResponse || { billetera: null };
+    rewards.value = Array.isArray(rewardsResponse) ? rewardsResponse : [];
+    rangos.value = Array.isArray(rangosResponse) ? rangosResponse : [];
+  } catch (exception) {
+    summaryError.value = exception.message || "No se pudo cargar el resumen financiero.";
+  } finally {
+    loadingSummary.value = false;
+  }
+}
 
 function navigate(name) {
   router.push({ name });
 }
+
+onMounted(loadDashboardSummary);
 </script>
 
 <template>
@@ -70,7 +200,7 @@ function navigate(name) {
           <div>
             <div class="vy-eyebrow">Hola {{ user.short }}, sábado 9 de mayo</div>
             <h1>Tu bienestar financiero, hoy</h1>
-            <p>Has crecido 24% este mes. Vas en camino al rango Diamante Élite.</p>
+            <p>{{ welcomeRankMessage }}</p>
           </div>
           <div class="welcome-actions">
             <button class="vy-btn vy-btn-ghost" type="button">
@@ -84,13 +214,14 @@ function navigate(name) {
           </div>
         </section>
 
+        <p v-if="summaryError" class="summary-error">{{ summaryError }}</p>
+
         <section class="kpi-grid">
-          <article v-for="(kpi, index) in KPIS" :key="kpi.label" class="vy-card kpi-card">
+          <article v-for="(kpi, index) in dashboardKpis" :key="kpi.label" class="vy-card kpi-card">
             <header>
               <span>{{ kpi.label }}</span>
               <small class="vy-chip vy-chip-success">
-                <VyIcon :name="kpi.up ? 'arrowUp' : 'arrowDn'" :size="10" />
-                {{ kpi.delta }}
+                {{ kpi.state }}
               </small>
             </header>
             <strong>{{ kpi.value }}</strong>
@@ -102,35 +233,25 @@ function navigate(name) {
         </section>
 
         <section class="dashboard-grid">
-          <article class="vy-card chart-card">
-            <header class="card-header">
-              <div>
-                <h2>Ganancias acumuladas</h2>
-                <p>Últimos 12 meses · valor en millones COP</p>
-              </div>
-              <div class="period-tabs">
-                <button class="active" type="button">Año</button>
-                <button type="button">6M</button>
-                <button type="button">3M</button>
-              </div>
-            </header>
-            <div class="chart-scroll">
-              <VyBarChart :data="chartData" :width="640" :height="180" />
-            </div>
-          </article>
-
           <article class="vy-card rank-card">
-            <div class="rank-orb"></div>
             <div class="rank-content">
-              <span class="vy-chip vy-chip-orange">Tu nivel actual</span>
-              <h2>Líder Diamante</h2>
-              <p>Top 8% de embajadores en Colombia</p>
+              <span class="vy-chip vy-chip-orange">Tu rango actual</span>
+              <h2>{{ currentRank?.nombre || "Sin rango" }}</h2>
+              <p>{{ rankSummary }}</p>
               <div class="rank-progress">
-                <VyDonut :value="68" :size="124" :stroke="11" />
+                <div class="rank-donut">
+                  <VyDonut :value="rankProgress" :size="136" :stroke="12" />
+                </div>
                 <div>
-                  <strong>Próximo: Diamante Élite</strong>
-                  <span>Cierre de mes el 31 de mayo. Faltan <b>$ 1,2M</b> en volumen para alcanzarlo.</span>
-                  <button class="vy-btn vy-btn-dark" type="button">Ver requisitos</button>
+                  <strong>{{ nextRank ? `Proximo: ${nextRank.nombre}` : "Rango maximo alcanzado" }}</strong>
+                  <span v-if="nextRank">
+                    Tienes <b>{{ money(currentQp) }} QP</b>. Faltan <b>{{ money(missingQp) }} QP</b> para llegar a {{ money(nextRank.qpMinimo) }} QP.
+                  </span>
+                  <span v-else-if="currentRank">
+                    Ya alcanzaste el rango mas alto registrado con <b>{{ money(currentQp) }} QP</b>.
+                  </span>
+                  <span v-else>No hay rangos configurados para calcular el avance.</span>
+                  <button class="vy-btn vy-btn-dark" type="button" @click="navigate('rangos')">Ver rangos</button>
                 </div>
               </div>
             </div>
@@ -156,17 +277,20 @@ function navigate(name) {
                   <th>ID</th>
                   <th>Concepto</th>
                   <th>Fecha</th>
-                  <th>Estado</th>
+                  <th>Tipo</th>
                   <th>Monto</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="transaction in TRANSACTIONS.slice(0, 5)" :key="transaction.id">
-                  <td>{{ transaction.id }}</td>
-                  <td>{{ transaction.type }}</td>
-                  <td>{{ transaction.date }}</td>
-                  <td><span class="vy-chip vy-chip-success">● {{ transaction.status }}</span></td>
-                  <td><VyMoney :v="transaction.amt" sign /></td>
+                <tr v-for="movement in recentMovements" :key="movement.id">
+                  <td>#{{ movement.id }}</td>
+                  <td>{{ movement.concepto }}</td>
+                  <td>{{ formatDate(movement.fechaRegistro) }}</td>
+                  <td><span class="vy-chip vy-chip-success">{{ movement.tipo }}</span></td>
+                  <td>{{ formatMovementAmount(movement) }}</td>
+                </tr>
+                <tr v-if="!recentMovements.length && !loadingSummary">
+                  <td colspan="5">No hay movimientos registrados.</td>
                 </tr>
               </tbody>
             </table>
@@ -294,6 +418,16 @@ function navigate(name) {
   margin-bottom: 18px;
 }
 
+.summary-error {
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: rgba(196, 69, 42, 0.1);
+  color: var(--vy-danger);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .kpi-card {
   padding: 18px;
 }
@@ -333,13 +467,9 @@ function navigate(name) {
 }
 
 .dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(360px, 1fr);
-  gap: 14px;
   margin-bottom: 18px;
 }
 
-.chart-card,
 .rank-card,
 .transactions-card {
   padding: 22px;
@@ -356,46 +486,10 @@ function navigate(name) {
   margin-top: 2px;
 }
 
-.period-tabs {
-  display: flex;
-  gap: 6px;
-  background: var(--vy-cream);
-  padding: 4px;
-  border-radius: 99px;
-}
-
-.period-tabs button {
-  padding: 6px 14px;
-  border-radius: 99px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--vy-ink-2);
-}
-
-.period-tabs button.active {
-  background: var(--vy-surface);
-  box-shadow: var(--vy-shadow-sm);
-  color: var(--vy-ink);
-}
-
-.chart-scroll {
-  margin-top: 18px;
-  overflow-x: auto;
-}
-
 .rank-card {
   background: linear-gradient(140deg, var(--vy-cream) 0%, #fff 60%);
   position: relative;
   overflow: hidden;
-}
-
-.rank-orb {
-  right: -30px;
-  bottom: -30px;
-  top: auto;
-  width: 160px;
-  height: 160px;
-  background: rgba(242, 135, 5, 0.18);
 }
 
 .rank-content h2 {
@@ -417,11 +511,30 @@ function navigate(name) {
   margin-top: 18px;
 }
 
+.rank-donut {
+  position: relative;
+  width: 136px;
+  height: 136px;
+  flex: 0 0 auto;
+}
+
+.rank-donut :deep(svg) {
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(242, 135, 5, 0.16));
+}
+
+.rank-donut :deep(text) {
+  color: var(--vy-ink);
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .rank-progress div {
   font-size: 13px;
 }
 
-.rank-progress strong,
+.rank-progress > div:not(.rank-donut) > strong,
 .rank-progress span {
   display: block;
 }
@@ -545,4 +658,3 @@ td:nth-child(3) {
   }
 }
 </style>
-

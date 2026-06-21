@@ -66,17 +66,20 @@ VALUES
     ('dashboard', 'Dashboard', 'Home', FALSE, 10),
     ('roles-menus', 'Roles y menus', 'Shield', FALSE, 20),
     ('personas', 'Personas', 'User', FALSE, 30),
-    ('planes', 'Planes', 'BadgePercent', FALSE, 40),
-    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 50),
-    ('referidos', 'Referidos', 'Network', FALSE, 60),
-    ('inventario', 'Inventario', 'PackageSearch', FALSE, 70),
-    ('ventanilla', 'Ventanilla', 'Store', FALSE, 80),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 90),
-    ('shop', 'Tienda', 'ShoppingBag', FALSE, 100),
-    ('network', 'Mi red', 'Users', FALSE, 110),
-    ('rewards', 'Recompensas', 'Gift', FALSE, 120),
-    ('stats', 'Estadisticas', 'BarChart3', FALSE, 130),
-    ('profile', 'Perfil', 'User', FALSE, 140)
+    ('rangos', 'Rangos', 'Trophy', FALSE, 40),
+    ('planes', 'Planes', 'BadgePercent', FALSE, 50),
+    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 60),
+    ('referidos', 'Referidos', 'Network', FALSE, 70),
+    ('inventario', 'Inventario', 'PackageSearch', FALSE, 80),
+    ('ventanilla', 'Ventanilla', 'Store', FALSE, 90),
+    ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 100),
+    ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 110),
+    ('wallet', 'Finanzas', 'Wallet', FALSE, 120),
+    ('shop', 'Tienda', 'ShoppingBag', FALSE, 130),
+    ('network', 'Mi red', 'Users', FALSE, 140),
+    ('rewards', 'Recompensas', 'Gift', FALSE, 150),
+    ('stats', 'Estadisticas', 'BarChart3', FALSE, 160),
+    ('profile', 'Perfil', 'User', FALSE, 170)
 ON CONFLICT (menu_id) DO UPDATE
 SET label = EXCLUDED.label,
     icon = EXCLUDED.icon,
@@ -93,14 +96,14 @@ ON CONFLICT DO NOTHING;
 INSERT INTO roles_menus (rol_id, menu_id)
 SELECT r.id, m.id
 FROM roles r
-JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'wallet', 'shop', 'network', 'profile', 'rewards')
+JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'wallet', 'shop', 'network', 'profile', 'rewards', 'herramientas-digitales')
 WHERE r.nombre = 'EMBAJADOR'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_menus (rol_id, menu_id)
 SELECT r.id, m.id
 FROM roles r
-JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'wallet', 'shop', 'profile')
+JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'wallet', 'shop', 'profile', 'herramientas-digitales')
 WHERE r.nombre = 'USUARIO'
 ON CONFLICT DO NOTHING;
 
@@ -133,6 +136,72 @@ ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS qp NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
+CREATE TABLE IF NOT EXISTS productos_landings (
+    id BIGSERIAL PRIMARY KEY,
+    producto_id BIGINT NOT NULL UNIQUE REFERENCES productos(id),
+    headline VARCHAR(220),
+    subtitle TEXT,
+    story TEXT,
+    usage TEXT,
+    ingredients TEXT,
+    benefits TEXT,
+    gallery TEXT,
+    sections TEXT,
+    share_message TEXT,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+ALTER TABLE productos_landings
+    ADD COLUMN IF NOT EXISTS sections TEXT;
+
+ALTER TABLE productos_landings
+    ADD COLUMN IF NOT EXISTS share_message TEXT;
+
+CREATE TABLE IF NOT EXISTS digital_landings (
+    id BIGSERIAL PRIMARY KEY,
+    slug VARCHAR(120) NOT NULL UNIQUE,
+    title VARCHAR(160) NOT NULL,
+    category VARCHAR(120),
+    image_url VARCHAR(255),
+    description TEXT,
+    sections TEXT,
+    share_message TEXT,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+ALTER TABLE digital_landings
+    ADD COLUMN IF NOT EXISTS category VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS image_url VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS description TEXT,
+    ADD COLUMN IF NOT EXISTS sections TEXT,
+    ADD COLUMN IF NOT EXISTS share_message TEXT;
+
+INSERT INTO digital_landings (slug, title, category, description, share_message)
+SELECT
+    'educacion-financiera',
+    'Educacion financiera',
+    'Formacion',
+    'Una landing editable para compartir conceptos de orden financiero, habitos y vision de crecimiento.',
+    'Te comparto esta guia de {tema}. Entra aqui:'
+WHERE NOT EXISTS (SELECT 1 FROM digital_landings WHERE slug = 'educacion-financiera');
+
+INSERT INTO digital_landings (slug, title, category, description, share_message)
+SELECT
+    'claves-del-negocio',
+    'Las claves del negocio',
+    'Negocio',
+    'Una landing editable para explicar la oportunidad, el sistema y los primeros pasos.',
+    'Te comparto esta informacion sobre {tema}. Entra aqui:'
+WHERE NOT EXISTS (SELECT 1 FROM digital_landings WHERE slug = 'claves-del-negocio');
+
 CREATE TABLE IF NOT EXISTS lotes_productos (
     id BIGSERIAL PRIMARY KEY,
     producto_id BIGINT NOT NULL REFERENCES productos(id),
@@ -163,6 +232,20 @@ CREATE TABLE IF NOT EXISTS planes (
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+CREATE TABLE IF NOT EXISTS rangos (
+    id BIGSERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    qp_minimo NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+ALTER TABLE personas
+    ADD COLUMN IF NOT EXISTS rango_actual_id BIGINT REFERENCES rangos(id);
 
 ALTER TABLE planes
     ADD COLUMN IF NOT EXISTS imagen_url VARCHAR(255);
@@ -236,12 +319,46 @@ CREATE TABLE IF NOT EXISTS recompensas (
     nivel_generado INTEGER NOT NULL,
     monto_efectivo NUMERIC(12, 2) NOT NULL DEFAULT 0,
     valor_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    cobrable BOOLEAN NOT NULL DEFAULT TRUE,
+    motivo_no_cobrable VARCHAR(180),
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+ALTER TABLE recompensas
+    ADD COLUMN IF NOT EXISTS cobrable BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS motivo_no_cobrable VARCHAR(180);
+
+CREATE TABLE IF NOT EXISTS preinscripciones_referidos (
+    id BIGSERIAL PRIMARY KEY,
+    patrocinador_id BIGINT NOT NULL REFERENCES personas(id),
+    nombres VARCHAR(100) NOT NULL,
+    apellidos VARCHAR(100) NOT NULL,
+    documento VARCHAR(30) NOT NULL,
+    telefono VARCHAR(30) NOT NULL,
+    email VARCHAR(120),
+    estado_preinscripcion VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
+    plan_id BIGINT REFERENCES planes(id),
+    persona_id BIGINT REFERENCES personas(id),
+    referido_id BIGINT REFERENCES referidos(id),
+    fecha_validacion TIMESTAMP,
+    usuario_validacion VARCHAR(80),
+    observacion VARCHAR(300),
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE INDEX IF NOT EXISTS idx_preinscripciones_referidos_estado
+    ON preinscripciones_referidos (estado_preinscripcion);
+
+CREATE INDEX IF NOT EXISTS idx_preinscripciones_referidos_documento
+    ON preinscripciones_referidos (documento);
 
 CREATE TABLE IF NOT EXISTS billeteras (
     id BIGSERIAL PRIMARY KEY,
@@ -299,6 +416,9 @@ CREATE TABLE IF NOT EXISTS cierres_mensuales_billetera (
     saldo_dinero NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    rango_id BIGINT REFERENCES rangos(id),
+    rango_nombre VARCHAR(100),
+    rango_qp_minimo NUMERIC(12, 2),
     estado_planilla VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE_PLANILLA',
     fecha_cierre TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
@@ -308,6 +428,11 @@ CREATE TABLE IF NOT EXISTS cierres_mensuales_billetera (
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM',
     CONSTRAINT uk_cierres_mensuales_persona_periodo UNIQUE (persona_id, periodo)
 );
+
+ALTER TABLE cierres_mensuales_billetera
+    ADD COLUMN IF NOT EXISTS rango_id BIGINT REFERENCES rangos(id),
+    ADD COLUMN IF NOT EXISTS rango_nombre VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS rango_qp_minimo NUMERIC(12, 2);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_historial_membresias_referencia
     ON historial_membresias (referencia_tipo, referencia_id, tipo)

@@ -17,9 +17,17 @@ import RolesMenusView from "./views/RolesMenusView.vue";
 import CustomMenuView from "./views/CustomMenuView.vue";
 import InventoryView from "./views/InventoryView.vue";
 import PlansView from "./views/PlansView.vue";
+import RangosView from "./views/RangosView.vue";
 import ActivationPlansView from "./views/ActivationPlansView.vue";
 import ReferidosView from "./views/ReferidosView.vue";
 import AdminSalesView from "./views/AdminSalesView.vue";
+import RegistroReferidoView from "./views/RegistroReferidoView.vue";
+import DigitalToolsView from "./views/DigitalToolsView.vue";
+import DigitalLandingConfigView from "./views/DigitalLandingConfigView.vue";
+import DigitalLandingView from "./views/DigitalLandingView.vue";
+import ProductLandingConfigView from "./views/ProductLandingConfigView.vue";
+import ProductLandingView from "./views/ProductLandingView.vue";
+import PreinscripcionReferidoPublicView from "./views/PreinscripcionReferidoPublicView.vue";
 import { ScreenLanding } from "./screens/publico.js";
 import { ScreenAdmin } from "./screens/admin.js";
 import { useAuthStore } from "./stores/authStore.js";
@@ -29,15 +37,23 @@ import { useMenuStore } from "./stores/menuStore.js";
 const routes = [
   { path: "/", redirect: "/landing" },
   { path: "/landing", name: "landing", component: ScreenLanding, meta: { public: true } },
+  { path: "/producto/:productId/:ref?", name: "producto-landing", component: ProductLandingView, meta: { public: true } },
+  { path: "/herramienta/:slug", name: "herramienta-landing", component: DigitalLandingView, meta: { public: true } },
+  { path: "/preinscripcion-referido/:patrocinadorId", name: "preinscripcion-referido", component: PreinscripcionReferidoPublicView, meta: { public: true } },
   { path: "/login", name: "login", component: LoginView, meta: { public: true } },
   { path: "/dashboard", name: "dashboard", component: DashboardView, meta: { sidebar: true, roles: ["*"] } },
   { path: "/roles-menus", name: "roles-menus", component: RolesMenusView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/personas", name: "personas", component: PersonasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/rangos", name: "rangos", component: RangosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes", name: "planes", component: PlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes-activacion", name: "planes-activacion", component: ActivationPlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/referidos", name: "referidos", component: ReferidosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/inventario", name: "inventario", component: InventoryView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/ventanilla", name: "ventanilla", component: AdminSalesView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/registro-referido", name: "registro-referido", component: RegistroReferidoView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "ventanilla" } },
+  { path: "/herramientas-digitales", name: "herramientas-digitales", component: DigitalToolsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
+  { path: "/landings-productos-config", name: "landing-productos-config", component: ProductLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },
+  { path: "/landings-temas-config", name: "landing-temas-config", component: DigitalLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },
   { path: "/wallet", name: "wallet", component: WalletView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/shop", name: "shop", component: ShopView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] } },
   { path: "/cart", name: "cart", component: CartView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"], parentMenu: "shop" } },
@@ -85,7 +101,11 @@ function canEnterRoute(auth, to) {
     return canAccessMenu(auth.usuario?.roles, to.name, menuStore.roleMenuPermissions, menuStore.menuItems);
   }
 
-  if (to.meta.parentMenu && canAccessMenu(auth.usuario?.roles, to.meta.parentMenu, menuStore.roleMenuPermissions, menuStore.menuItems)) {
+  if (
+    to.meta.parentMenu &&
+    hasAnyRole(auth.usuario?.roles, to.meta.roles) &&
+    canAccessMenu(auth.usuario?.roles, to.meta.parentMenu, menuStore.roleMenuPermissions, menuStore.menuItems)
+  ) {
     return true;
   }
 

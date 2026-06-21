@@ -5,6 +5,7 @@ import com.vidayoung.platform.Model.Dao.PlanDao;
 import com.vidayoung.platform.Model.Dao.PlanNivelDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Dao.ReferidoDao;
+import com.vidayoung.platform.Model.Dao.UsuarioDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.Plan;
@@ -36,35 +37,40 @@ public class ReferidoServiceImpl implements ReferidoService {
     private final PlanNivelDao planNivelDao;
     private final RecompensaDao recompensaDao;
     private final BilleteraService billeteraService;
+    private final UsuarioDao usuarioDao;
 
     @Override
     public List<Referido> listar() {
         return referidoDao.findAll().stream()
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .peek(this::hidratarFotos)
                 .toList();
     }
 
     @Override
     public Optional<Referido> buscarPorId(Long id) {
         return referidoDao.findById(id)
-                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .map(this::hidratarFotos);
     }
 
     @Override
     public Optional<Referido> buscarPorPersonaId(Long personaId) {
         return referidoDao.findByPersonaId(personaId)
-                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .map(this::hidratarFotos);
     }
 
     @Override
     public List<Referido> listarPorPatrocinador(Long patrocinadorId) {
         return referidoDao.findByPatrocinadorId(patrocinadorId).stream()
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .peek(this::hidratarFotos)
                 .toList();
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackOn = Exception.class)
     public Referido guardar(Long personaId, Long patrocinadorId, Long planId) {
         Optional<Referido> existente = referidoDao.findByPersonaId(personaId);
 
@@ -81,7 +87,7 @@ public class ReferidoServiceImpl implements ReferidoService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackOn = Exception.class)
     public Referido actualizar(Long id, Long personaId, Long patrocinadorId, Long planId) {
         Referido referido = buscarPorId(id)
                 .orElseThrow(() -> new IllegalArgumentException("Referido no encontrado."));
@@ -99,7 +105,7 @@ public class ReferidoServiceImpl implements ReferidoService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackOn = Exception.class)
     public void eliminar(Long id) {
         referidoDao.findById(id).ifPresent(referido -> {
             referido.setEstado(Auditoria.ESTADO_ELIMINADO);
@@ -109,7 +115,7 @@ public class ReferidoServiceImpl implements ReferidoService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackOn = Exception.class)
     public int vencerMembresiasExpiradas() {
         List<Referido> vencidos = referidoDao.findByMembresiaActivaTrueAndFechaFinMembresiaLessThanEqual(LocalDateTime.now());
 
@@ -204,8 +210,18 @@ public class ReferidoServiceImpl implements ReferidoService {
             PlanNivel nivel = nivelesPorNumero.get(nivelActual);
             BigDecimal efectivo = nivel == null ? BigDecimal.ZERO : zeroIfNull(nivel.getPorcentajeComision());
             BigDecimal productos = nivel == null ? BigDecimal.ZERO : zeroIfNull(nivel.getValorProductosBeneficio());
+            Optional<Referido> beneficiarioReferido = referidoDao.findByPersonaId(beneficiario.getId())
+                    .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()));
+            int alcanceBeneficiario = beneficiarioReferido
+                    .map(Referido::getPlan)
+                    .map(Plan::getNivelesAlcance)
+                    .orElse(0);
+            boolean nivelAlcanza = alcanceBeneficiario >= nivelActual;
+            boolean beneficiarioActivo = beneficiarioReferido
+                    .map(this::membresiaActiva)
+                    .orElse(false);
 
-            if (efectivo.compareTo(BigDecimal.ZERO) > 0 || productos.compareTo(BigDecimal.ZERO) > 0) {
+            if (nivelAlcanza && (efectivo.compareTo(BigDecimal.ZERO) > 0 || productos.compareTo(BigDecimal.ZERO) > 0)) {
                 recompensaDao.save(Recompensa.builder()
                         .referido(referido)
                         .beneficiario(beneficiario)
@@ -213,15 +229,22 @@ public class ReferidoServiceImpl implements ReferidoService {
                         .nivelGenerado(nivelActual)
                         .montoEfectivo(efectivo)
                         .valorProductos(productos)
+                        .cobrable(beneficiarioActivo)
+                        .motivoNoCobrable(beneficiarioActivo ? null : "No cobrable porque la membresia no esta activa.")
                         .build());
             }
 
-            beneficiario = referidoDao.findByPersonaId(beneficiario.getId())
-                    .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+            beneficiario = beneficiarioReferido
                     .map(Referido::getPatrocinador)
                     .orElse(null);
             nivelActual++;
         }
+    }
+
+    private boolean membresiaActiva(Referido referido) {
+        return Boolean.TRUE.equals(referido.getMembresiaActiva())
+                && referido.getFechaFinMembresia() != null
+                && !referido.getFechaFinMembresia().isBefore(LocalDateTime.now());
     }
 
     private void desactivarRecompensas(Referido referido) {
@@ -237,5 +260,21 @@ public class ReferidoServiceImpl implements ReferidoService {
 
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private Referido hidratarFotos(Referido referido) {
+        hidratarFoto(referido.getPersona());
+        hidratarFoto(referido.getPatrocinador());
+        return referido;
+    }
+
+    private void hidratarFoto(Persona persona) {
+        if (persona == null || persona.getId() == null) {
+            return;
+        }
+
+        usuarioDao.findByPersonaId(persona.getId())
+                .map(usuario -> usuario.getFotoPerfil())
+                .ifPresent(persona::setFotoPerfil);
     }
 }

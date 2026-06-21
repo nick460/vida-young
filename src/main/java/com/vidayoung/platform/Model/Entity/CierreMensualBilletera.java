@@ -66,6 +66,18 @@ public class CierreMensualBilletera extends Auditoria {
     @Builder.Default
     private BigDecimal saldoQp = BigDecimal.ZERO;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rango_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @ToString.Exclude
+    private Rango rango;
+
+    @Column(name = "rango_nombre", length = 100)
+    private String rangoNombre;
+
+    @Column(name = "rango_qp_minimo", precision = 12, scale = 2)
+    private BigDecimal rangoQpMinimo;
+
     @Column(name = "estado_planilla", nullable = false, length = 30)
     private String estadoPlanilla;
 

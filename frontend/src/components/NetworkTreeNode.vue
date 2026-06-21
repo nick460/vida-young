@@ -1,10 +1,11 @@
 <script setup>
 import { MoreHorizontal } from "lucide-vue-next";
-import { VyAvatar } from "./ui.js";
 
 defineOptions({
   name: "NetworkTreeNode"
 });
+
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 defineProps({
   node: {
@@ -26,6 +27,21 @@ function initials(personaOrName) {
   return name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "VY";
 }
 
+function photoUrl(persona) {
+  const photo = persona?.fotoPerfil || persona?.fotoUrl || persona?.imagenUrl || persona?.photo || "";
+
+  if (!photo) {
+    return "";
+  }
+
+  if (photo.startsWith("http") || photo.startsWith("blob:")) {
+    return photo;
+  }
+
+  const normalizedPhoto = photo.startsWith("/") ? photo : `/${photo}`;
+  return `${API_URL}${normalizedPhoto}`;
+}
+
 function progressWidth(node) {
   const children = node.children?.length || 0;
   const percent = Math.min(100, 35 + children * 18);
@@ -37,7 +53,10 @@ function progressWidth(node) {
   <li class="tree-item">
     <article class="tree-card">
       <header>
-        <VyAvatar :name="initials(node.persona)" :size="34" bg="var(--vy-cream)" />
+        <span class="member-avatar">
+          <img v-if="photoUrl(node.persona)" :src="photoUrl(node.persona)" :alt="fullName(node.persona)" />
+          <span v-else>{{ initials(node.persona) }}</span>
+        </span>
         <div>
           <strong>{{ fullName(node.persona) }}</strong>
           <small>{{ node.plan?.nombre || "Sin plan" }}</small>
@@ -72,24 +91,27 @@ function progressWidth(node) {
   flex-direction: column;
   align-items: center;
   position: relative;
-  min-width: 214px;
+  min-width: 236px;
 }
 
 .tree-card {
-  width: 214px;
-  min-height: 108px;
-  padding: 12px 12px 10px;
+  width: 236px;
+  min-height: 116px;
+  padding: 13px 13px 11px;
   border-radius: 8px;
   border: 1px solid rgba(214, 204, 188, 0.86);
-  background: #fff;
-  box-shadow: 0 8px 18px rgba(31, 26, 20, 0.05);
+  background:
+    linear-gradient(180deg, #fff 0%, rgba(255, 248, 232, 0.62) 100%);
+  box-shadow: 0 10px 22px rgba(31, 26, 20, 0.06);
   position: relative;
   z-index: 1;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .tree-card:hover {
   border-color: rgba(242, 135, 5, 0.5);
   box-shadow: 0 12px 24px rgba(31, 26, 20, 0.08);
+  transform: translateY(-1px);
 }
 
 .tree-card header {
@@ -97,6 +119,42 @@ function progressWidth(node) {
   align-items: center;
   gap: 8px;
   margin-bottom: 9px;
+}
+
+.member-avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+  padding: 3px;
+  background: linear-gradient(135deg, rgba(242, 135, 5, 0.85), rgba(242, 183, 5, 0.55));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.member-avatar img,
+.member-avatar > span {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.member-avatar img {
+  object-fit: cover;
+  display: block;
+  background: var(--vy-surface-2);
+}
+
+.member-avatar > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vy-cream);
+  color: var(--vy-ink);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .tree-card header > div {
@@ -205,34 +263,35 @@ function progressWidth(node) {
 
 @media (max-width: 900px) {
   .tree-item {
-    min-width: 100%;
-    align-items: stretch;
+    min-width: 220px;
+    align-items: center;
   }
 
   .tree-card {
-    width: 100%;
+    width: 220px;
+    min-height: 112px;
   }
 
   .tree-children {
-    flex-direction: column;
-    gap: 12px;
-    padding-left: 18px;
-  }
-
-  .tree-children::before {
-    top: 0;
-    left: 8px;
-    width: 0;
-    height: 100%;
-    border-top: 0;
-    border-left: 2px solid rgba(242, 135, 5, 0.32);
-    transform: none;
+    flex-direction: row;
+    gap: 14px;
+    padding: 42px 0 0;
   }
 
   .tree-children > .tree-item::before,
   .tree-children > .tree-item::after,
   .tree-card:has(+ .tree-children)::after {
-    display: none;
+    display: block;
+  }
+}
+
+@media (max-width: 420px) {
+  .tree-item {
+    min-width: 214px;
+  }
+
+  .tree-card {
+    width: 214px;
   }
 }
 </style>

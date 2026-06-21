@@ -62,4 +62,11 @@ public class Recompensa extends Auditoria {
     @Column(name = "valor_productos", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal valorProductos = BigDecimal.ZERO;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean cobrable = true;
+
+    @Column(name = "motivo_no_cobrable", length = 180)
+    private String motivoNoCobrable;
 }

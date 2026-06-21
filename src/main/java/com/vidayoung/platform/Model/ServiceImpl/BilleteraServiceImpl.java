@@ -6,6 +6,8 @@ import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanDao;
+import com.vidayoung.platform.Model.Dao.RangoDao;
+import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Billetera;
@@ -14,6 +16,7 @@ import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.Plan;
+import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import jakarta.transaction.Transactional;
@@ -22,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +43,8 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final HistorialMembresiaDao historialMembresiaDao;
     private final PersonaDao personaDao;
     private final PlanDao planDao;
+    private final RangoDao rangoDao;
+    private final RecompensaDao recompensaDao;
     private final ReferidoDao referidoDao;
 
     @Override
@@ -71,6 +77,31 @@ public class BilleteraServiceImpl implements BilleteraService {
     @Override
     public List<CierreMensualBilletera> listarCierresMensuales(Long personaId) {
         return cierreMensualBilleteraDao.findByPersonaIdOrderByPeriodoDesc(personaId);
+    }
+
+    @Override
+    @Transactional
+    public void actualizarRangoActual(Persona persona, BigDecimal qpActual) {
+        if (persona == null || persona.getId() == null) {
+            return;
+        }
+
+        Persona persistente = personaDao.findById(persona.getId())
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElse(null);
+
+        if (persistente == null) {
+            return;
+        }
+
+        Rango rango = rangoAlcanzadoPorQp(qpActual).orElse(null);
+        Long rangoActualId = persistente.getRangoActual() == null ? null : persistente.getRangoActual().getId();
+        Long nuevoRangoId = rango == null ? null : rango.getId();
+
+        if (!java.util.Objects.equals(rangoActualId, nuevoRangoId)) {
+            persistente.setRangoActual(rango);
+            personaDao.save(persistente);
+        }
     }
 
     @Override
@@ -115,6 +146,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             Billetera billetera = asegurarBilletera(referido.getPatrocinador());
             billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(qpPlan));
             billetera = billeteraDao.save(billetera);
+            actualizarRangoActual(referido.getPatrocinador(), billetera.getSaldoQp());
             movimientoBilleteraDao.save(MovimientoBilletera.builder()
                     .billetera(billetera)
                     .tipo(MovimientoBilletera.TIPO_QP)
@@ -165,6 +197,8 @@ public class BilleteraServiceImpl implements BilleteraService {
         if (qpPlan.compareTo(BigDecimal.ZERO) > 0) {
             billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(qpPlan));
             billetera = billeteraDao.save(billetera);
+            actualizarRangoActual(persona, billetera.getSaldoQp());
+            actualizarRecompensasCobrables(persona, true);
             movimientoBilleteraDao.save(MovimientoBilletera.builder()
                     .billetera(billetera)
                     .tipo(MovimientoBilletera.TIPO_QP)
@@ -190,6 +224,7 @@ public class BilleteraServiceImpl implements BilleteraService {
         vencidas.forEach(historial -> {
             historial.setEstadoMembresia(HistorialMembresia.MEMBRESIA_VENCIDA);
             historialMembresiaDao.save(historial);
+            actualizarRecompensasCobrables(historial.getPersona(), false);
         });
 
         return vencidas.size();
@@ -211,6 +246,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             BigDecimal saldoDinero = zeroIfNull(billetera.getSaldoDinero());
             BigDecimal saldoPv = zeroIfNull(billetera.getSaldoPv());
             BigDecimal saldoQp = zeroIfNull(billetera.getSaldoQp());
+            Rango rango = rangoAlcanzadoPorQp(saldoQp).orElse(null);
 
             CierreMensualBilletera cierre = cierreMensualBilleteraDao.save(CierreMensualBilletera.builder()
                     .persona(billetera.getPersona())
@@ -218,6 +254,9 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .saldoDinero(saldoDinero)
                     .saldoPv(saldoPv)
                     .saldoQp(saldoQp)
+                    .rango(rango)
+                    .rangoNombre(rango == null ? null : rango.getNombre())
+                    .rangoQpMinimo(rango == null ? null : zeroIfNull(rango.getQpMinimo()))
                     .estadoPlanilla(CierreMensualBilletera.ESTADO_PLANILLA_PENDIENTE)
                     .fechaCierre(fechaCierre)
                     .build());
@@ -230,10 +269,34 @@ public class BilleteraServiceImpl implements BilleteraService {
             billetera.setSaldoPv(BigDecimal.ZERO);
             billetera.setSaldoQp(BigDecimal.ZERO);
             billeteraDao.save(billetera);
+            actualizarRangoActual(billetera.getPersona(), BigDecimal.ZERO);
             totalCierres++;
         }
 
         return totalCierres;
+    }
+
+    private Optional<Rango> rangoAlcanzadoPorQp(BigDecimal qp) {
+        BigDecimal qpActual = zeroIfNull(qp);
+
+        return rangoDao.findAll().stream()
+                .filter(rango -> Auditoria.ESTADO_ACTIVO.equals(rango.getEstado()))
+                .filter(rango -> qpActual.compareTo(zeroIfNull(rango.getQpMinimo())) >= 0)
+                .max(Comparator.comparing(rango -> zeroIfNull(rango.getQpMinimo())));
+    }
+
+    private void actualizarRecompensasCobrables(Persona persona, boolean cobrable) {
+        if (persona == null || persona.getId() == null) {
+            return;
+        }
+
+        recompensaDao.findByBeneficiarioId(persona.getId()).stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .forEach(recompensa -> {
+                    recompensa.setCobrable(cobrable);
+                    recompensa.setMotivoNoCobrable(cobrable ? null : "No cobrable porque la membresia no esta activa.");
+                    recompensaDao.save(recompensa);
+                });
     }
 
     private BigDecimal zeroIfNull(BigDecimal value) {

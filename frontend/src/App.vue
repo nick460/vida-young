@@ -28,6 +28,7 @@ body {
   margin: 0;
   background: var(--vy-bg);
   overflow-x: hidden;
+  font-family: var(--font-sans);
 }
 
 .app-layout {
@@ -82,32 +83,87 @@ body {
   }
 }
 
+.swal2-container,
+.swal2-popup,
+.swal2-title,
+.swal2-html-container,
+.swal2-actions,
+.swal2-confirm,
+.swal2-cancel,
+.swal2-deny,
+.swal2-input,
+.swal2-textarea,
+.swal2-select {
+  font-family: var(--font-sans) !important;
+}
+
+.swal2-popup,
 .vy-swal-popup {
-  border-radius: 18px;
+  border-radius: 8px !important;
   border: 1px solid var(--vy-line);
   box-shadow: var(--vy-shadow-lg);
-  font-family: var(--font-sans);
+  color: var(--vy-ink);
 }
 
+.swal2-title,
 .vy-swal-title {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: 0;
+  font-family: var(--font-display) !important;
+  color: var(--vy-ink) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.025em !important;
 }
 
+.swal2-html-container,
 .vy-swal-text {
-  color: var(--vy-ink-2);
-  font-size: 14px;
+  color: var(--vy-ink-2) !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
 }
 
+.swal2-confirm,
+.swal2-cancel,
 .vy-swal-confirm,
 .vy-swal-cancel {
-  border-radius: 999px !important;
+  border-radius: 8px !important;
   padding: 11px 18px !important;
-  font-weight: 800 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
   box-shadow: none !important;
 }
 
+.swal2-confirm,
+.vy-swal-confirm {
+  background: var(--vy-orange) !important;
+}
+
+.swal2-confirm:hover,
+.vy-swal-confirm:hover {
+  background: var(--vy-orange-deep) !important;
+}
+
+.swal2-cancel,
+.vy-swal-cancel {
+  background: var(--vy-ink) !important;
+}
+
+.swal2-input,
+.swal2-textarea,
+.swal2-select {
+  border: 1px solid var(--vy-line) !important;
+  border-radius: 8px !important;
+  color: var(--vy-ink) !important;
+  box-shadow: none !important;
+}
+
+.swal2-input:focus,
+.swal2-textarea:focus,
+.swal2-select:focus {
+  border-color: var(--vy-orange) !important;
+  box-shadow: 0 0 0 3px rgba(242, 135, 5, 0.18) !important;
+}
+
+.swal2-confirm:focus,
+.swal2-cancel:focus,
 .vy-swal-confirm:focus,
 .vy-swal-cancel:focus {
   box-shadow: 0 0 0 3px rgba(242, 135, 5, 0.22) !important;

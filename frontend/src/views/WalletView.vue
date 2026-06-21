@@ -246,6 +246,7 @@ onMounted(loadWallet);
                 <th>Dinero planilla</th>
                 <th>PV</th>
                 <th>QP</th>
+                <th>Rango</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -256,10 +257,13 @@ onMounted(loadWallet);
                 <td>Bs. {{ money(cierre.saldoDinero) }}</td>
                 <td>{{ money(cierre.saldoPv) }}</td>
                 <td>{{ money(cierre.saldoQp) }}</td>
+                <td>
+                  <span class="rank-pill">{{ cierre.rangoNombre || cierre.rango?.nombre || "Sin rango" }}</span>
+                </td>
                 <td><span class="vy-chip vy-chip-orange">{{ cierre.estadoPlanilla }}</span></td>
               </tr>
               <tr v-if="!cierresMensuales.length && !loading">
-                <td colspan="6">No hay cierres mensuales registrados.</td>
+                <td colspan="7">No hay cierres mensuales registrados.</td>
               </tr>
             </tbody>
           </table>
@@ -431,6 +435,20 @@ onMounted(loadWallet);
   border-radius: 999px;
   background: var(--vy-cream);
   color: #6b4a12;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.rank-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(242, 135, 5, 0.1);
+  color: var(--vy-orange-deep);
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;

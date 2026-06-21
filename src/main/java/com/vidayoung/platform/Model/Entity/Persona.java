@@ -8,8 +8,11 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -48,8 +51,17 @@ public class Persona extends Auditoria {
     @Column(length = 30)
     private String telefono;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rango_actual_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @ToString.Exclude
+    private Rango rangoActual;
+
     @OneToOne(mappedBy = "persona", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @JsonIgnoreProperties("persona")
     @ToString.Exclude
     private Usuario usuario;
+
+    @Transient
+    private String fotoPerfil;
 }

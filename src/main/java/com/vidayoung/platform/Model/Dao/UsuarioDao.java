@@ -10,5 +10,7 @@ public interface UsuarioDao extends JpaRepository<Usuario, Long> {
 
     Optional<Usuario> findByUsername(String username);
 
+    Optional<Usuario> findByPersonaId(Long personaId);
+
     boolean existsByUsername(String username);
 }

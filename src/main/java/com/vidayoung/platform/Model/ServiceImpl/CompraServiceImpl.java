@@ -59,7 +59,7 @@ public class CompraServiceImpl implements CompraService {
     private final BilleteraService billeteraService;
 
     @Override
-    @Transactional
+    @Transactional(rollbackOn = Exception.class)
     public Compra registrarCompra(Long personaId, List<ItemCompraRequest> items, PagoCompraRequest pago) {
         if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("La compra debe tener al menos un producto.");
@@ -167,7 +167,7 @@ public class CompraServiceImpl implements CompraService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackOn = Exception.class)
     public Compra cambiarEstado(Long compraId, String estadoCompra, String usuarioOperacion) {
         String estado = normalizarTexto(estadoCompra);
         if (estado == null || !ESTADOS_COMPRA_VALIDOS.contains(estado.toUpperCase())) {
@@ -287,6 +287,7 @@ public class CompraServiceImpl implements CompraService {
                 && !movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo("COMPRA", compra.getId(), MovimientoBilletera.TIPO_QP)) {
             billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(totalQp));
             billetera = billeteraDao.save(billetera);
+            billeteraService.actualizarRangoActual(comprador, billetera.getSaldoQp());
             movimientoBilleteraDao.save(MovimientoBilletera.builder()
                     .billetera(billetera)
                     .tipo(MovimientoBilletera.TIPO_QP)

@@ -21,6 +21,8 @@ public interface BilleteraService {
 
     List<CierreMensualBilletera> listarCierresMensuales(Long personaId);
 
+    void actualizarRangoActual(Persona persona, java.math.BigDecimal qpActual);
+
     void registrarAfiliacionInicial(Referido referido);
 
     HistorialMembresia registrarActivacion(Long personaId, Long planId);

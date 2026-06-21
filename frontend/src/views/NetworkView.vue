@@ -3,20 +3,19 @@ import { computed, onMounted, ref } from "vue";
 import {
   Copy,
   Plus,
-  QrCode,
-  RefreshCw,
-  Users
+  RefreshCw
 } from "lucide-vue-next";
 import { useAuthStore } from "../stores/authStore.js";
 import { apiRequest } from "../services/api.js";
-import { VyAvatar } from "../components/ui.js";
 import NetworkTreeNode from "../components/NetworkTreeNode.vue";
 
 const authStore = useAuthStore();
+const API_URL = import.meta.env.VITE_API_URL || "";
 const loading = ref(false);
 const error = ref("");
 const referidos = ref([]);
 const viewMode = ref("tree");
+const copiedInvite = ref(false);
 
 const currentPersona = computed(() => authStore.usuario?.persona || null);
 const directChildren = computed(() => childrenOf(currentPersona.value?.id));
@@ -38,6 +37,11 @@ const maxDepth = computed(() => {
 });
 const volumeLabel = computed(() => activeCount.value ? `${activeCount.value} miembros` : "Sin red");
 const inviteCode = computed(() => authStore.usuario?.username || currentPersona.value?.documento || "VIDAYOUNG");
+const inviteLink = computed(() => {
+  if (!currentPersona.value?.id) return "";
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return `${base}#/preinscripcion-referido/${currentPersona.value.id}`;
+});
 
 const summary = computed(() => {
   const levels = [1, 2, 3, 4].map((level) => ({
@@ -59,6 +63,25 @@ function fullName(persona) {
 function initials(personaOrName) {
   const name = typeof personaOrName === "string" ? personaOrName : fullName(personaOrName);
   return name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "VY";
+}
+
+function photoUrl(persona, fallback = "") {
+  const photo = persona?.fotoPerfil || persona?.fotoUrl || persona?.imagenUrl || persona?.photo || fallback || "";
+
+  if (!photo) {
+    return "";
+  }
+
+  if (photo.startsWith("http") || photo.startsWith("blob:")) {
+    return photo;
+  }
+
+  const normalizedPhoto = photo.startsWith("/") ? photo : `/${photo}`;
+  return `${API_URL}${normalizedPhoto}`;
+}
+
+function currentPhotoUrl() {
+  return photoUrl(currentPersona.value, authStore.usuario?.fotoPerfil || "");
 }
 
 function childrenOf(personaId) {
@@ -125,6 +148,15 @@ async function loadNetwork() {
   }
 }
 
+async function copyInviteLink() {
+  if (!inviteLink.value) return;
+  await navigator.clipboard.writeText(inviteLink.value);
+  copiedInvite.value = true;
+  window.setTimeout(() => {
+    copiedInvite.value = false;
+  }, 1800);
+}
+
 onMounted(loadNetwork);
 </script>
 
@@ -151,13 +183,10 @@ onMounted(loadNetwork);
           <span class="vy-chip vy-chip-cream">Tu enlace de invitacion</span>
           <div class="invite-link">
             <Copy :size="17" stroke-width="2" />
-            <strong>vidayoung.co/invitar/{{ inviteCode }}</strong>
-            <button class="vy-btn vy-btn-dark" type="button">Copiar</button>
-          </div>
-          <div class="share-row">
-            <span><Users :size="14" /> WhatsApp</span>
-            <span><Copy :size="14" /> Correo</span>
-            <span><QrCode :size="14" /> Generar QR</span>
+            <strong>{{ inviteLink || inviteCode }}</strong>
+            <button class="vy-btn vy-btn-dark" type="button" :disabled="!inviteLink" @click="copyInviteLink">
+              {{ copiedInvite ? "Copiado" : "Copiar" }}
+            </button>
           </div>
         </div>
 
@@ -180,10 +209,13 @@ onMounted(loadNetwork);
             </div>
           </header>
 
-          <div class="root-row">
+          <div v-if="viewMode !== 'tree'" class="root-row">
             <article class="root-node">
               <span>Tu</span>
-              <VyAvatar :name="initials(currentPersona)" :size="44" bg="var(--vy-orange)" color="#fff" />
+              <div class="root-avatar">
+                <img v-if="currentPhotoUrl()" :src="currentPhotoUrl()" :alt="fullName(currentPersona)" />
+                <strong v-else>{{ initials(currentPersona) }}</strong>
+              </div>
               <div>
                 <strong>{{ fullName(currentPersona) }}</strong>
                 <small>{{ authStore.usuario?.roles?.[0] || "USUARIO" }} - {{ volumeLabel }}</small>
@@ -196,20 +228,39 @@ onMounted(loadNetwork);
           <div v-else-if="!directChildren.length" class="empty-state">Todavia no tienes referidos directos.</div>
 
           <section v-else-if="viewMode === 'tree'" class="tree-stage">
-            <ul class="tree-root">
-              <NetworkTreeNode
-                v-for="node in networkTree"
-                :key="node.id"
-                :node="node"
-                :level="1"
-              />
-            </ul>
+            <div class="tree-canvas">
+              <div class="root-row">
+                <article class="root-node">
+                  <span>Tu</span>
+                  <div class="root-avatar">
+                    <img v-if="currentPhotoUrl()" :src="currentPhotoUrl()" :alt="fullName(currentPersona)" />
+                    <strong v-else>{{ initials(currentPersona) }}</strong>
+                  </div>
+                  <div>
+                    <strong>{{ fullName(currentPersona) }}</strong>
+                    <small>{{ authStore.usuario?.roles?.[0] || "USUARIO" }} - {{ volumeLabel }}</small>
+                  </div>
+                </article>
+              </div>
+
+              <ul class="tree-root">
+                <NetworkTreeNode
+                  v-for="node in networkTree"
+                  :key="node.id"
+                  :node="node"
+                  :level="1"
+                />
+              </ul>
+            </div>
           </section>
 
           <section v-else-if="viewMode === 'list'" class="network-list-view">
             <article v-for="row in networkRows" :key="row.id" class="network-list-row">
               <div class="member-cell">
-                <VyAvatar :name="initials(row.persona)" :size="34" bg="var(--vy-cream)" />
+                <span class="small-avatar">
+                  <img v-if="photoUrl(row.persona)" :src="photoUrl(row.persona)" :alt="fullName(row.persona)" />
+                  <strong v-else>{{ initials(row.persona) }}</strong>
+                </span>
                 <span>
                   <strong>{{ fullName(row.persona) }}</strong>
                   <small>{{ row.plan?.nombre || "Sin plan" }}</small>
@@ -228,7 +279,10 @@ onMounted(loadNetwork);
               </header>
               <div class="map-nodes">
                 <article v-for="row in level.rows" :key="row.id" class="map-node">
-                  <VyAvatar :name="initials(row.persona)" :size="30" bg="var(--vy-cream)" />
+                  <span class="small-avatar compact">
+                    <img v-if="photoUrl(row.persona)" :src="photoUrl(row.persona)" :alt="fullName(row.persona)" />
+                    <strong v-else>{{ initials(row.persona) }}</strong>
+                  </span>
                   <span>
                     <strong>{{ fullName(row.persona) }}</strong>
                     <small>{{ row.directCount }} directos</small>
@@ -361,22 +415,6 @@ onMounted(loadNetwork);
   transform: none;
 }
 
-.share-row {
-  display: flex;
-  gap: 18px;
-  margin-top: 14px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--vy-ink-2);
-  font-weight: 700;
-}
-
-.share-row span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -472,14 +510,16 @@ onMounted(loadNetwork);
 .root-node {
   background: var(--vy-ink);
   color: #fff;
-  width: min(360px, 100%);
-  padding: 15px 22px;
+  width: min(420px, 100%);
+  min-height: 92px;
+  padding: 16px 24px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 14px;
-  box-shadow: 0 14px 30px rgba(31, 26, 20, 0.16);
+  box-shadow: 0 18px 42px rgba(31, 26, 20, 0.18);
   position: relative;
+  overflow: visible;
 }
 
 .root-node > span {
@@ -502,6 +542,40 @@ onMounted(loadNetwork);
   font-size: 14px;
 }
 
+.root-avatar {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  border-radius: 50%;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--vy-orange), var(--vy-orange-deep));
+  box-shadow: 0 10px 22px rgba(242, 135, 5, 0.28);
+}
+
+.root-avatar img,
+.root-avatar strong {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+}
+
+.root-avatar img {
+  display: block;
+  object-fit: cover;
+  background: var(--vy-surface-2);
+}
+
+.root-avatar strong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vy-orange);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
 .root-node small {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.7);
@@ -509,7 +583,56 @@ onMounted(loadNetwork);
 
 .tree-stage {
   overflow-x: auto;
-  padding: 8px 4px 6px;
+  overflow-y: auto;
+  padding: 8px 4px 12px;
+  max-height: min(68vh, 720px);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(242, 135, 5, 0.52) rgba(214, 204, 188, 0.35);
+}
+
+.tree-stage::-webkit-scrollbar {
+  height: 8px;
+}
+
+.tree-stage::-webkit-scrollbar-track {
+  background: rgba(214, 204, 188, 0.35);
+  border-radius: 99px;
+}
+
+.tree-stage::-webkit-scrollbar-thumb {
+  background: rgba(242, 135, 5, 0.52);
+  border-radius: 99px;
+}
+
+.tree-canvas {
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tree-stage .root-row {
+  width: 100%;
+  min-width: max-content;
+  justify-content: center;
+  margin-bottom: 28px;
+  position: relative;
+}
+
+.tree-stage .root-row::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -28px;
+  height: 22px;
+  border-left: 1px solid rgba(242, 135, 5, 0.62);
+}
+
+.tree-stage .root-node {
+  width: 420px;
 }
 
 .tree-root {
@@ -518,18 +641,13 @@ onMounted(loadNetwork);
   gap: 16px;
   min-width: max-content;
   margin: 0;
-  padding: 48px 0 0;
+  padding: 24px 0 0;
   list-style: none;
   position: relative;
 }
 
 .tree-root::before {
-  content: "";
-  position: absolute;
-  top: -18px;
-  left: 50%;
-  height: 42px;
-  border-left: 1px solid rgba(242, 135, 5, 0.62);
+  display: none;
 }
 
 .tree-root > :deep(.tree-item)::before {
@@ -591,6 +709,48 @@ onMounted(loadNetwork);
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.small-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, rgba(242, 135, 5, 0.75), rgba(242, 231, 196, 0.95));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.small-avatar.compact {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+}
+
+.small-avatar img,
+.small-avatar strong {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.small-avatar img {
+  display: block;
+  object-fit: cover;
+  background: var(--vy-surface-2);
+}
+
+.small-avatar strong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vy-cream);
+  color: var(--vy-ink);
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .member-cell span {
@@ -732,6 +892,10 @@ onMounted(loadNetwork);
   .workspace {
     padding: 24px 20px 32px;
   }
+
+  .network-card {
+    padding: 18px;
+  }
 }
 
 @media (max-width: 680px) {
@@ -746,14 +910,69 @@ onMounted(loadNetwork);
     grid-template-columns: 1fr 1fr;
   }
 
+  .network-card {
+    padding: 14px;
+  }
+
+  .network-header {
+    gap: 12px;
+  }
+
+  .view-tabs {
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  .view-tabs button {
+    flex: 1;
+    border-radius: 7px;
+    padding: 8px 10px;
+  }
+
+  .root-row {
+    justify-content: stretch;
+  }
+
+  .root-node {
+    width: 100%;
+    min-height: 82px;
+    padding: 14px;
+  }
+
+  .root-avatar {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+  }
+
   .tree-stage {
-    overflow-x: visible;
+    margin: 0 -8px;
+    padding: 10px 8px 84px;
+    max-height: calc(100dvh - 300px);
+    min-height: 360px;
+    overflow: auto;
+    border: 1px solid rgba(214, 204, 188, 0.72);
+    border-radius: 8px;
+    background:
+      linear-gradient(90deg, rgba(255, 248, 232, 0.92), rgba(255, 255, 255, 0) 24px) left / 42px 100% no-repeat,
+      linear-gradient(270deg, rgba(255, 248, 232, 0.92), rgba(255, 255, 255, 0) 24px) right / 42px 100% no-repeat,
+      rgba(255, 255, 255, 0.64);
   }
 
   .tree-root {
-    min-width: 0;
-    flex-direction: column;
-    padding-top: 18px;
+    min-width: max-content;
+    flex-direction: row;
+    padding: 24px 24px 24px;
+    justify-content: center;
+  }
+
+  .tree-stage .root-row {
+    justify-content: center;
+  }
+
+  .tree-stage .root-node {
+    width: 340px;
+    min-height: 82px;
   }
 
   .network-list-row {
@@ -763,6 +982,28 @@ onMounted(loadNetwork);
 
   .direct-count {
     text-align: left;
+  }
+}
+
+@media (max-width: 420px) {
+  .workspace {
+    padding: 18px 12px 28px;
+  }
+
+  .invite-card {
+    padding: 16px;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .root-node {
+    align-items: flex-start;
+  }
+
+  .network-map-view {
+    grid-template-columns: 1fr;
   }
 }
 </style>

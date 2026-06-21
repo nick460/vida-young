@@ -18,12 +18,19 @@ const accumulatedRewards = computed(() => recompensas.value.map((item) => ({
   fechaUnion: item.referido?.fechaUnion,
   nivel: Number(item.nivelGenerado || 0),
   montoDirecto: Number(item.montoEfectivo || 0),
-  valorProductos: Number(item.valorProductos || 0)
+  valorProductos: Number(item.valorProductos || 0),
+  cobrable: item.cobrable !== false,
+  motivoNoCobrable: item.motivoNoCobrable || "No cobrable porque la membresia no esta activa."
 })));
 
-const totalCash = computed(() => accumulatedRewards.value.reduce((sum, item) => sum + item.montoDirecto, 0));
-const totalProducts = computed(() => accumulatedRewards.value.reduce((sum, item) => sum + item.valorProductos, 0));
+const payableRewards = computed(() => accumulatedRewards.value.filter((item) => item.cobrable));
+const lostRewards = computed(() => accumulatedRewards.value.filter((item) => !item.cobrable));
+const totalCash = computed(() => payableRewards.value.reduce((sum, item) => sum + item.montoDirecto, 0));
+const totalProducts = computed(() => payableRewards.value.reduce((sum, item) => sum + item.valorProductos, 0));
 const totalRewards = computed(() => totalCash.value + totalProducts.value);
+const lostCash = computed(() => lostRewards.value.reduce((sum, item) => sum + item.montoDirecto, 0));
+const lostProducts = computed(() => lostRewards.value.reduce((sum, item) => sum + item.valorProductos, 0));
+const lostTotal = computed(() => lostCash.value + lostProducts.value);
 const paidRewardCount = computed(() => accumulatedRewards.value.length);
 const directRewardCount = computed(() => accumulatedRewards.value.filter((item) => item.nivel === 1).length);
 const maxRewardLevel = computed(() => Math.max(0, ...accumulatedRewards.value.map((item) => item.nivel)));
@@ -96,12 +103,21 @@ onMounted(loadRewards);
             <span>Total acumulado</span>
             <strong>{{ money(totalRewards) }}</strong>
             <p>
-              Incluye {{ money(totalCash) }} en efectivo y {{ money(totalProducts) }} en valor canjeable por productos.
+              Incluye {{ money(totalCash) }} en efectivo cobrable y {{ money(totalProducts) }} en valor canjeable por productos.
+              <span v-if="lostTotal"> Estas perdiendo {{ money(lostTotal) }} por no estar activo.</span>
             </p>
 
             <div class="summary-stats">
               <article>
-                <small>Recompensas</small>
+                <small>Cobrables</small>
+                <b>{{ payableRewards.length }}</b>
+              </article>
+              <article>
+                <small>Perdidas</small>
+                <b>{{ lostRewards.length }}</b>
+              </article>
+              <article>
+                <small>Total beneficios</small>
                 <b>{{ paidRewardCount }}</b>
               </article>
               <article>
@@ -132,28 +148,29 @@ onMounted(loadRewards);
 
       <section class="content-grid">
         <article class="rewards-card">
-          <h2>Ingresos que te generan recompensa</h2>
+            <h2>Ingresos que te generan recompensa</h2>
 
           <div v-if="loading" class="empty-state">Cargando recompensas...</div>
           <div v-else-if="!currentPersona?.id" class="empty-state">Tu usuario no tiene persona asociada.</div>
           <div v-else-if="!accumulatedRewards.length" class="empty-state">Todavia no tienes recompensas acumuladas.</div>
 
           <div v-else class="reward-table">
-            <article v-for="reward in accumulatedRewards" :key="reward.id" class="reward-row">
+            <article v-for="reward in accumulatedRewards" :key="reward.id" class="reward-row" :class="{ lost: !reward.cobrable }">
               <div class="member-cell">
                 <VyAvatar :name="initials(reward.persona)" :size="36" bg="var(--vy-cream)" />
                 <span>
                   <strong>{{ fullName(reward.persona) }}</strong>
                   <small>Nivel {{ reward.nivel }} · {{ reward.plan?.nombre || "Sin plan" }}</small>
+                  <em v-if="!reward.cobrable">{{ reward.motivoNoCobrable }}</em>
                 </span>
               </div>
               <div class="reward-values">
                 <span>
-                  <small>Monto directo</small>
+                  <small>{{ reward.cobrable ? "Monto directo" : "Efectivo perdido" }}</small>
                   <strong>{{ money(reward.montoDirecto) }}</strong>
                 </span>
                 <span>
-                  <small>Productos</small>
+                  <small>{{ reward.cobrable ? "Productos" : "Productos perdidos" }}</small>
                   <strong>{{ money(reward.valorProductos) }}</strong>
                 </span>
               </div>
@@ -378,6 +395,11 @@ onMounted(loadRewards);
   background: var(--vy-surface-2);
 }
 
+.reward-row.lost {
+  border-color: rgba(196, 69, 42, 0.24);
+  background: rgba(196, 69, 42, 0.06);
+}
+
 .member-cell {
   display: flex;
   align-items: center;
@@ -409,6 +431,16 @@ onMounted(loadRewards);
   font-weight: 900;
 }
 
+.member-cell em {
+  display: block;
+  margin-top: 4px;
+  color: var(--vy-danger);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: normal;
+}
+
 .reward-values {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -435,6 +467,15 @@ onMounted(loadRewards);
   color: var(--vy-ink);
   font-size: 13px;
   font-weight: 900;
+}
+
+.reward-row.lost .reward-values span {
+  background: #fff7f4;
+}
+
+.reward-row.lost .reward-values small,
+.reward-row.lost .reward-values strong {
+  color: var(--vy-danger);
 }
 
 .reward-list article {
