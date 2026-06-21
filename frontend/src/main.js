@@ -1,6 +1,6 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
-import { createRouter, createWebHashHistory } from "vue-router";
+import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
 import "./styles/brand.css";
 import DashboardView from "./views/DashboardView.vue";
@@ -68,7 +68,7 @@ const routes = [
 const pinia = createPinia();
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes
 });
 

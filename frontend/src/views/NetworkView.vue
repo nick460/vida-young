@@ -39,8 +39,7 @@ const volumeLabel = computed(() => activeCount.value ? `${activeCount.value} mie
 const inviteCode = computed(() => authStore.usuario?.username || currentPersona.value?.documento || "VIDAYOUNG");
 const inviteLink = computed(() => {
   if (!currentPersona.value?.id) return "";
-  const base = `${window.location.origin}${window.location.pathname}`;
-  return `${base}#/preinscripcion-referido/${currentPersona.value.id}`;
+  return `${window.location.origin}/preinscripcion-referido/${currentPersona.value.id}`;
 });
 
 const summary = computed(() => {

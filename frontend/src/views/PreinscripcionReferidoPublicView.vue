@@ -1,0 +1,570 @@
+<script setup>
+import { computed, onMounted, reactive, ref } from "vue";
+import { useRoute } from "vue-router";
+import { CheckCircle2, Mail, Phone, Send, ShieldCheck, UserPlus } from "lucide-vue-next";
+import { apiRequest } from "../services/api.js";
+
+const route = useRoute();
+const loading = ref(false);
+const saving = ref(false);
+const error = ref("");
+const saved = ref(false);
+const patrocinador = ref(null);
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+const patrocinadorId = computed(() => Number(route.params.patrocinadorId || 0));
+
+const sponsorName = computed(() => {
+  const persona = patrocinador.value || {};
+  return persona.nombreCompleto
+    || [persona.nombres, persona.apellidos].filter(Boolean).join(" ").trim()
+    || "Asesor Vidayoung";
+});
+
+const sponsorInitials = computed(() => sponsorName.value
+  .split(" ")
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((item) => item[0])
+  .join("")
+  .toUpperCase());
+
+const sponsorPhoto = computed(() => {
+  const photo = patrocinador.value?.fotoPerfil
+    || patrocinador.value?.fotoUrl
+    || patrocinador.value?.imagenUrl
+    || patrocinador.value?.photo
+    || "";
+
+  if (!photo) {
+    return "";
+  }
+
+  if (photo.startsWith("http") || photo.startsWith("blob:")) {
+    return photo;
+  }
+
+  const normalizedPhoto = photo.startsWith("/") ? photo : `/${photo}`;
+  return `${API_URL}${normalizedPhoto}`;
+});
+
+const form = reactive({
+  nombres: "",
+  apellidos: "",
+  documento: "",
+  telefono: "",
+  email: ""
+});
+
+async function loadPatrocinador() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    patrocinador.value = await apiRequest(`/api/public/preinscripciones-referidos/patrocinadores/${patrocinadorId.value}`);
+  } catch (exception) {
+    error.value = "El enlace de referido no es valido o la persona que refiere no existe.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function submitForm() {
+  saving.value = true;
+  error.value = "";
+
+  try {
+    await apiRequest("/api/public/preinscripciones-referidos", {
+      method: "POST",
+      body: JSON.stringify({
+        patrocinadorId: patrocinadorId.value,
+        ...form
+      })
+    });
+    saved.value = true;
+  } catch (exception) {
+    error.value = exception.message || "No se pudo registrar tu preinscripcion.";
+  } finally {
+    saving.value = false;
+  }
+}
+
+onMounted(loadPatrocinador);
+</script>
+
+<template>
+  <main class="public-referral-page">
+    <section class="referral-shell">
+      <article class="intro-panel">
+        <span class="eyebrow"><UserPlus :size="16" /> Preinscripcion Vidayoung</span>
+        <div class="sponsor-hero">
+          <div class="sponsor-photo-wrap">
+            <img v-if="sponsorPhoto" class="sponsor-photo" :src="sponsorPhoto" :alt="sponsorName" />
+            <span v-else class="sponsor-initials">{{ sponsorInitials }}</span>
+          </div>
+          <div>
+            <small>Invitacion personal de</small>
+            <strong>{{ sponsorName }}</strong>
+          </div>
+        </div>
+
+        <h1>Unete a la red Vidayoung</h1>
+        <p>
+          Completa tus datos para que tu solicitud quede vinculada con la persona que te invito. En ventanilla validaran tu informacion y el plan de ingreso.
+        </p>
+        <div class="sponsor-box">
+          <div>
+            <ShieldCheck :size="18" />
+            <span>Referente verificado</span>
+          </div>
+          <strong>{{ patrocinador ? sponsorName : "Cargando..." }}</strong>
+          <small v-if="patrocinador?.telefono"><Phone :size="13" /> {{ patrocinador.telefono }}</small>
+          <small v-if="patrocinador?.email"><Mail :size="13" /> {{ patrocinador.email }}</small>
+        </div>
+      </article>
+
+      <form v-if="!saved" class="referral-form" @submit.prevent="submitForm">
+        <h2>Datos personales</h2>
+        <p v-if="error" class="error-box">{{ error }}</p>
+        <p v-if="loading" class="loading-box">Validando enlace...</p>
+
+        <label>
+          CI
+          <input v-model.trim="form.documento" type="text" required maxlength="30" autocomplete="off" />
+        </label>
+        <label>
+          Nombres
+          <input v-model.trim="form.nombres" type="text" required maxlength="100" autocomplete="given-name" />
+        </label>
+        <label>
+          Apellidos
+          <input v-model.trim="form.apellidos" type="text" required maxlength="100" autocomplete="family-name" />
+        </label>
+        <label>
+          Numero de celular
+          <input v-model.trim="form.telefono" type="tel" required maxlength="30" autocomplete="tel" />
+        </label>
+        <label>
+          Email opcional
+          <input v-model.trim="form.email" type="email" maxlength="120" autocomplete="email" />
+        </label>
+
+        <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador">
+          <Send :size="17" />
+          {{ saving ? "Enviando..." : "Enviar preinscripcion" }}
+        </button>
+      </form>
+
+      <article v-else class="success-panel">
+        <CheckCircle2 :size="44" />
+        <h2>Preinscripcion enviada</h2>
+        <p>Tu solicitud fue registrada correctamente. La empresa validara tus datos para completar el ingreso a la red.</p>
+      </article>
+    </section>
+  </main>
+</template>
+
+<style scoped>
+.public-referral-page {
+  min-height: 100vh;
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(31, 26, 20, 0.08) 0%, rgba(255, 255, 255, 0) 34%),
+    linear-gradient(135deg, #fff8e8 0%, #ffffff 58%, #f7efe1 100%);
+  color: var(--vy-ink);
+}
+
+.referral-shell {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(320px, 430px);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.intro-panel,
+.referral-form,
+.success-panel {
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 22px 54px rgba(31, 26, 20, 0.1);
+}
+
+.intro-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 248, 232, 0.96) 100%);
+}
+
+.intro-panel::after {
+  content: "";
+  position: absolute;
+  right: -92px;
+  bottom: -92px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  border: 42px solid rgba(242, 135, 5, 0.1);
+  pointer-events: none;
+}
+
+.eyebrow {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(242, 135, 5, 0.12);
+  color: var(--vy-orange-deep);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.intro-panel h1 {
+  margin-top: 18px;
+  font-size: clamp(34px, 4.4vw, 54px);
+  line-height: 0.98;
+  font-weight: 900;
+  position: relative;
+  z-index: 1;
+}
+
+.intro-panel p {
+  max-width: 620px;
+  margin-top: 18px;
+  color: var(--vy-ink-2);
+  font-size: 16px;
+  line-height: 1.55;
+  position: relative;
+  z-index: 1;
+}
+
+.sponsor-hero {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 28px;
+  padding: 14px;
+  border: 1px solid rgba(242, 135, 5, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 42px rgba(31, 26, 20, 0.08);
+}
+
+.sponsor-photo-wrap {
+  width: 86px;
+  height: 86px;
+  flex: 0 0 86px;
+  border-radius: 50%;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--vy-orange), var(--vy-orange-deep));
+  box-shadow: 0 14px 28px rgba(242, 135, 5, 0.28);
+}
+
+.sponsor-photo,
+.sponsor-initials {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sponsor-photo {
+  object-fit: cover;
+  background: var(--vy-surface-2);
+}
+
+.sponsor-initials {
+  background: var(--vy-ink);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.sponsor-hero small {
+  display: block;
+  color: var(--vy-ink-3);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sponsor-hero strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.sponsor-box {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  min-width: 260px;
+  margin-top: 26px;
+  padding: 14px 16px;
+  border: 1px solid rgba(242, 135, 5, 0.28);
+  border-radius: 8px;
+  background: rgba(242, 135, 5, 0.07);
+}
+
+.sponsor-box div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vy-orange-deep);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sponsor-box small,
+.sponsor-box strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sponsor-box small {
+  margin-top: 8px;
+  color: var(--vy-ink-3);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sponsor-box strong {
+  margin-top: 8px;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.referral-form,
+.success-panel {
+  padding: 24px;
+}
+
+.referral-form h2,
+.success-panel h2 {
+  font-size: 22px;
+  font-weight: 900;
+  margin-bottom: 16px;
+}
+
+.referral-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--vy-ink-2);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.referral-form input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--vy-ink);
+  font: inherit;
+}
+
+.submit-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--vy-orange), var(--vy-orange-deep));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 14px 28px rgba(242, 135, 5, 0.24);
+}
+
+.submit-button:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+.error-box,
+.loading-box {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.error-box {
+  color: var(--vy-danger);
+  background: rgba(196, 69, 42, 0.1);
+}
+
+.loading-box {
+  color: var(--vy-ink-2);
+  background: var(--vy-surface-2);
+}
+
+.success-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.success-panel svg {
+  margin: 0 auto 14px;
+  color: var(--vy-orange-deep);
+}
+
+.success-panel p {
+  color: var(--vy-ink-2);
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .public-referral-page {
+    min-height: 100dvh;
+    padding: 18px;
+    align-items: flex-start;
+  }
+
+  .referral-shell {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .intro-panel {
+    padding: 24px;
+  }
+
+  .intro-panel h1 {
+    max-width: 620px;
+    font-size: 40px;
+    line-height: 1;
+  }
+
+  .referral-form,
+  .success-panel {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 520px) {
+  .public-referral-page {
+    padding: 10px;
+  }
+
+  .intro-panel,
+  .referral-form,
+  .success-panel {
+    border-radius: 8px;
+    box-shadow: 0 14px 30px rgba(31, 26, 20, 0.08);
+  }
+
+  .intro-panel {
+    padding: 18px;
+  }
+
+  .eyebrow {
+    max-width: 100%;
+    font-size: 11px;
+  }
+
+  .sponsor-hero {
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 12px;
+  }
+
+  .sponsor-photo-wrap {
+    width: 68px;
+    height: 68px;
+    flex-basis: 68px;
+  }
+
+  .sponsor-initials {
+    font-size: 20px;
+  }
+
+  .sponsor-hero strong {
+    font-size: 17px;
+    line-height: 1.18;
+  }
+
+  .intro-panel h1 {
+    margin-top: 18px;
+    font-size: 33px;
+    line-height: 1.02;
+  }
+
+  .intro-panel p {
+    margin-top: 14px;
+    font-size: 14px;
+  }
+
+  .sponsor-box {
+    width: 100%;
+    min-width: 0;
+    margin-top: 18px;
+  }
+
+  .referral-form,
+  .success-panel {
+    padding: 18px;
+  }
+
+  .referral-form h2,
+  .success-panel h2 {
+    font-size: 20px;
+    margin-bottom: 14px;
+  }
+
+  .referral-form label {
+    margin-bottom: 10px;
+  }
+
+  .referral-form input {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .submit-button {
+    min-height: 50px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .sponsor-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .intro-panel h1 {
+    font-size: 29px;
+  }
+}
+</style>
