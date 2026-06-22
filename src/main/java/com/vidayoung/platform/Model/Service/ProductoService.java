@@ -8,6 +8,8 @@ public interface ProductoService {
 
     List<Producto> listar();
 
+    List<Producto> listarParaShop();
+
     Optional<Producto> buscarPorId(Long id);
 
     Optional<Producto> buscarPorSku(String sku);

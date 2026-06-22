@@ -24,7 +24,7 @@ public class ProductoLandingRestController {
 
     @GetMapping("/api/public/productos")
     public ResponseEntity<List<Producto>> listarProductosPublicos() {
-        return ResponseEntity.ok(productoService.listar());
+        return ResponseEntity.ok(productoService.listarParaShop());
     }
 
     @GetMapping("/api/public/productos/{productoId}/landing")

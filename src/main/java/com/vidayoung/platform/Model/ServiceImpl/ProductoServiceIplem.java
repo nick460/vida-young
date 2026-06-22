@@ -24,6 +24,13 @@ public class ProductoServiceIplem implements ProductoService {
     }
 
     @Override
+    public List<Producto> listarParaShop() {
+        return listar().stream()
+                .filter(producto -> Boolean.TRUE.equals(producto.getListarEnShop()))
+                .toList();
+    }
+
+    @Override
     public Optional<Producto> buscarPorId(Long id) {
         return productoDao.findById(id)
                 .filter(producto -> Auditoria.ESTADO_ACTIVO.equals(producto.getEstado()));
@@ -37,16 +44,16 @@ public class ProductoServiceIplem implements ProductoService {
 
     @Override
     public Producto guardar(Producto producto) {
-        if (producto.getStockMinimo() == null) {
-            producto.setStockMinimo(0);
-        }
-
         if (producto.getPv() == null) {
             producto.setPv(BigDecimal.ZERO);
         }
 
         if (producto.getQp() == null) {
             producto.setQp(BigDecimal.ZERO);
+        }
+
+        if (producto.getListarEnShop() == null) {
+            producto.setListarEnShop(Boolean.FALSE);
         }
 
         return productoDao.save(producto);

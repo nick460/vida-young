@@ -47,9 +47,8 @@ function mapProducto(producto) {
     pv: Number(producto.pv || 0),
     qp: Number(producto.qp || 0),
     old: null,
-    badge: Number(producto.stockDisponible || 0) <= Number(producto.stockMinimo || 0) ? "Stock bajo" : null,
+    badge: null,
     img: producto.imagenUrl || "linear-gradient(135deg, #F2E7C4 0%, #F28705 100%)",
-    stockDisponible: Number(producto.stockDisponible || 0),
     descripcion: producto.descripcion
   };
 }
@@ -59,8 +58,8 @@ async function loadProducts() {
   error.value = "";
 
   try {
-    const data = await apiRequest("/api/productos");
-    productos.value = data.map(mapProducto).filter((product) => product.stockDisponible > 0);
+    const data = await apiRequest("/api/public/productos");
+    productos.value = data.map(mapProducto);
   } catch {
     productos.value = [];
     error.value = "No se pudieron cargar los productos reales desde inventario.";
@@ -120,7 +119,7 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
           <small>{{ hero.cat }}</small>
           <h2>{{ hero.name }}</h2>
           <p>
-            {{ hero.descripcion || "Producto Vidayoung registrado en inventario con disponibilidad calculada por lotes activos." }}
+            {{ hero.descripcion || "Producto Vidayoung registrado en inventario y publicado en tienda." }}
           </p>
 
           <div class="price-row">
@@ -188,7 +187,7 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
       <section v-if="!loading && !error && !productos.length" class="empty-shop vy-card">
         <ShoppingCart :size="28" />
         <h2>No hay productos disponibles</h2>
-        <p>La tienda solo muestra productos reales con stock disponible en inventario.</p>
+        <p>La tienda solo muestra productos marcados para publicarse desde inventario.</p>
       </section>
 
       <button class="floating-cart" type="button" aria-label="Abrir carrito" @click="navigate('cart')">

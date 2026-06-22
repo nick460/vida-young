@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS productos (
     pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
     imagen_url VARCHAR(255),
-    stock_minimo INTEGER NOT NULL DEFAULT 0,
+    listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -157,7 +157,8 @@ CREATE TABLE IF NOT EXISTS productos (
 
 ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS qp NUMERIC(12, 2) NOT NULL DEFAULT 0;
+    ADD COLUMN IF NOT EXISTS qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS productos_landings (
     id BIGSERIAL PRIMARY KEY,
@@ -231,22 +232,6 @@ SELECT
     'Una landing editable para explicar la oportunidad, el sistema y los primeros pasos.',
     'Te comparto esta informacion sobre {tema}. Entra aqui:'
 WHERE NOT EXISTS (SELECT 1 FROM digital_landings WHERE slug = 'claves-del-negocio');
-
-CREATE TABLE IF NOT EXISTS lotes_productos (
-    id BIGSERIAL PRIMARY KEY,
-    producto_id BIGINT NOT NULL REFERENCES productos(id),
-    numero_lote VARCHAR(80) NOT NULL,
-    fecha_vencimiento DATE,
-    cantidad_inicial INTEGER NOT NULL,
-    cantidad_disponible INTEGER NOT NULL,
-    costo_unitario NUMERIC(12, 2),
-    observacion VARCHAR(200),
-    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
-    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
-    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
-);
 
 CREATE TABLE IF NOT EXISTS planes (
     id BIGSERIAL PRIMARY KEY,

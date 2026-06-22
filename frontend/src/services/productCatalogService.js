@@ -16,7 +16,7 @@ export function mapProduct(producto) {
     rating: producto.rating || 4.8,
     badge: producto.badge || null,
     img: producto.imagenUrl || producto.img || DEFAULT_GRADIENT,
-    stockDisponible: Number(producto.stockDisponible ?? 1),
+    listarEnShop: Boolean(producto.listarEnShop ?? true),
     descripcion: producto.descripcion || ""
   };
 }
@@ -24,20 +24,17 @@ export function mapProduct(producto) {
 export async function loadProductCatalog({ onlyAvailable = false, fallbackToMock = true } = {}) {
   try {
     const data = await apiRequest("/api/public/productos");
-    const products = data.map(mapProduct);
-    return onlyAvailable ? products.filter((product) => product.stockDisponible > 0) : products;
+    return data.map(mapProduct);
   } catch (error) {
     try {
       const data = await apiRequest("/api/productos");
-      const products = data.map(mapProduct);
-      return onlyAvailable ? products.filter((product) => product.stockDisponible > 0) : products;
+      return data.map(mapProduct);
     } catch {
       if (!fallbackToMock) {
         throw error;
       }
 
-      const products = PRODUCTS.map(mapProduct);
-      return onlyAvailable ? products.filter((product) => product.stockDisponible > 0) : products;
+      return PRODUCTS.map(mapProduct);
     }
   }
 }

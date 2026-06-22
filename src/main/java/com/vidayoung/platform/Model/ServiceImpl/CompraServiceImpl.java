@@ -3,7 +3,6 @@ package com.vidayoung.platform.Model.ServiceImpl;
 import com.vidayoung.platform.Model.Dao.BeneficioActivacionCompraDao;
 import com.vidayoung.platform.Model.Dao.BilleteraDao;
 import com.vidayoung.platform.Model.Dao.CompraDao;
-import com.vidayoung.platform.Model.Dao.LoteProductoDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
@@ -15,7 +14,6 @@ import com.vidayoung.platform.Model.Entity.BeneficioActivacionCompra;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.Compra;
 import com.vidayoung.platform.Model.Entity.CompraDetalle;
-import com.vidayoung.platform.Model.Entity.LoteProducto;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
@@ -27,7 +25,6 @@ import com.vidayoung.platform.Model.Service.CompraService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -49,7 +46,6 @@ public class CompraServiceImpl implements CompraService {
     private final CompraDao compraDao;
     private final ProductoDao productoDao;
     private final PersonaDao personaDao;
-    private final LoteProductoDao loteProductoDao;
     private final BilleteraDao billeteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
     private final ReferidoDao referidoDao;
@@ -101,8 +97,6 @@ public class CompraServiceImpl implements CompraService {
             Producto producto = productoDao.findById(item.productoId())
                     .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
                     .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado."));
-
-            descontarStock(producto, cantidad);
 
             BigDecimal precio = zeroIfNull(producto.getPrecio());
             BigDecimal pv = zeroIfNull(producto.getPv());
@@ -230,38 +224,6 @@ public class CompraServiceImpl implements CompraService {
 
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {
             generarBeneficiosActivacion(compra, totalProductos);
-        }
-    }
-
-    private void descontarStock(Producto producto, int cantidad) {
-        int restante = cantidad;
-        List<LoteProducto> lotes = loteProductoDao.findByProductoId(producto.getId()).stream()
-                .filter(lote -> Auditoria.ESTADO_ACTIVO.equals(lote.getEstado()))
-                .filter(lote -> Optional.ofNullable(lote.getCantidadDisponible()).orElse(0) > 0)
-                .sorted(Comparator
-                        .comparing(LoteProducto::getFechaVencimiento, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(LoteProducto::getId))
-                .toList();
-
-        int stockDisponible = lotes.stream()
-                .map(LoteProducto::getCantidadDisponible)
-                .filter(value -> value != null)
-                .reduce(0, Integer::sum);
-
-        if (stockDisponible < cantidad) {
-            throw new IllegalArgumentException("Stock insuficiente para " + producto.getNombre() + ".");
-        }
-
-        for (LoteProducto lote : lotes) {
-            if (restante <= 0) {
-                return;
-            }
-
-            int disponible = Optional.ofNullable(lote.getCantidadDisponible()).orElse(0);
-            int descuento = Math.min(disponible, restante);
-            lote.setCantidadDisponible(disponible - descuento);
-            loteProductoDao.save(lote);
-            restante -= descuento;
         }
     }
 

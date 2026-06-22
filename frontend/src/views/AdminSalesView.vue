@@ -55,9 +55,8 @@ const filteredPersonas = computed(() => {
 
 const filteredProducts = computed(() => {
   const text = productQuery.value.trim().toLowerCase();
-  const available = productos.value.filter((producto) => Number(producto.stockDisponible || 0) > 0);
-  if (!text) return available;
-  return available.filter((producto) => [
+  if (!text) return productos.value;
+  return productos.value.filter((producto) => [
     producto.nombre,
     producto.sku,
     producto.categoria
@@ -413,10 +412,7 @@ function showError(title, text) {
 function addProduct(producto) {
   const found = ventaItems.value.find((item) => Number(item.id) === Number(producto.id));
   if (found) {
-    const stock = Number(producto.stockDisponible || 0);
-    if (!stock || found.cantidad < stock) {
-      found.cantidad += 1;
-    }
+    found.cantidad += 1;
     return;
   }
 
@@ -427,15 +423,13 @@ function addProduct(producto) {
     precio: Number(producto.precio || 0),
     pv: Number(producto.pv || 0),
     qp: Number(producto.qp || 0),
-    stockDisponible: Number(producto.stockDisponible || 0),
     cantidad: 1
   });
 }
 
 function changeQuantity(item, value) {
   const next = Number(value || 1);
-  const stock = Number(item.stockDisponible || 0);
-  item.cantidad = Math.max(1, stock ? Math.min(stock, next) : next);
+  item.cantidad = Math.max(1, next);
 }
 
 function removeItem(item) {
@@ -592,7 +586,7 @@ onMounted(loadAll);
             >
               <span>
                 <strong>{{ producto.nombre }}</strong>
-                <small>{{ producto.sku }} · Stock {{ producto.stockDisponible || 0 }}</small>
+                <small>{{ producto.sku }} · {{ producto.categoria || "Producto" }}</small>
               </span>
               <b>Bs. {{ money(producto.precio) }}</b>
               <Plus :size="16" />
@@ -605,7 +599,7 @@ onMounted(loadAll);
                 <strong>{{ item.nombre }}</strong>
                 <small>Bs. {{ money(item.precio) }} · PV {{ money(item.pv) }} · QP {{ money(item.qp) }}</small>
               </div>
-              <input :value="item.cantidad" type="number" min="1" :max="item.stockDisponible || undefined" @input="changeQuantity(item, $event.target.value)" />
+              <input :value="item.cantidad" type="number" min="1" @input="changeQuantity(item, $event.target.value)" />
               <b>Bs. {{ money(item.precio * item.cantidad) }}</b>
               <button type="button" @click="removeItem(item)"><Trash2 :size="15" /></button>
             </div>

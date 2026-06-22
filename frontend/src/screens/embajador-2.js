@@ -37,7 +37,6 @@ export const ScreenShop = defineComponent({
         <div style="display:flex;align-items:center;gap:14px;margin-top:18px">
           <div style="display:flex;align-items:center;gap:6px;color:var(--vy-orange-deep)"><vy-icon name="star" :size="14" fill="currentColor" stroke="currentColor"/> <span style="font-weight:700;font-size:13px">{{ hero.rating }}</span></div>
           <span style="font-size:12px;color:var(--vy-ink-3)">· 1.248 reseñas</span>
-          <span class="vy-chip vy-chip-success" style="font-size:10px">En stock</span>
         </div>
         <div style="display:flex;align-items:baseline;gap:12px;margin-top:24px">
           <div style="font-family:var(--font-display);font-size:32px;font-weight:800;letter-spacing:-0.03em">$ {{ hero.price.toLocaleString('es-CO') }}</div>

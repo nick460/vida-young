@@ -83,10 +83,6 @@ function persist() {
 }
 
 function increment(item) {
-  const stock = Number(item.stockDisponible || 0);
-  if (stock && Number(item.quantity || 0) >= stock) {
-    return;
-  }
   item.quantity = Number(item.quantity || 0) + 1;
   persist();
 }

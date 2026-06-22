@@ -3,9 +3,11 @@ package com.vidayoung.platform.Config;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.RolDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
+import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.Rol;
 import com.vidayoung.platform.Model.Entity.Usuario;
+import java.util.HashSet;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -29,39 +31,49 @@ public class DataInitializer {
     @Bean
     public CommandLineRunner initDefaultUser() {
         return args -> {
-            boolean hasData = usuarioDao.count() > 0
-                    || personaDao.count() > 0
-                    || rolDao.count() > 0;
+            Persona persona = personaDao.findByDocumento("00000000")
+                    .orElseGet(() -> Persona.builder()
+                            .nombres("Administrador")
+                            .apellidos("Vidayoung")
+                            .documento("00000000")
+                            .email("admin@vidayoung.com")
+                            .telefono("00000000")
+                            .build());
 
-            if (hasData) {
-                return;
+            Rol rol = rolDao.findByNombre(DEFAULT_ROLE)
+                    .orElseGet(() -> Rol.builder()
+                            .nombre(DEFAULT_ROLE)
+                            .descripcion("Rol administrador por defecto")
+                            .build());
+
+            Usuario usuario = usuarioDao.findByUsername(DEFAULT_USERNAME)
+                    .orElseGet(() -> Usuario.builder()
+                            .username(DEFAULT_USERNAME)
+                            .persona(persona)
+                            .build());
+
+            usuario.setActivo(true);
+            usuario.setEstado(Auditoria.ESTADO_ACTIVO);
+            usuario.setPersona(persona);
+
+            if (!isBCryptHash(usuario.getPassword())) {
+                usuario.setPassword(passwordEncoder.encode(DEFAULT_PASSWORD));
             }
 
-            Persona persona = Persona.builder()
-                    .nombres("Administrador")
-                    .apellidos("Vidayoung")
-                    .documento("00000000")
-                    .email("admin@vidayoung.com")
-                    .telefono("00000000")
-                    .build();
-
-            Rol rol = Rol.builder()
-                    .nombre(DEFAULT_ROLE)
-                    .descripcion("Rol administrador por defecto")
-                    .build();
-
-            Usuario usuario = Usuario.builder()
-                    .username(DEFAULT_USERNAME)
-                    .password(passwordEncoder.encode(DEFAULT_PASSWORD))
-                    .activo(true)
-                    .persona(persona)
-                    .roles(Set.of(rol))
-                    .build();
+            Set<Rol> roles = new HashSet<>(usuario.getRoles() == null ? Set.of() : usuario.getRoles());
+            roles.add(rol);
+            usuario.setRoles(roles);
 
             persona.setUsuario(usuario);
-            rol.setUsuarios(Set.of(usuario));
+            persona.setEstado(Auditoria.ESTADO_ACTIVO);
+            rol.setEstado(Auditoria.ESTADO_ACTIVO);
 
             usuarioDao.save(usuario);
         };
+    }
+
+    private boolean isBCryptHash(String value) {
+        return value != null
+                && (value.startsWith("$2a$") || value.startsWith("$2b$") || value.startsWith("$2y$"));
     }
 }

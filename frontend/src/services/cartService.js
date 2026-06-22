@@ -30,7 +30,6 @@ export function addCartItem(product, quantity = 1) {
       price: Number(product.price || 0),
       pv: Number(product.pv || 0),
       qp: Number(product.qp || 0),
-      stockDisponible: Number(product.stockDisponible || 0),
       img: product.img,
       quantity: Number(quantity || 1)
     });
