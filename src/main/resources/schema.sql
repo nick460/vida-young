@@ -207,6 +207,13 @@ ALTER TABLE digital_landings
     ADD COLUMN IF NOT EXISTS sections TEXT,
     ADD COLUMN IF NOT EXISTS share_message TEXT;
 
+ALTER TABLE digital_landings
+    ALTER COLUMN estado SET DEFAULT 'ACTIVO',
+    ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
+    ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
+
 INSERT INTO digital_landings (slug, title, category, description, share_message)
 SELECT
     'educacion-financiera',
@@ -465,6 +472,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_billetera_referencia
     ON movimientos_billetera (referencia_tipo, referencia_id, tipo)
     WHERE referencia_tipo IS NOT NULL AND referencia_id IS NOT NULL;
 
+ALTER TABLE billeteras
+    ALTER COLUMN estado SET DEFAULT 'ACTIVO',
+    ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
+    ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
+
+ALTER TABLE historial_membresias
+    ALTER COLUMN estado SET DEFAULT 'ACTIVO',
+    ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
+    ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
+
+ALTER TABLE movimientos_billetera
+    ALTER COLUMN estado SET DEFAULT 'ACTIVO',
+    ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
+    ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
+
 INSERT INTO billeteras (persona_id, saldo_dinero, saldo_pv, saldo_qp)
 SELECT p.id, 0, 0, 0
 FROM personas p
@@ -569,6 +597,20 @@ CREATE TABLE IF NOT EXISTS planes_activacion_niveles (
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM',
     CONSTRAINT uk_planes_activacion_nivel UNIQUE (plan_activacion_id, numero_nivel)
 );
+
+ALTER TABLE planes_activacion
+    ALTER COLUMN estado SET DEFAULT 'ACTIVO',
+    ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
+    ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
+
+ALTER TABLE planes_activacion_niveles
+    ALTER COLUMN estado SET DEFAULT 'ACTIVO',
+    ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
+    ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
 
 INSERT INTO planes_activacion (nombre, descripcion, pv_minimo_mensual, niveles_alcance)
 SELECT 'Activacion Estandar', 'Activa beneficios por compras de producto hasta 3 niveles.', 200, 3
