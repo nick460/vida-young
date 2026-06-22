@@ -3,6 +3,9 @@ import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   plugins: [vue()],
+  preview: {
+    allowedHosts: ["rubina-solutions.tech"]
+  },
   resolve: {
     alias: {
       vue: "vue/dist/vue.esm-bundler.js"
