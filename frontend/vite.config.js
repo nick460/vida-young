@@ -4,7 +4,7 @@ import vue from "@vitejs/plugin-vue";
 export default defineConfig({
   plugins: [vue()],
   preview: {
-    allowedHosts: ["rubina-solutions.tech"]
+    allowedHosts: ["rubina-solutions.tech", "www.vidayoung.online", "vidayoung.online"]
   },
   resolve: {
     alias: {
