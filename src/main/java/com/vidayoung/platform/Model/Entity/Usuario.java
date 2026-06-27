@@ -51,13 +51,13 @@ public class Usuario extends Auditoria {
     @Column(name = "foto_perfil", length = 255)
     private String fotoPerfil;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false, cascade = CascadeType.ALL)
+    @OneToOne(fetch = FetchType.EAGER , optional = false, cascade = CascadeType.ALL)
     @JoinColumn(name = "persona_id", nullable = false, unique = true)
     @JsonIgnoreProperties("usuario")
     @ToString.Exclude
     private Persona persona;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToMany(fetch = FetchType.EAGER , cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
             name = "usuarios_roles",
             joinColumns = @JoinColumn(name = "usuario_id"),
