@@ -2,10 +2,12 @@ CREATE TABLE IF NOT EXISTS personas (
     id BIGSERIAL PRIMARY KEY,
     nombres VARCHAR(100) NOT NULL,
     apellidos VARCHAR(100) NOT NULL,
-    documento VARCHAR(30) NOT NULL UNIQUE,
+    documento VARCHAR(30) UNIQUE,
     email VARCHAR(120),
     telefono VARCHAR(30)
 );
+
+ALTER TABLE personas ALTER COLUMN documento DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS roles (
     id BIGSERIAL PRIMARY KEY,

@@ -61,6 +61,11 @@ const compensationSummary = computed(() => referidos.value.reduce((summaryValue,
 
 const previewRows = computed(() => compensationRowsForSponsor(Number(form.patrocinadorId), Number(form.planId)));
 
+function optionalText(value) {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
+}
+
 function fullName(persona) {
   return `${persona?.nombres || ""} ${persona?.apellidos || ""}`.trim() || "Persona";
 }
@@ -202,9 +207,9 @@ async function createPersonaIfNeeded() {
     body: JSON.stringify({
       nombres: form.nombres,
       apellidos: form.apellidos,
-      documento: form.documento,
-      email: form.email,
-      telefono: form.telefono
+      documento: optionalText(form.documento),
+      email: optionalText(form.email),
+      telefono: optionalText(form.telefono)
     })
   });
 
@@ -356,7 +361,7 @@ onMounted(loadAll);
           </label>
           <label>
             Documento
-            <input v-model.trim="form.documento" required maxlength="30" />
+            <input v-model.trim="form.documento" maxlength="30" />
           </label>
           <label>
             Email

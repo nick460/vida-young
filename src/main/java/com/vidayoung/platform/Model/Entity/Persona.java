@@ -42,7 +42,7 @@ public class Persona extends Auditoria {
     @Column(nullable = false, length = 100)
     private String apellidos;
 
-    @Column(nullable = false, unique = true, length = 30)
+    @Column(unique = true, length = 30)
     private String documento;
 
     @Column(length = 120)
