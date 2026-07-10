@@ -28,10 +28,6 @@ export const ScreenDashboard = defineComponent({
         <h1 style="font-size:30px;font-weight:800">Tu bienestar financiero, hoy</h1>
         <p style="font-size:14px;color:var(--vy-ink-2);margin-top:4px">Has crecido 24% este mes. Vas en camino al rango Diamante Élite.</p>
       </div>
-      <div style="display:flex;gap:10px">
-        <button class="vy-btn vy-btn-ghost" style="padding:10px 16px"><vy-icon name="arrowDn" :size="14"/> Retirar</button>
-        <button class="vy-btn vy-btn-primary" style="padding:10px 18px"><vy-icon name="plus" :size="14"/> Invitar embajador</button>
-      </div>
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:14px;margin-bottom:18px">

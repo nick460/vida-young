@@ -170,7 +170,6 @@ export const ScreenNetwork = defineComponent({
         <h1 style="font-size:30px;font-weight:800">Comunidad de bienestar</h1>
         <p style="font-size:14px;color:var(--vy-ink-2);margin-top:4px">138 embajadores activos en 4 niveles. Crecimiento +12% en 30 días.</p>
       </div>
-      <button class="vy-btn vy-btn-primary"><vy-icon name="plus" :size="14"/> Invitar embajador</button>
     </div>
 
     <div class="vy-card" style="padding:22px;margin-bottom:18px;display:grid;grid-template-columns:1.4fr 1fr;gap:24px;align-items:center">
