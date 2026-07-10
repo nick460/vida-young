@@ -108,6 +108,16 @@ public class ReferidoServiceImpl implements ReferidoService {
     @Transactional(rollbackOn = Exception.class)
     public void eliminar(Long id) {
         referidoDao.findById(id).ifPresent(referido -> {
+            Persona patrocinadorInmediato = referido.getPatrocinador();
+
+            referidoDao.findByPatrocinadorId(referido.getPersona().getId()).stream()
+                    .filter(hijo -> Auditoria.ESTADO_ACTIVO.equals(hijo.getEstado()))
+                    .forEach(hijo -> {
+                        hijo.setPatrocinador(patrocinadorInmediato);
+                        Referido hijoActualizado = referidoDao.save(hijo);
+                        regenerarRecompensas(hijoActualizado);
+                    });
+
             referido.setEstado(Auditoria.ESTADO_ELIMINADO);
             referidoDao.save(referido);
             desactivarRecompensas(referido);

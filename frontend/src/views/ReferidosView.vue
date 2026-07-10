@@ -278,10 +278,10 @@ async function saveReferido() {
 async function removeReferido(referido) {
   const result = await Swal.fire({
     title: "Quitar de la red",
-    text: `${fullName(referido.persona)} dejara de figurar como referido activo.`,
+    text: `${fullName(referido.persona)} dejara de figurar como referido activo. Sus referidos directos pasaran a su patrocinador inmediato. Esta accion no se puede revertir.`,
     icon: "warning",
     showCancelButton: true,
-    confirmButtonText: "Quitar",
+    confirmButtonText: "Aceptar y quitar",
     cancelButtonText: "Cancelar",
     confirmButtonColor: "#C4452A",
     cancelButtonColor: "#1F1A14"

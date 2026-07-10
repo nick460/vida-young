@@ -313,7 +313,7 @@ watch(planModalOpen, (isOpen) => {
     </section>
 
     <Teleport to="body">
-      <div v-if="planModalOpen" class="modal-backdrop" @click.self="closePlanModal">
+      <div v-if="planModalOpen" class="modal-backdrop">
         <form class="plan-modal" @submit.prevent="savePlan">
           <header>
             <div>

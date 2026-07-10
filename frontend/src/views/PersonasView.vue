@@ -440,7 +440,7 @@ watch(totalPages, (pages) => {
     </main>
 
     <Teleport to="body">
-      <div v-if="personaModalOpen" class="modal-backdrop" @click.self="closePersonaModal">
+      <div v-if="personaModalOpen" class="modal-backdrop">
         <form class="entity-modal" @submit.prevent="savePersona">
           <header>
             <div>
@@ -467,7 +467,7 @@ watch(totalPages, (pages) => {
         </form>
       </div>
 
-      <div v-if="usuarioModalOpen" class="modal-backdrop" @click.self="closeUsuarioModal">
+      <div v-if="usuarioModalOpen" class="modal-backdrop">
         <form class="entity-modal" @submit.prevent="saveUsuario">
           <header>
             <div>

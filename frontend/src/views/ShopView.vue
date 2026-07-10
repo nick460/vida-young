@@ -113,7 +113,9 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
       </section>
 
       <section v-if="hero" class="vy-card featured-product">
-        <VyProductImage :grad="productGradient(hero)" :h="380" big />
+        <div class="featured-image">
+          <VyProductImage :grad="productGradient(hero)" :h="1" big />
+        </div>
         <div class="featured-info">
           <span class="vy-chip vy-chip-orange">{{ hero.badge }}</span>
           <small>{{ hero.cat }}</small>
@@ -152,7 +154,7 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
       <section class="product-grid">
         <article v-for="product in productList" :key="product.id" class="vy-card product-card">
           <div class="product-image">
-            <VyProductImage :grad="productGradient(product)" :h="180" />
+            <VyProductImage :grad="productGradient(product)" :h="1" />
             <span v-if="product.badge" class="vy-chip vy-chip-ink">{{ product.badge }}</span>
             <button type="button" aria-label="Favorito">
               <Heart :size="15" />
@@ -329,9 +331,21 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
   padding: 0;
   margin-bottom: 18px;
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  grid-template-columns: minmax(280px, 0.82fr) minmax(320px, 1fr);
   gap: 0;
   overflow: hidden;
+}
+
+.featured-image {
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.featured-image :deep(> div),
+.product-image :deep(> div) {
+  width: 100%;
+  height: 100% !important;
 }
 
 .featured-info {
@@ -477,6 +491,9 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
 
 .product-image {
   position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 14px;
 }
 
 .product-image .vy-chip {

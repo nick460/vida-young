@@ -216,7 +216,7 @@ watch(() => form.nivelesAlcance, applyReachToRows);
     </section>
 
     <Teleport to="body">
-      <div v-if="modalOpen" class="modal-backdrop" @click.self="closeModal">
+      <div v-if="modalOpen" class="modal-backdrop">
         <form class="activation-modal" @submit.prevent="savePlan">
           <header>
             <div>

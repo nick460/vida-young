@@ -368,7 +368,7 @@ watch(productForm, () => {
     </main>
 
     <Teleport to="body">
-      <div v-if="productModalOpen" class="modal-backdrop" @click.self="closeProductModal">
+      <div v-if="productModalOpen" class="modal-backdrop">
         <form class="entity-modal" novalidate @submit.prevent="saveProduct">
           <header>
             <div>
