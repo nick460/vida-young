@@ -33,6 +33,7 @@ const paymentOptions = [
 const total = computed(() => items.value.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0));
 const totalPv = computed(() => items.value.reduce((sum, item) => sum + Number(item.pv || 0) * Number(item.quantity || 0), 0));
 const totalQp = computed(() => items.value.reduce((sum, item) => sum + Number(item.qp || 0) * Number(item.quantity || 0), 0));
+const totalCr = computed(() => items.value.reduce((sum, item) => sum + Number(item.cr || 0) * Number(item.quantity || 0), 0));
 const totalProducts = computed(() => items.value.reduce((sum, item) => sum + Number(item.quantity || 0), 0));
 
 function money(value) {
@@ -148,7 +149,7 @@ async function checkout() {
 
     await Swal.fire({
       title: "Compra pendiente",
-      html: `Metodo de pago: <b>${selectedPayment.value}</b><br>${selectedPayment.value === "CAJA" ? `Codigo de caja: <b>${cajaCode.value}</b><br>` : ""}PV: <b>${money(response.compra?.totalPv)}</b><br>QP: <b>${money(response.compra?.totalQp)}</b><br>La compra queda pendiente de validacion en ventanilla.`,
+      html: `Metodo de pago: <b>${selectedPayment.value}</b><br>${selectedPayment.value === "CAJA" ? `Codigo de caja: <b>${cajaCode.value}</b><br>` : ""}PV: <b>${money(response.compra?.totalPv)}</b><br>QP: <b>${money(response.compra?.totalQp)}</b><br>CR: <b>${money(response.compra?.totalCr)}</b><br>La compra queda pendiente de validacion en ventanilla.`,
       icon: "success",
       confirmButtonText: "Entendido",
       confirmButtonColor: "#F28705"
@@ -176,7 +177,7 @@ onMounted(() => {
         <div>
           <div class="vy-eyebrow">Carrito</div>
           <h1>Confirmar compra</h1>
-          <p>La compra se registrara para la persona logeada y sumara PV/QP mensual.</p>
+          <p>La compra se registrara para la persona logeada y sumara PV/QP/CR mensual.</p>
         </div>
       </header>
 
@@ -193,7 +194,7 @@ onMounted(() => {
             <div class="cart-info">
               <small>{{ item.sku }} · {{ item.cat || "Producto" }}</small>
               <strong>{{ item.name }}</strong>
-              <span>Bs. {{ money(item.price) }} · PV {{ money(item.pv) }} · QP {{ money(item.qp) }}</span>
+              <span>Bs. {{ money(item.price) }} · PV {{ money(item.pv) }} · QP {{ money(item.qp) }} · CR {{ money(item.cr) }}</span>
             </div>
             <div class="quantity-box">
               <button type="button" @click="decrement(item)"><Minus :size="13" /></button>
@@ -213,6 +214,7 @@ onMounted(() => {
           <div class="summary-line"><span>Productos</span><b>{{ totalProducts }}</b></div>
           <div class="summary-line"><span>PV mensual</span><b>{{ money(totalPv) }}</b></div>
           <div class="summary-line"><span>QP mensual</span><b>{{ money(totalQp) }}</b></div>
+          <div class="summary-line"><span>CR mensual</span><b>{{ money(totalCr) }}</b></div>
           <div class="summary-total"><span>Total</span><strong>Bs. {{ money(total) }}</strong></div>
           <p>Los beneficios de activacion se pagan hacia arriba segun PV activo y niveles alcanzados.</p>
         </aside>

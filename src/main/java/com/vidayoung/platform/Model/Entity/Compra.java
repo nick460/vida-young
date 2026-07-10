@@ -69,6 +69,10 @@ public class Compra extends Auditoria {
     @Builder.Default
     private BigDecimal totalQp = BigDecimal.ZERO;
 
+    @Column(name = "total_cr", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal totalCr = BigDecimal.ZERO;
+
     @Column(name = "estado_compra", nullable = false, length = 30)
     private String estadoCompra;
 

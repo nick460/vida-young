@@ -32,6 +32,7 @@ public class MovimientoBilletera extends Auditoria {
     public static final String TIPO_DINERO = "DINERO";
     public static final String TIPO_PV = "PV";
     public static final String TIPO_QP = "QP";
+    public static final String TIPO_CR = "CR";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

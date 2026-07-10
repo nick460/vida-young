@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS productos (
     precio NUMERIC(12, 2) NOT NULL,
     pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     imagen_url VARCHAR(255),
     listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
@@ -161,7 +162,36 @@ CREATE TABLE IF NOT EXISTS productos (
 ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS productos_categorias (
+    id BIGSERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    sigla VARCHAR(12) NOT NULL UNIQUE,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+ALTER TABLE productos_categorias
+    ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    ADD COLUMN IF NOT EXISTS fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    ADD COLUMN IF NOT EXISTS usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM';
+
+INSERT INTO productos_categorias (nombre, sigla)
+SELECT DISTINCT
+    p.categoria,
+    LOWER(SUBSTRING(REGEXP_REPLACE(p.categoria, '[^A-Za-z0-9]', '', 'g') FROM 1 FOR 3))
+FROM productos p
+WHERE p.categoria IS NOT NULL
+  AND TRIM(p.categoria) <> ''
+  AND LENGTH(REGEXP_REPLACE(p.categoria, '[^A-Za-z0-9]', '', 'g')) >= 2
+ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS productos_landings (
     id BIGSERIAL PRIMARY KEY,
@@ -393,6 +423,7 @@ CREATE TABLE IF NOT EXISTS billeteras (
     saldo_dinero NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -443,6 +474,7 @@ CREATE TABLE IF NOT EXISTS cierres_mensuales_billetera (
     saldo_dinero NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     rango_id BIGINT REFERENCES rangos(id),
     rango_nombre VARCHAR(100),
     rango_qp_minimo NUMERIC(12, 2),
@@ -457,6 +489,7 @@ CREATE TABLE IF NOT EXISTS cierres_mensuales_billetera (
 );
 
 ALTER TABLE cierres_mensuales_billetera
+    ADD COLUMN IF NOT EXISTS saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS rango_id BIGINT REFERENCES rangos(id),
     ADD COLUMN IF NOT EXISTS rango_nombre VARCHAR(100),
     ADD COLUMN IF NOT EXISTS rango_qp_minimo NUMERIC(12, 2);
@@ -470,6 +503,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_billetera_referencia
     WHERE referencia_tipo IS NOT NULL AND referencia_id IS NOT NULL;
 
 ALTER TABLE billeteras
+    ADD COLUMN IF NOT EXISTS saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ALTER COLUMN estado SET DEFAULT 'ACTIVO',
     ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
     ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
@@ -490,8 +524,8 @@ ALTER TABLE movimientos_billetera
     ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
     ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
 
-INSERT INTO billeteras (persona_id, saldo_dinero, saldo_pv, saldo_qp)
-SELECT p.id, 0, 0, 0
+INSERT INTO billeteras (persona_id, saldo_dinero, saldo_pv, saldo_qp, saldo_cr)
+SELECT p.id, 0, 0, 0, 0
 FROM personas p
 WHERE NOT EXISTS (
     SELECT 1 FROM billeteras b WHERE b.persona_id = p.id
@@ -566,6 +600,15 @@ SET saldo_qp = COALESCE((
     FROM movimientos_billetera mb
     WHERE mb.billetera_id = b.id
       AND mb.tipo = 'QP'
+      AND mb.estado = 'ACTIVO'
+), 0);
+
+UPDATE billeteras b
+SET saldo_cr = COALESCE((
+    SELECT SUM(mb.monto)
+    FROM movimientos_billetera mb
+    WHERE mb.billetera_id = b.id
+      AND mb.tipo = 'CR'
       AND mb.estado = 'ACTIVO'
 ), 0);
 
@@ -648,6 +691,7 @@ CREATE TABLE IF NOT EXISTS compras (
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado_compra VARCHAR(30) NOT NULL DEFAULT 'CONFIRMADA',
     usuario_validacion VARCHAR(80),
     fecha_validacion TIMESTAMP,
@@ -680,7 +724,8 @@ ALTER TABLE compras
     ADD COLUMN IF NOT EXISTS referencia_pago VARCHAR(180),
     ADD COLUMN IF NOT EXISTS comprobante_pago_url VARCHAR(255),
     ADD COLUMN IF NOT EXISTS comprobante_pago_nombre VARCHAR(180),
-    ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80);
+    ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS compras_detalles (
     id BIGSERIAL PRIMARY KEY,
@@ -690,6 +735,7 @@ CREATE TABLE IF NOT EXISTS compras_detalles (
     precio_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     pv_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     qp_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    cr_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -697,6 +743,9 @@ CREATE TABLE IF NOT EXISTS compras_detalles (
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+ALTER TABLE compras_detalles
+    ADD COLUMN IF NOT EXISTS cr_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS beneficios_activacion_compras (
     id BIGSERIAL PRIMARY KEY,

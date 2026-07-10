@@ -58,6 +58,9 @@ public class CompraDetalle extends Auditoria {
     @Column(name = "qp_unitario", nullable = false, precision = 12, scale = 2)
     private BigDecimal qpUnitario;
 
+    @Column(name = "cr_unitario", nullable = false, precision = 12, scale = 2)
+    private BigDecimal crUnitario;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal subtotal;
 }

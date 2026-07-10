@@ -46,6 +46,7 @@ function mapProducto(producto) {
     price: Number(producto.precio || 0),
     pv: Number(producto.pv || 0),
     qp: Number(producto.qp || 0),
+    cr: Number(producto.cr || 0),
     old: null,
     badge: null,
     img: producto.imagenUrl || "linear-gradient(135deg, #F2E7C4 0%, #F28705 100%)",
@@ -129,7 +130,10 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
             <span v-if="hero.old">Bs. {{ hero.old.toLocaleString("es-BO") }}</span>
             <b v-if="hero.old" class="vy-chip vy-chip-orange">−14%</b>
           </div>
-          <p class="volume-line">PV {{ hero.pv.toLocaleString("es-BO") }} · QP {{ hero.qp.toLocaleString("es-BO") }}</p>
+          <p class="volume-line">
+            PV {{ hero.pv.toLocaleString("es-BO") }} · QP {{ hero.qp.toLocaleString("es-BO") }}
+            <template v-if="Number(hero.cr || 0) > 0"> · CR {{ hero.cr.toLocaleString("es-BO") }}</template>
+          </p>
 
           <div class="featured-actions">
             <button
@@ -168,7 +172,10 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
             <footer>
               <div>
                 <strong>Bs. {{ product.price.toLocaleString("es-BO") }}</strong>
-                <small>PV {{ product.pv.toLocaleString("es-BO") }} · QP {{ product.qp.toLocaleString("es-BO") }}</small>
+                <small>
+                  PV {{ product.pv.toLocaleString("es-BO") }} · QP {{ product.qp.toLocaleString("es-BO") }}
+                  <template v-if="Number(product.cr || 0) > 0"> · CR {{ product.cr.toLocaleString("es-BO") }}</template>
+                </small>
                 <span v-if="product.old">Bs. {{ product.old.toLocaleString("es-BO") }}</span>
               </div>
               <button

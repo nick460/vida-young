@@ -12,6 +12,7 @@ export function mapProduct(producto) {
     price: Number(producto.precio ?? producto.price ?? 0),
     pv: Number(producto.pv || 0),
     qp: Number(producto.qp || 0),
+    cr: Number(producto.cr || 0),
     old: producto.old || null,
     rating: producto.rating || 4.8,
     badge: producto.badge || null,

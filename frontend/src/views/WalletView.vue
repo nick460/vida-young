@@ -74,7 +74,7 @@ onMounted(loadWallet);
         <div>
           <div class="vy-eyebrow">Finanzas</div>
           <h1>Billetera y membresias</h1>
-          <p>Consulta dinero disponible, PV, QP e historial mensual de membresias.</p>
+          <p>Consulta dinero disponible, PV, QP, CR e historial mensual de membresias.</p>
         </div>
         <button class="vy-btn vy-btn-primary" type="button">
           <ArrowDownToLine :size="16" stroke-width="2" />
@@ -116,6 +116,11 @@ onMounted(loadWallet);
             <strong>{{ money(billetera.saldoQp) }}</strong>
             <small>Puntos calificables de planes y activaciones.</small>
           </div>
+          <div class="point-row">
+            <span>CR</span>
+            <strong>{{ money(billetera.saldoCr) }}</strong>
+            <small>Credito de recompensa acumulado por compras.</small>
+          </div>
         </article>
       </section>
 
@@ -126,13 +131,14 @@ onMounted(loadWallet);
         <header class="history-header">
           <div>
             <h2>Movimientos de billetera</h2>
-            <p>Dinero, PV y QP registrados en tu cuenta.</p>
+            <p>Dinero, PV, QP y CR registrados en tu cuenta.</p>
           </div>
           <div class="filters">
             <button class="active" type="button">Todos</button>
             <button type="button">Dinero</button>
             <button type="button">PV</button>
             <button type="button">QP</button>
+            <button type="button">CR</button>
           </div>
         </header>
 
@@ -233,7 +239,7 @@ onMounted(loadWallet);
         <header class="history-header">
           <div>
             <h2>Cierres mensuales</h2>
-            <p>Historico de dinero enviado a planilla y PV/QP reiniciados por mes.</p>
+            <p>Historico de dinero enviado a planilla y PV/QP/CR reiniciados por mes.</p>
           </div>
         </header>
 
@@ -246,6 +252,7 @@ onMounted(loadWallet);
                 <th>Dinero planilla</th>
                 <th>PV</th>
                 <th>QP</th>
+                <th>CR</th>
                 <th>Rango</th>
                 <th>Estado</th>
               </tr>
@@ -257,13 +264,14 @@ onMounted(loadWallet);
                 <td>Bs. {{ money(cierre.saldoDinero) }}</td>
                 <td>{{ money(cierre.saldoPv) }}</td>
                 <td>{{ money(cierre.saldoQp) }}</td>
+                <td>{{ money(cierre.saldoCr) }}</td>
                 <td>
                   <span class="rank-pill">{{ cierre.rangoNombre || cierre.rango?.nombre || "Sin rango" }}</span>
                 </td>
                 <td><span class="vy-chip vy-chip-orange">{{ cierre.estadoPlanilla }}</span></td>
               </tr>
               <tr v-if="!cierresMensuales.length && !loading">
-                <td colspan="7">No hay cierres mensuales registrados.</td>
+                <td colspan="8">No hay cierres mensuales registrados.</td>
               </tr>
             </tbody>
           </table>

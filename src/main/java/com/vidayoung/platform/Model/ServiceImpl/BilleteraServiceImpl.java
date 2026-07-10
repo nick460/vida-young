@@ -56,6 +56,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                         .saldoDinero(BigDecimal.ZERO)
                         .saldoPv(BigDecimal.ZERO)
                         .saldoQp(BigDecimal.ZERO)
+                        .saldoCr(BigDecimal.ZERO)
                         .build()));
     }
 
@@ -246,6 +247,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             BigDecimal saldoDinero = zeroIfNull(billetera.getSaldoDinero());
             BigDecimal saldoPv = zeroIfNull(billetera.getSaldoPv());
             BigDecimal saldoQp = zeroIfNull(billetera.getSaldoQp());
+            BigDecimal saldoCr = zeroIfNull(billetera.getSaldoCr());
             Rango rango = rangoAlcanzadoPorQp(saldoQp).orElse(null);
 
             CierreMensualBilletera cierre = cierreMensualBilleteraDao.save(CierreMensualBilletera.builder()
@@ -254,6 +256,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .saldoDinero(saldoDinero)
                     .saldoPv(saldoPv)
                     .saldoQp(saldoQp)
+                    .saldoCr(saldoCr)
                     .rango(rango)
                     .rangoNombre(rango == null ? null : rango.getNombre())
                     .rangoQpMinimo(rango == null ? null : zeroIfNull(rango.getQpMinimo()))
@@ -264,10 +267,12 @@ public class BilleteraServiceImpl implements BilleteraService {
             registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_DINERO, saldoDinero);
             registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PV, saldoPv);
             registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_QP, saldoQp);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_CR, saldoCr);
 
             billetera.setSaldoDinero(BigDecimal.ZERO);
             billetera.setSaldoPv(BigDecimal.ZERO);
             billetera.setSaldoQp(BigDecimal.ZERO);
+            billetera.setSaldoCr(BigDecimal.ZERO);
             billeteraDao.save(billetera);
             actualizarRangoActual(billetera.getPersona(), BigDecimal.ZERO);
             totalCierres++;

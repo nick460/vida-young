@@ -63,7 +63,7 @@ function landingUrl(product) {
     query: Object.fromEntries(new URLSearchParams(encodeReferralQuery(referral.value)))
   });
 
-  return `${window.location.origin}${window.location.pathname}${route.href}`;
+  return `${window.location.origin}${route.href}`;
 }
 
 function shareMessage(product) {
@@ -78,7 +78,7 @@ function topicUrl(topic) {
     query: Object.fromEntries(new URLSearchParams(encodeReferralQuery(referral.value)))
   });
 
-  return `${window.location.origin}${window.location.pathname}${route.href}`;
+  return `${window.location.origin}${route.href}`;
 }
 
 function topicMessage(topic) {

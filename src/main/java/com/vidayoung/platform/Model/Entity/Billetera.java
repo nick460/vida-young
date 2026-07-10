@@ -55,4 +55,8 @@ public class Billetera extends Auditoria {
     @Column(name = "saldo_qp", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal saldoQp = BigDecimal.ZERO;
+
+    @Column(name = "saldo_cr", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal saldoCr = BigDecimal.ZERO;
 }

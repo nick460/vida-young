@@ -53,6 +53,10 @@ public class Producto extends Auditoria {
     @Builder.Default
     private BigDecimal qp = BigDecimal.ZERO;
 
+    @Column(nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal cr = BigDecimal.ZERO;
+
     @Column(name = "imagen_url", length = 255)
     private String imagenUrl;
 

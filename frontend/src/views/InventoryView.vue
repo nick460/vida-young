@@ -19,6 +19,7 @@ import { VyProductImage } from "../components/ui.js";
 const loading = ref(false);
 const error = ref("");
 const productos = ref([]);
+const categorias = ref([]);
 const query = ref("");
 const productModalOpen = ref(false);
 const editingProductId = ref(null);
@@ -41,11 +42,18 @@ const productForm = reactive({
   precio: 0,
   pv: 0,
   qp: 0,
+  cr: 0,
   imagenUrl: "",
   listarEnShop: false
 });
 
+const categoryForm = reactive({
+  nombre: "",
+  sigla: ""
+});
+
 const productErrors = reactive({});
+const categoryErrors = reactive({});
 const productSubmitted = ref(false);
 
 const filteredProducts = computed(() => {
@@ -66,8 +74,35 @@ const shopProductsCount = computed(() =>
 );
 
 const categoriesCount = computed(() =>
-  new Set(productos.value.map((producto) => producto.categoria).filter(Boolean)).size
+  categorias.value.length || new Set(productos.value.map((producto) => producto.categoria).filter(Boolean)).size
 );
+
+const sortedCategories = computed(() =>
+  [...categorias.value].sort((left, right) => left.nombre.localeCompare(right.nombre))
+);
+
+const selectedCategory = computed(() =>
+  sortedCategories.value.find((categoria) => categoria.nombre === productForm.categoria)
+);
+
+const nextSkuPreview = computed(() => {
+  if (editingProductId.value && productForm.sku) {
+    return productForm.sku;
+  }
+
+  if (!selectedCategory.value?.sigla) {
+    return "Se generara al guardar";
+  }
+
+  const prefix = `${selectedCategory.value.sigla.toLowerCase()}-`;
+  const max = productos.value
+    .map((producto) => String(producto.sku || ""))
+    .filter((sku) => sku.toLowerCase().startsWith(prefix))
+    .map((sku) => Number(sku.slice(prefix.length)) || 0)
+    .reduce((highest, value) => Math.max(highest, value), 0);
+
+  return `${prefix}${String(max + 1).padStart(3, "0")}`;
+});
 
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", {
@@ -130,8 +165,8 @@ function setErrors(target, errors) {
 function validateProductForm() {
   const errors = {};
 
-  if (!productForm.sku.trim()) {
-    errors.sku = "Ingresa el SKU del producto.";
+  if (!productForm.categoria) {
+    errors.categoria = "Selecciona una categoria registrada.";
   }
 
   if (!productForm.nombre.trim()) {
@@ -150,7 +185,27 @@ function validateProductForm() {
     errors.qp = "El QP no puede ser negativo.";
   }
 
+  if (Number(productForm.cr) < 0) {
+    errors.cr = "El CR no puede ser negativo.";
+  }
+
   setErrors(productErrors, errors);
+  return Object.keys(errors).length === 0;
+}
+
+function validateCategoryForm() {
+  const errors = {};
+  const sigla = categoryForm.sigla.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  if (!categoryForm.nombre.trim()) {
+    errors.nombre = "Ingresa el nombre de la categoria.";
+  }
+
+  if (sigla.length < 2 || sigla.length > 12) {
+    errors.sigla = "La sigla debe tener entre 2 y 12 caracteres.";
+  }
+
+  setErrors(categoryErrors, errors);
   return Object.keys(errors).length === 0;
 }
 
@@ -159,11 +214,38 @@ async function loadAll() {
   error.value = "";
 
   try {
-    productos.value = await apiRequest("/api/productos");
+    const [productosData, categoriasData] = await Promise.all([
+      apiRequest("/api/productos"),
+      apiRequest("/api/producto-categorias")
+    ]);
+    productos.value = productosData;
+    categorias.value = categoriasData;
   } catch {
     error.value = "No se pudo cargar inventario. Verifica que el backend este activo y la sesion sea valida.";
   } finally {
     loading.value = false;
+  }
+}
+
+async function saveCategory() {
+  if (!validateCategoryForm()) {
+    return;
+  }
+
+  try {
+    await apiRequest("/api/producto-categorias", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre: categoryForm.nombre,
+        sigla: categoryForm.sigla
+      })
+    });
+    Object.assign(categoryForm, { nombre: "", sigla: "" });
+    setErrors(categoryErrors, {});
+    await loadAll();
+    await showSuccess("Categoria guardada", "La categoria se registro correctamente.");
+  } catch (exception) {
+    await showError("No se pudo guardar", exception.message || "Revisa la categoria.");
   }
 }
 
@@ -181,6 +263,7 @@ function resetProductForm() {
     precio: 0,
     pv: 0,
     qp: 0,
+    cr: 0,
     imagenUrl: "",
     listarEnShop: false
   });
@@ -199,6 +282,7 @@ function openProductModal(producto = null) {
       precio: producto.precio || 0,
       pv: producto.pv || 0,
       qp: producto.qp || 0,
+      cr: producto.cr || 0,
       imagenUrl: producto.imagenUrl || "",
       listarEnShop: Boolean(producto.listarEnShop)
     });
@@ -234,6 +318,7 @@ async function saveProduct() {
         precio: Number(productForm.precio || 0),
         pv: Number(productForm.pv || 0),
         qp: Number(productForm.qp || 0),
+        cr: Number(productForm.cr || 0),
         listarEnShop: Boolean(productForm.listarEnShop)
       })
     });
@@ -323,6 +408,34 @@ watch(productForm, () => {
       <div v-if="loading" class="loading-box">Cargando inventario...</div>
 
       <section v-else class="vy-card products-card">
+        <section class="category-manager">
+          <div>
+            <h2>Categorias de producto</h2>
+            <p>Registra categorias con sigla para generar SKU automaticos.</p>
+          </div>
+          <form class="category-form" @submit.prevent="saveCategory">
+            <label :class="{ invalid: categoryErrors.nombre }">
+              <span>Categoria</span>
+              <input v-model.trim="categoryForm.nombre" placeholder="Malteada" />
+              <small v-if="categoryErrors.nombre">{{ categoryErrors.nombre }}</small>
+            </label>
+            <label :class="{ invalid: categoryErrors.sigla }">
+              <span>Sigla</span>
+              <input v-model.trim="categoryForm.sigla" maxlength="12" placeholder="mal" />
+              <small v-if="categoryErrors.sigla">{{ categoryErrors.sigla }}</small>
+            </label>
+            <button class="vy-btn vy-btn-primary" type="submit">
+              <Plus :size="14" />
+              Categoria
+            </button>
+          </form>
+          <div class="category-pills">
+            <span v-for="categoria in sortedCategories" :key="categoria.id">
+              {{ categoria.nombre }} <strong>{{ categoria.sigla }}</strong>
+            </span>
+          </div>
+        </section>
+
         <div class="card-header">
           <div>
             <h2>Catalogo de productos</h2>
@@ -343,7 +456,7 @@ watch(productForm, () => {
             />
             <div class="product-main">
               <strong>{{ producto.nombre }}</strong>
-              <small>{{ producto.sku }} · {{ producto.categoria || "Sin categoria" }}</small>
+              <small>{{ producto.sku }} · {{ producto.categoria || "Sin categoria" }} · CR {{ money(producto.cr) }}</small>
             </div>
             <span class="shop-state" :class="{ disabled: !producto.listarEnShop }">
               <Eye v-if="producto.listarEnShop" :size="14" />
@@ -352,7 +465,7 @@ watch(productForm, () => {
             </span>
             <span class="price">
               Bs. {{ money(producto.precio) }}
-              <small>PV {{ money(producto.pv) }} · QP {{ money(producto.qp) }}</small>
+              <small>PV {{ money(producto.pv) }} · QP {{ money(producto.qp) }} · CR {{ money(producto.cr) }}</small>
             </span>
             <span class="row-actions">
               <button type="button" aria-label="Editar" @click="openProductModal(producto)">
@@ -378,19 +491,24 @@ watch(productForm, () => {
             <button type="button" aria-label="Cerrar" @click="closeProductModal">x</button>
           </header>
           <div class="modal-grid">
-            <label :class="{ invalid: productErrors.sku }">
+            <label>
               <span>SKU</span>
-              <input v-model.trim="productForm.sku" />
-              <small v-if="productErrors.sku">{{ productErrors.sku }}</small>
+              <input :value="nextSkuPreview" disabled />
             </label>
             <label :class="{ invalid: productErrors.nombre }">
               <span>Nombre</span>
               <input v-model.trim="productForm.nombre" />
               <small v-if="productErrors.nombre">{{ productErrors.nombre }}</small>
             </label>
-            <label>
+            <label :class="{ invalid: productErrors.categoria }">
               <span>Categoria</span>
-              <input v-model.trim="productForm.categoria" />
+              <select v-model="productForm.categoria">
+                <option value="">Selecciona categoria</option>
+                <option v-for="categoria in sortedCategories" :key="categoria.id" :value="categoria.nombre">
+                  {{ categoria.nombre }} ({{ categoria.sigla }})
+                </option>
+              </select>
+              <small v-if="productErrors.categoria">{{ productErrors.categoria }}</small>
             </label>
             <label :class="{ invalid: productErrors.precio }">
               <span>Precio</span>
@@ -406,6 +524,11 @@ watch(productForm, () => {
               <span>QP</span>
               <input v-model.number="productForm.qp" type="number" min="0" step="0.01" />
               <small v-if="productErrors.qp">{{ productErrors.qp }}</small>
+            </label>
+            <label :class="{ invalid: productErrors.cr }">
+              <span>CR</span>
+              <input v-model.number="productForm.cr" type="number" min="0" step="0.01" />
+              <small v-if="productErrors.cr">{{ productErrors.cr }}</small>
             </label>
             <label class="toggle-field full-field">
               <input v-model="productForm.listarEnShop" type="checkbox" />
@@ -449,8 +572,15 @@ watch(productForm, () => {
 .summary-card span { display: block; font-size: 12px; color: var(--vy-ink-3); font-weight: 700; text-transform: uppercase; }
 .summary-card strong { display: block; font-family: var(--font-display); font-size: 28px; font-weight: 800; margin-top: 6px; }
 .products-card { padding: 18px; overflow: hidden; }
+.category-manager { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--vy-line-2); }
+.category-manager h2, .card-header h2 { font-size: 16px; font-weight: 800; }
+.category-manager p { margin-top: 4px; color: var(--vy-ink-2); font-size: 14px; }
+.category-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.45fr) auto; gap: 12px; align-items: end; margin-top: 14px; }
+.category-form .vy-btn { min-height: 42px; border-radius: 12px; font-weight: 900; }
+.category-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.category-pills span { min-height: 30px; padding: 0 10px; border: 1px solid var(--vy-line); border-radius: 999px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; }
+.category-pills strong { color: var(--vy-orange-deep); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; }
 .card-header { margin-bottom: 16px; }
-.card-header h2 { font-size: 16px; font-weight: 800; }
 .search-field { min-width: 280px; height: 40px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 8px; color: var(--vy-ink-3); }
 .search-field input { width: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: var(--vy-ink); }
 .product-list { display: grid; gap: 8px; max-height: 650px; overflow: auto; padding-right: 2px; }
@@ -480,16 +610,17 @@ watch(productForm, () => {
 .full-field { grid-column: 1 / -1; }
 label span { display: block; margin-bottom: 6px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; text-transform: uppercase; }
 label small { display: block; margin-top: 6px; color: var(--vy-danger); font-size: 11px; font-weight: 800; }
-input, textarea { width: 100%; padding: 12px 13px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 600; }
+input, textarea, select { width: 100%; padding: 12px 13px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 600; }
+input:disabled { background: var(--vy-surface-2); color: var(--vy-ink-3); cursor: not-allowed; }
 input[type="file"] { padding: 10px; }
-input:focus, textarea:focus { outline: 2px solid rgba(242, 135, 5, 0.22); border-color: var(--vy-orange); }
+input:focus, textarea:focus, select:focus { outline: 2px solid rgba(242, 135, 5, 0.22); border-color: var(--vy-orange); }
 label.invalid > span { color: var(--vy-danger); }
-label.invalid input, label.invalid textarea { border-color: var(--vy-danger); background: rgba(196, 69, 42, 0.04); }
+label.invalid input, label.invalid textarea, label.invalid select { border-color: var(--vy-danger); background: rgba(196, 69, 42, 0.04); }
 .toggle-field { min-height: 46px; padding: 12px 13px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 10px; }
 .toggle-field input { width: 18px; height: 18px; padding: 0; accent-color: var(--vy-orange); }
 .toggle-field span { margin: 0; color: var(--vy-ink); font-size: 13px; text-transform: none; }
 .image-field { display: grid; grid-template-columns: minmax(220px, 0.85fr) minmax(260px, 1.15fr); gap: 14px; align-items: end; }
 .entity-modal footer { justify-content: flex-end; padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--vy-line-2); }
 @media (max-width: 1180px) { .product-row { grid-template-columns: 58px minmax(0, 1fr) auto auto; } .price { display: none; } }
-@media (max-width: 720px) { .workspace { padding: 24px 20px 32px; } .page-header, .card-header, .entity-modal header, .entity-modal footer { align-items: stretch; flex-direction: column; } .header-actions, .header-actions .vy-btn { width: 100%; } .summary-grid, .modal-grid, .image-field { grid-template-columns: 1fr; } .product-row { grid-template-columns: 1fr; } .search-field { min-width: 0; width: 100%; } .price { text-align: left; } .row-actions button { width: 100%; } }
+@media (max-width: 720px) { .workspace { padding: 24px 20px 32px; } .page-header, .card-header, .entity-modal header, .entity-modal footer { align-items: stretch; flex-direction: column; } .header-actions, .header-actions .vy-btn { width: 100%; } .summary-grid, .modal-grid, .image-field, .category-form { grid-template-columns: 1fr; } .product-row { grid-template-columns: 1fr; } .search-field { min-width: 0; width: 100%; } .price { text-align: left; } .row-actions button { width: 100%; } }
 </style>

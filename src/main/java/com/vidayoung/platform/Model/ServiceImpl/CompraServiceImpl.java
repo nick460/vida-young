@@ -80,12 +80,14 @@ public class CompraServiceImpl implements CompraService {
                 .subtotal(BigDecimal.ZERO)
                 .totalPv(BigDecimal.ZERO)
                 .totalQp(BigDecimal.ZERO)
+                .totalCr(BigDecimal.ZERO)
                 .build();
         compra = compraDao.save(compra);
 
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal totalPv = BigDecimal.ZERO;
         BigDecimal totalQp = BigDecimal.ZERO;
+        BigDecimal totalCr = BigDecimal.ZERO;
         int totalProductos = 0;
 
         for (ItemCompraRequest item : items) {
@@ -101,6 +103,7 @@ public class CompraServiceImpl implements CompraService {
             BigDecimal precio = zeroIfNull(producto.getPrecio());
             BigDecimal pv = zeroIfNull(producto.getPv());
             BigDecimal qp = zeroIfNull(producto.getQp());
+            BigDecimal cr = zeroIfNull(producto.getCr());
             BigDecimal detalleSubtotal = precio.multiply(BigDecimal.valueOf(cantidad));
 
             compra.getDetalles().add(CompraDetalle.builder()
@@ -110,18 +113,21 @@ public class CompraServiceImpl implements CompraService {
                     .precioUnitario(precio)
                     .pvUnitario(pv)
                     .qpUnitario(qp)
+                    .crUnitario(cr)
                     .subtotal(detalleSubtotal)
                     .build());
 
             subtotal = subtotal.add(detalleSubtotal);
             totalPv = totalPv.add(pv.multiply(BigDecimal.valueOf(cantidad)));
             totalQp = totalQp.add(qp.multiply(BigDecimal.valueOf(cantidad)));
+            totalCr = totalCr.add(cr.multiply(BigDecimal.valueOf(cantidad)));
             totalProductos += cantidad;
         }
 
         compra.setSubtotal(subtotal);
         compra.setTotalPv(totalPv);
         compra.setTotalQp(totalQp);
+        compra.setTotalCr(totalCr);
         compra = compraDao.save(compra);
 
         return compra;
@@ -220,14 +226,14 @@ public class CompraServiceImpl implements CompraService {
                 .filter(value -> value != null)
                 .reduce(0, Integer::sum);
 
-        acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()));
+        acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()), zeroIfNull(compra.getTotalCr()));
 
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {
             generarBeneficiosActivacion(compra, totalProductos);
         }
     }
 
-    private void acreditarVolumenComprador(Persona comprador, Compra compra, BigDecimal totalPv, BigDecimal totalQp) {
+    private void acreditarVolumenComprador(Persona comprador, Compra compra, BigDecimal totalPv, BigDecimal totalQp, BigDecimal totalCr) {
         Billetera billetera = billeteraService.asegurarBilletera(comprador);
 
         if (totalPv.compareTo(BigDecimal.ZERO) > 0
@@ -258,6 +264,21 @@ public class CompraServiceImpl implements CompraService {
                     .referenciaId(compra.getId())
                     .monto(totalQp)
                     .saldoResultado(billetera.getSaldoQp())
+                    .build());
+        }
+
+        if (totalCr.compareTo(BigDecimal.ZERO) > 0
+                && !movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo("COMPRA", compra.getId(), MovimientoBilletera.TIPO_CR)) {
+            billetera.setSaldoCr(zeroIfNull(billetera.getSaldoCr()).add(totalCr));
+            billetera = billeteraDao.save(billetera);
+            movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                    .billetera(billetera)
+                    .tipo(MovimientoBilletera.TIPO_CR)
+                    .concepto("CR por compra #" + compra.getId())
+                    .referenciaTipo("COMPRA")
+                    .referenciaId(compra.getId())
+                    .monto(totalCr)
+                    .saldoResultado(billetera.getSaldoCr())
                     .build());
         }
     }

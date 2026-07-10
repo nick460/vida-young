@@ -83,6 +83,10 @@ const saleQp = computed(() =>
   ventaItems.value.reduce((sum, item) => sum + Number(item.qp || 0) * Number(item.cantidad || 0), 0)
 );
 
+const saleCr = computed(() =>
+  ventaItems.value.reduce((sum, item) => sum + Number(item.cr || 0) * Number(item.cantidad || 0), 0)
+);
+
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", {
     minimumFractionDigits: 2,
@@ -142,7 +146,7 @@ function buildReceiptHtml(compra) {
       <td>${escapeHtml(detalle.producto?.sku || "")}</td>
       <td class="num">${Number(detalle.cantidad || 0)}</td>
       <td class="num">Bs. ${money(detalle.precioUnitario)}</td>
-      <td class="num">PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)}</td>
+      <td class="num">PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)} / CR ${money(detalle.crUnitario)}</td>
       <td class="num">Bs. ${money(detalle.subtotal)}</td>
     </tr>
   `).join("");
@@ -212,6 +216,7 @@ function buildReceiptHtml(compra) {
     <section class="totals">
       <div><span>Total PV</span><strong>${money(compra.totalPv)}</strong></div>
       <div><span>Total QP</span><strong>${money(compra.totalQp)}</strong></div>
+      <div><span>Total CR</span><strong>${money(compra.totalCr)}</strong></div>
       <div><span>Total pagado</span><strong>Bs. ${money(compra.subtotal)}</strong></div>
     </section>
 
@@ -340,15 +345,16 @@ async function downloadReceiptPdf(compra) {
     doc.text(`Bs. ${money(detalle.precioUnitario)}`, 144, y + 6, { align: "right" });
     doc.text(`PV ${money(detalle.pvUnitario)}`, 151, y + 5);
     doc.text(`QP ${money(detalle.qpUnitario)}`, 151, y + 10);
+    doc.text(`CR ${money(detalle.crUnitario)}`, 151, y + 15);
     doc.text(`Bs. ${money(detalle.subtotal)}`, 178, y + 6, { align: "right" });
     doc.setDrawColor(240, 234, 219);
-    doc.line(margin, Math.max(nextY, y + 15), pageWidth - margin, Math.max(nextY, y + 15));
-    y = Math.max(nextY + 4, y + 18);
+    doc.line(margin, Math.max(nextY, y + 20), pageWidth - margin, Math.max(nextY, y + 20));
+    y = Math.max(nextY + 4, y + 23);
   });
 
   y += 8;
   doc.setFillColor(255, 250, 240);
-  doc.roundedRect(pageWidth - 86, y, 72, 31, 4, 4, "F");
+  doc.roundedRect(pageWidth - 86, y, 72, 39, 4, 4, "F");
   doc.setTextColor(31, 26, 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -356,11 +362,13 @@ async function downloadReceiptPdf(compra) {
   doc.text(money(compra.totalPv), pageWidth - 18, y + 8, { align: "right" });
   doc.text("Total QP", pageWidth - 80, y + 16);
   doc.text(money(compra.totalQp), pageWidth - 18, y + 16, { align: "right" });
+  doc.text("Total CR", pageWidth - 80, y + 24);
+  doc.text(money(compra.totalCr), pageWidth - 18, y + 24, { align: "right" });
   doc.setFillColor(242, 135, 5);
-  doc.roundedRect(pageWidth - 86, y + 22, 72, 12, 4, 4, "F");
+  doc.roundedRect(pageWidth - 86, y + 30, 72, 12, 4, 4, "F");
   doc.setTextColor(255, 255, 255);
-  doc.text("Total", pageWidth - 80, y + 30);
-  doc.text(`Bs. ${money(compra.subtotal)}`, pageWidth - 18, y + 30, { align: "right" });
+  doc.text("Total", pageWidth - 80, y + 38);
+  doc.text(`Bs. ${money(compra.subtotal)}`, pageWidth - 18, y + 38, { align: "right" });
 
   doc.save(`comprobante-compra-${compra.id}.pdf`);
 }
@@ -423,6 +431,7 @@ function addProduct(producto) {
     precio: Number(producto.precio || 0),
     pv: Number(producto.pv || 0),
     qp: Number(producto.qp || 0),
+    cr: Number(producto.cr || 0),
     cantidad: 1
   });
 }
@@ -597,7 +606,7 @@ onMounted(loadAll);
             <div v-for="item in ventaItems" :key="item.id" class="sale-item">
               <div>
                 <strong>{{ item.nombre }}</strong>
-                <small>Bs. {{ money(item.precio) }} · PV {{ money(item.pv) }} · QP {{ money(item.qp) }}</small>
+                <small>Bs. {{ money(item.precio) }} · PV {{ money(item.pv) }} · QP {{ money(item.qp) }} · CR {{ money(item.cr) }}</small>
               </div>
               <input :value="item.cantidad" type="number" min="1" @input="changeQuantity(item, $event.target.value)" />
               <b>Bs. {{ money(item.precio * item.cantidad) }}</b>
@@ -613,7 +622,7 @@ onMounted(loadAll);
             <div>
               <small>Total</small>
               <strong>Bs. {{ money(saleTotal) }}</strong>
-              <span>PV {{ money(salePv) }} · QP {{ money(saleQp) }}</span>
+              <span>PV {{ money(salePv) }} · QP {{ money(saleQp) }} · CR {{ money(saleCr) }}</span>
             </div>
             <button class="vy-btn vy-btn-primary" type="button" :disabled="saving" @click="createCajaSale">
               <ShoppingBag :size="16" /> Registrar venta
@@ -648,6 +657,7 @@ onMounted(loadAll);
               <div class="order-meta">
                 <span>PV {{ money(compra.totalPv) }}</span>
                 <span>QP {{ money(compra.totalQp) }}</span>
+                <span>CR {{ money(compra.totalCr) }}</span>
                 <span v-if="compra.codigoPago">Caja {{ compra.codigoPago }}</span>
               </div>
 
@@ -775,7 +785,7 @@ onMounted(loadAll);
                       <td>{{ detalle.producto?.sku || "" }}</td>
                       <td>{{ detalle.cantidad }}</td>
                       <td>Bs. {{ money(detalle.precioUnitario) }}</td>
-                      <td>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }}</td>
+                      <td>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</td>
                       <td>Bs. {{ money(detalle.subtotal) }}</td>
                     </tr>
                   </tbody>
@@ -785,6 +795,7 @@ onMounted(loadAll);
               <div class="receipt-totals">
                 <div><span>Total PV</span><strong>{{ money(receiptModalCompra.totalPv) }}</strong></div>
                 <div><span>Total QP</span><strong>{{ money(receiptModalCompra.totalQp) }}</strong></div>
+                <div><span>Total CR</span><strong>{{ money(receiptModalCompra.totalCr) }}</strong></div>
                 <div><span>Total pagado</span><strong>Bs. {{ money(receiptModalCompra.subtotal) }}</strong></div>
               </div>
             </div>

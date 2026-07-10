@@ -11,4 +11,6 @@ public interface ProductoDao extends JpaRepository<Producto, Long> {
     Optional<Producto> findBySku(String sku);
 
     boolean existsBySku(String sku);
+
+    Optional<Producto> findTopBySkuStartingWithIgnoreCaseOrderBySkuDesc(String prefix);
 }
