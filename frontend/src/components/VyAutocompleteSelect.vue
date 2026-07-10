@@ -4,7 +4,7 @@ import { VyIcon } from "./ui.js";
 
 const props = defineProps({
   modelValue: {
-    type: Array,
+    type: [Array, String, Number],
     default: () => []
   },
   options: {
@@ -26,6 +26,10 @@ const props = defineProps({
   emptyText: {
     type: String,
     default: "Sin resultados"
+  },
+  multiple: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -34,13 +38,23 @@ const emit = defineEmits(["update:modelValue"]);
 const query = ref("");
 const open = ref(false);
 
+const selectedValues = computed(() => {
+  if (props.multiple) {
+    return Array.isArray(props.modelValue) ? props.modelValue : [];
+  }
+
+  return props.modelValue === "" || props.modelValue === null || props.modelValue === undefined
+    ? []
+    : [props.modelValue];
+});
+
 const selectedOptions = computed(() => props.options.filter((option) => {
-  return props.modelValue.map(String).includes(String(option[props.valueKey]));
+  return selectedValues.value.map(String).includes(String(option[props.valueKey]));
 }));
 
 const filteredOptions = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase();
-  const selected = new Set(props.modelValue.map(String));
+  const selected = new Set(selectedValues.value.map(String));
 
   return props.options.filter((option) => {
     const value = String(option[props.valueKey]);
@@ -50,13 +64,18 @@ const filteredOptions = computed(() => {
 });
 
 function selectOption(option) {
-  emit("update:modelValue", [...props.modelValue, option[props.valueKey]]);
+  emit("update:modelValue", props.multiple ? [...selectedValues.value, option[props.valueKey]] : option[props.valueKey]);
   query.value = "";
-  open.value = true;
+  open.value = props.multiple;
 }
 
 function removeOption(value) {
-  emit("update:modelValue", props.modelValue.filter((item) => String(item) !== String(value)));
+  if (props.multiple) {
+    emit("update:modelValue", selectedValues.value.filter((item) => String(item) !== String(value)));
+    return;
+  }
+
+  emit("update:modelValue", "");
 }
 
 function closeLater() {

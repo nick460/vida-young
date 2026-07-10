@@ -5,6 +5,7 @@ export const CUSTOM_MENUS_STORAGE_KEY = "vy_custom_menus";
 export const BASE_MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "Home", roles: ["*"] },
   { id: "roles-menus", label: "Roles y menus", icon: "Shield", roles: [ROLE_ADMIN] },
+  { id: "pagina-principal-config", label: "Pagina principal", icon: "PanelTop", roles: [ROLE_ADMIN] },
   { id: "personas", label: "Personas", icon: "User", roles: [ROLE_ADMIN] },
   { id: "rangos", label: "Rangos", icon: "Trophy", roles: [ROLE_ADMIN] },
   { id: "planes", label: "Planes", icon: "BadgePercent", roles: [ROLE_ADMIN] },

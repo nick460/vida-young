@@ -90,21 +90,22 @@ INSERT INTO menus_sistema (menu_id, label, icon, custom, orden)
 VALUES
     ('dashboard', 'Dashboard', 'Home', FALSE, 10),
     ('roles-menus', 'Roles y menus', 'Shield', FALSE, 20),
-    ('personas', 'Personas', 'User', FALSE, 30),
-    ('rangos', 'Rangos', 'Trophy', FALSE, 40),
-    ('planes', 'Planes', 'BadgePercent', FALSE, 50),
-    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 60),
-    ('referidos', 'Referidos', 'Network', FALSE, 70),
-    ('inventario', 'Inventario', 'PackageSearch', FALSE, 80),
-    ('ventanilla', 'Ventanilla', 'Store', FALSE, 90),
-    ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 100),
-    ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 110),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 120),
-    ('shop', 'Tienda', 'ShoppingBag', FALSE, 130),
-    ('network', 'Mi red', 'Users', FALSE, 140),
-    ('rewards', 'Recompensas', 'Gift', FALSE, 150),
-    ('stats', 'Estadisticas', 'BarChart3', FALSE, 160),
-    ('profile', 'Perfil', 'User', FALSE, 170)
+    ('pagina-principal-config', 'Pagina principal', 'PanelTop', FALSE, 30),
+    ('personas', 'Personas', 'User', FALSE, 40),
+    ('rangos', 'Rangos', 'Trophy', FALSE, 50),
+    ('planes', 'Planes', 'BadgePercent', FALSE, 60),
+    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 70),
+    ('referidos', 'Referidos', 'Network', FALSE, 80),
+    ('inventario', 'Inventario', 'PackageSearch', FALSE, 90),
+    ('ventanilla', 'Ventanilla', 'Store', FALSE, 100),
+    ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 110),
+    ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 120),
+    ('wallet', 'Finanzas', 'Wallet', FALSE, 130),
+    ('shop', 'Tienda', 'ShoppingBag', FALSE, 140),
+    ('network', 'Mi red', 'Users', FALSE, 150),
+    ('rewards', 'Recompensas', 'Gift', FALSE, 160),
+    ('stats', 'Estadisticas', 'BarChart3', FALSE, 170),
+    ('profile', 'Perfil', 'User', FALSE, 180)
 ON CONFLICT (menu_id) DO UPDATE
 SET label = EXCLUDED.label,
     icon = EXCLUDED.icon,
@@ -216,6 +217,15 @@ ALTER TABLE digital_landings
     ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
     ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
     ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
+
+INSERT INTO digital_landings (slug, title, category, description, share_message)
+SELECT
+    'pagina-principal',
+    'Vidayoung',
+    'Empresa',
+    'Bienestar, comunidad y productos funcionales para acompanar tu crecimiento diario.',
+    ''
+WHERE NOT EXISTS (SELECT 1 FROM digital_landings WHERE slug = 'pagina-principal');
 
 INSERT INTO digital_landings (slug, title, category, description, share_message)
 SELECT

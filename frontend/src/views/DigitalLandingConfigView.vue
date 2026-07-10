@@ -163,6 +163,12 @@ function addSection(type = "text") {
     },
     gallery: { title: "Galeria", images: [form.imageUrl].filter(Boolean), layout: "grid3" },
     carousel: { title: "Carrusel", images: [form.imageUrl].filter(Boolean), layout: "carousel" },
+    social: {
+      title: "Redes sociales",
+      text: "Canales oficiales o recomendados.",
+      images: ["Instagram|||https://www.instagram.com/"],
+      layout: "grid3"
+    },
     preguntas: {
       title: "Preguntas frecuentes",
       images: ["¿Que debo saber?|||Aqui puedes escribir una respuesta clara.", "¿Como avanzo?|||Escribenos para recibir orientacion."],
@@ -439,7 +445,7 @@ onMounted(loadLandings);
                     <div v-if="!mediaLibrary.length" class="empty-media"><ImageIcon :size="15" />Sin imagenes</div>
                   </div>
                 </section>
-                <label v-if="['benefits', 'gallery', 'carousel', 'contact'].includes(section.type)" class="full-field">
+                <label v-if="['benefits', 'gallery', 'carousel', 'contact', 'social'].includes(section.type)" class="full-field">
                   <span>{{ section.type === "benefits" ? "Items, uno por linea" : "Imagenes/notas, una por linea" }}</span>
                   <textarea v-model="section.imagesText" rows="5" />
                 </label>

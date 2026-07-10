@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { MessageCircle } from "lucide-vue-next";
+import { ExternalLink, MessageCircle } from "lucide-vue-next";
 import { VyLogo, VyProductImage } from "../components/ui.js";
 import { loadPublicDigitalLanding } from "../services/digitalLandingService.js";
 import { readReferralFromRoute } from "../services/productLandingService.js";
@@ -59,6 +59,14 @@ function youtubeEmbedUrl(url) {
   const match = value.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{6,})/);
   const videoId = match?.[1] || "";
   return videoId ? `https://www.youtube.com/embed/${videoId}` : "";
+}
+
+function socialLabel(item) {
+  return String(item || "").split("|||")[0] || "Red social";
+}
+
+function socialUrl(item) {
+  return String(item || "").split("|||")[1] || "#";
 }
 
 onMounted(loadLanding);
@@ -154,6 +162,20 @@ onMounted(loadLanding);
             </div>
           </template>
 
+          <template v-else-if="section.type === 'social'">
+            <header>
+              <span class="vy-eyebrow">Redes</span>
+              <h2>{{ section.title }}</h2>
+              <p>{{ section.text }}</p>
+            </header>
+            <div class="social-grid">
+              <a v-for="item in section.images" :key="item" :href="socialUrl(item)" target="_blank" rel="noreferrer">
+                <span>{{ socialLabel(item) }}</span>
+                <ExternalLink :size="17" />
+              </a>
+            </div>
+          </template>
+
           <template v-else-if="section.type === 'contact'">
             <div class="contact-card">
               <VyProductImage :grad="advisorPhoto" :h="280" />
@@ -203,6 +225,8 @@ onMounted(loadLanding);
 .landing-section.list .benefits-grid { grid-template-columns: 1fr; }
 .benefits-grid span { min-height: 86px; padding: 16px; border: 1px solid rgba(31, 26, 20, 0.1); border-radius: 14px; background: var(--vy-surface-2); color: var(--vy-ink-2); font-weight: 750; line-height: 1.52; text-align: justify; }
 .media-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.social-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.social-grid a { min-height: 72px; padding: 0 18px; border-radius: 14px; background: var(--vy-ink); color: #fff; display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 900; }
 .video-frame { aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; background: #1d1d1f; box-shadow: 0 18px 42px rgba(31, 26, 20, 0.14); }
 .video-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
 .video-frame span { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 18px; color: rgba(255, 255, 255, 0.72); font-size: 13px; font-weight: 800; text-align: center; }
@@ -229,7 +253,7 @@ onMounted(loadLanding);
   .hero-section, .hero-section.imageLeft, .landing-section.imageText, .landing-section.imageText.imageLeft, .landing-section.videoText, .landing-section.videoText.imageLeft { width: min(100% - 28px, 760px); grid-template-columns: 1fr; }
   .hero-section.imageLeft .hero-copy, .landing-section.imageText.imageLeft > div:first-child, .landing-section.videoText.imageLeft > div:first-child { order: initial; }
   .dynamic-sections { width: min(100% - 28px, 760px); }
-  .benefits-grid, .landing-section.grid2 .benefits-grid, .media-row { grid-template-columns: 1fr; }
+  .benefits-grid, .landing-section.grid2 .benefits-grid, .media-row, .social-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .landing-nav { min-height: 64px; padding: 8px 14px; }

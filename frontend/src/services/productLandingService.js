@@ -8,6 +8,7 @@ export const LANDING_SECTION_TYPES = [
   { value: "videoText", label: "Video y texto" },
   { value: "gallery", label: "Galeria" },
   { value: "carousel", label: "Carrusel" },
+  { value: "social", label: "Redes sociales" },
   { value: "contact", label: "Contacto personalizado" },
   { value: "preguntas", label: "Preguntas frecuentes" }
 ];
@@ -167,6 +168,9 @@ function defaultLayoutForSection(type) {
   }
   if (type === "carousel") {
     return "carousel";
+  }
+  if (type === "social") {
+    return "grid3";
   }
   if (type === "contact") {
     return "cardCentered";

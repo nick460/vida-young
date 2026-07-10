@@ -15,6 +15,7 @@ import {
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { VyAvatar } from "../components/ui.js";
+import VyAutocompleteSelect from "../components/VyAutocompleteSelect.vue";
 
 const loading = ref(false);
 const saving = ref(false);
@@ -43,6 +44,18 @@ const availablePersonas = computed(() => personas.value.filter((persona) => {
   return !registeredPersonaIds.value.has(persona.id);
 }));
 const sponsorOptions = computed(() => personas.value.filter((persona) => persona.id !== Number(form.personaId)));
+const availablePersonaSelectOptions = computed(() => availablePersonas.value.map((persona) => ({
+  ...persona,
+  selectorLabel: personLabel(persona)
+})));
+const sponsorSelectOptions = computed(() => sponsorOptions.value.map((persona) => ({
+  ...persona,
+  selectorLabel: personLabel(persona)
+})));
+const planSelectOptions = computed(() => planes.value.map((plan) => ({
+  ...plan,
+  selectorLabel: `${plan.nombre} - ${plan.nivelesAlcance} niveles`
+})));
 
 const summary = computed(() => ({
   total: referidos.value.length,
@@ -68,6 +81,10 @@ function optionalText(value) {
 
 function fullName(persona) {
   return `${persona?.nombres || ""} ${persona?.apellidos || ""}`.trim() || "Persona";
+}
+
+function personLabel(persona) {
+  return `${fullName(persona)}${persona?.documento ? ` - ${persona.documento}` : ""}`;
 }
 
 function initials(persona) {
@@ -217,10 +234,25 @@ async function createPersonaIfNeeded() {
 }
 
 async function saveReferido() {
-  saving.value = true;
   const isEditing = Boolean(editingReferidoId.value);
 
   try {
+    if ((useExistingPerson.value || isEditing) && !form.personaId) {
+      await showError("Selecciona la persona referida.");
+      return;
+    }
+
+    if (!esCabezaRed.value && !form.patrocinadorId) {
+      await showError("Selecciona el patrocinador.");
+      return;
+    }
+
+    if (!form.planId) {
+      await showError("Selecciona el plan.");
+      return;
+    }
+
+    saving.value = true;
     const personaId = await createPersonaIfNeeded();
     const payload = {
       personaId,
@@ -342,12 +374,15 @@ onMounted(loadAll);
 
         <label v-if="useExistingPerson || editingReferidoId">
           Persona referida
-          <select v-model="form.personaId" required>
-            <option value="">Selecciona una persona</option>
-            <option v-for="persona in availablePersonas" :key="persona.id" :value="persona.id">
-              {{ fullName(persona) }} - {{ persona.documento }}
-            </option>
-          </select>
+          <VyAutocompleteSelect
+            v-model="form.personaId"
+            :multiple="false"
+            :options="availablePersonaSelectOptions"
+            label-key="selectorLabel"
+            value-key="id"
+            placeholder="Buscar persona"
+            empty-text="No hay personas disponibles"
+          />
         </label>
 
         <div v-else class="person-grid">
@@ -383,22 +418,28 @@ onMounted(loadAll);
 
         <label v-if="!esCabezaRed">
           Patrocinador
-          <select v-model="form.patrocinadorId" required>
-            <option value="">Selecciona patrocinador</option>
-            <option v-for="persona in sponsorOptions" :key="persona.id" :value="persona.id">
-              {{ fullName(persona) }} - {{ persona.documento }}
-            </option>
-          </select>
+          <VyAutocompleteSelect
+            v-model="form.patrocinadorId"
+            :multiple="false"
+            :options="sponsorSelectOptions"
+            label-key="selectorLabel"
+            value-key="id"
+            placeholder="Buscar patrocinador"
+            empty-text="No hay patrocinadores disponibles"
+          />
         </label>
 
         <label>
           Plan
-          <select v-model="form.planId" required>
-            <option value="">Selecciona plan</option>
-            <option v-for="plan in planes" :key="plan.id" :value="plan.id">
-              {{ plan.nombre }} - {{ plan.nivelesAlcance }} niveles
-            </option>
-          </select>
+          <VyAutocompleteSelect
+            v-model="form.planId"
+            :multiple="false"
+            :options="planSelectOptions"
+            label-key="selectorLabel"
+            value-key="id"
+            placeholder="Buscar plan"
+            empty-text="No hay planes disponibles"
+          />
         </label>
 
         <section class="commission-preview">

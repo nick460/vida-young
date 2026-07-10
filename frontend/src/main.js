@@ -25,6 +25,8 @@ import RegistroReferidoView from "./views/RegistroReferidoView.vue";
 import DigitalToolsView from "./views/DigitalToolsView.vue";
 import DigitalLandingConfigView from "./views/DigitalLandingConfigView.vue";
 import DigitalLandingView from "./views/DigitalLandingView.vue";
+import CompanyHomeConfigView from "./views/CompanyHomeConfigView.vue";
+import CompanyHomeView from "./views/CompanyHomeView.vue";
 import ProductLandingConfigView from "./views/ProductLandingConfigView.vue";
 import ProductLandingView from "./views/ProductLandingView.vue";
 import PreinscripcionReferidoPublicView from "./views/PreinscripcionReferidoPublicView.vue";
@@ -35,7 +37,7 @@ import { ROLE_ADMIN, canAccessMenu, getDefaultRouteName, hasAnyRole } from "./na
 import { useMenuStore } from "./stores/menuStore.js";
 
 const routes = [
-  { path: "/", redirect: "/landing" },
+  { path: "/", name: "home-publica", component: CompanyHomeView, meta: { public: true } },
   { path: "/landing", name: "landing", component: ScreenLanding, meta: { public: true } },
   { path: "/producto/:productId/:ref?", name: "producto-landing", component: ProductLandingView, meta: { public: true } },
   { path: "/herramienta/:slug", name: "herramienta-landing", component: DigitalLandingView, meta: { public: true } },
@@ -54,6 +56,7 @@ const routes = [
   { path: "/herramientas-digitales", name: "herramientas-digitales", component: DigitalToolsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/landings-productos-config", name: "landing-productos-config", component: ProductLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },
   { path: "/landings-temas-config", name: "landing-temas-config", component: DigitalLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },
+  { path: "/pagina-principal-config", name: "pagina-principal-config", component: CompanyHomeConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/wallet", name: "wallet", component: WalletView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/shop", name: "shop", component: ShopView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] } },
   { path: "/cart", name: "cart", component: CartView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"], parentMenu: "shop" } },
@@ -62,7 +65,7 @@ const routes = [
   { path: "/rewards", name: "rewards", component: RewardsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR"] } },
   { path: "/stats", name: "stats", component: StatsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/admin", name: "admin", component: ScreenAdmin, meta: { roles: [ROLE_ADMIN] } },
-  { path: "/:pathMatch(.*)*", redirect: "/landing" }
+  { path: "/:pathMatch(.*)*", redirect: "/" }
 ];
 
 const pinia = createPinia();
