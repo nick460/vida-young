@@ -153,6 +153,19 @@ onMounted(loadHome);
           </template>
         </article>
       </section>
+
+      <footer class="home-footer">
+        <div>
+          <VyLogo :size="24" dark />
+          <p>{{ landing.description }}</p>
+        </div>
+        <nav>
+          <a href="#contenido">Empresa</a>
+          <RouterLink to="/login">Iniciar sesion</RouterLink>
+          <a href="mailto:info@vidayoung.com">Contacto</a>
+        </nav>
+        <small>Vidayoung © {{ new Date().getFullYear() }}. Todos los derechos reservados.</small>
+      </footer>
     </main>
   </div>
 </template>
@@ -192,10 +205,18 @@ onMounted(loadHome);
 .faq-wrap details p { margin: 0; padding: 0 18px 18px; color: rgba(255, 255, 255, 0.78); }
 .social-grid a { min-height: 78px; padding: 0 18px; border-radius: 8px; background: var(--vy-ink); color: #fff; justify-content: space-between; }
 .contact-block { max-width: 720px; margin: 0 auto; text-align: center; }
+.home-footer { padding: clamp(28px, 5vw, 44px) clamp(18px, 5vw, 64px); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: start; background: var(--vy-ink); color: #fff; }
+.home-footer p { max-width: 560px; margin-top: 12px; color: rgba(255, 255, 255, 0.68); line-height: 1.6; }
+.home-footer nav { display: flex; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
+.home-footer a { color: rgba(255, 255, 255, 0.82); font-size: 14px; font-weight: 800; }
+.home-footer a:hover { color: var(--vy-orange); }
+.home-footer small { grid-column: 1 / -1; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.5); font-size: 12px; font-weight: 700; }
 @media (max-width: 920px) {
   .home-hero, .home-hero.imageLeft, .home-section.imageText, .home-section.imageText.imageLeft { grid-template-columns: 1fr; min-height: auto; }
   .home-hero.imageLeft .hero-copy, .home-section.imageText.imageLeft > div:first-child { order: initial; }
   .card-grid, .media-grid, .social-grid { grid-template-columns: 1fr; }
+  .home-footer { grid-template-columns: 1fr; }
+  .home-footer nav { justify-content: flex-start; }
 }
 @media (max-width: 560px) {
   .home-nav { min-height: 68px; padding: 10px 14px; }
