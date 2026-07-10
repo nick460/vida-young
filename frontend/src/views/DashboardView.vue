@@ -202,16 +202,6 @@ onMounted(loadDashboardSummary);
             <h1>Tu bienestar financiero, hoy</h1>
             <p>{{ welcomeRankMessage }}</p>
           </div>
-          <div class="welcome-actions">
-            <button class="vy-btn vy-btn-ghost" type="button">
-              <VyIcon name="arrowDn" :size="14" />
-              Retirar
-            </button>
-            <button class="vy-btn vy-btn-primary" type="button">
-              <VyIcon name="plus" :size="14" />
-              Invitar embajador
-            </button>
-          </div>
         </section>
 
         <p v-if="summaryError" class="summary-error">{{ summaryError }}</p>
@@ -403,12 +393,6 @@ onMounted(loadDashboardSummary);
   font-size: 14px;
   color: var(--vy-ink-2);
   margin-top: 4px;
-}
-
-.welcome-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 .kpi-grid {
