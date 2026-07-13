@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   Check,
-  Heart,
   Plus,
   ShoppingCart
 } from "lucide-vue-next";
@@ -20,10 +19,9 @@ const cartItems = ref(readCartItems());
 const recentlyAddedId = ref(null);
 
 const categories = computed(() => ["Todos", ...new Set(productos.value.map((product) => product.cat).filter(Boolean))]);
-const hero = computed(() => productos.value[0]);
 const productList = computed(() => {
   if (activeCategory.value === "Todos") {
-    return productos.value.slice(1);
+    return productos.value;
   }
 
   return productos.value.filter((product) => product.cat === activeCategory.value);
@@ -112,57 +110,11 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
           {{ category }}
         </button>
       </section>
-
-      <section v-if="hero" class="vy-card featured-product">
-        <div class="featured-image">
-          <VyProductImage :grad="productGradient(hero)" :h="1" big />
-        </div>
-        <div class="featured-info">
-          <span class="vy-chip vy-chip-orange">{{ hero.badge }}</span>
-          <small>{{ hero.cat }}</small>
-          <h2>{{ hero.name }}</h2>
-          <p>
-            {{ hero.descripcion || "Producto Vidayoung registrado en inventario y publicado en tienda." }}
-          </p>
-
-          <div class="price-row">
-            <strong>Bs. {{ hero.price.toLocaleString("es-BO") }}</strong>
-            <span v-if="hero.old">Bs. {{ hero.old.toLocaleString("es-BO") }}</span>
-            <b v-if="hero.old" class="vy-chip vy-chip-orange">−14%</b>
-          </div>
-          <p class="volume-line">
-            PV {{ hero.pv.toLocaleString("es-BO") }} · QP {{ hero.qp.toLocaleString("es-BO") }}
-            <template v-if="Number(hero.cr || 0) > 0"> · CR {{ hero.cr.toLocaleString("es-BO") }}</template>
-          </p>
-
-          <div class="featured-actions">
-            <button
-              class="add-cart-featured"
-              :class="{ added: recentlyAddedId === hero.id }"
-              type="button"
-              @click="addToCart(hero)"
-            >
-              <span class="add-cart-icon">
-                <Check v-if="recentlyAddedId === hero.id" :size="17" />
-                <ShoppingCart v-else :size="17" />
-              </span>
-              <span>{{ recentlyAddedId === hero.id ? "Agregado al carrito" : "Agregar al carrito" }}</span>
-            </button>
-            <button class="favorite-button" type="button" aria-label="Favorito">
-              <Heart :size="18" />
-            </button>
-          </div>
-        </div>
-      </section>
-
       <section class="product-grid">
         <article v-for="product in productList" :key="product.id" class="vy-card product-card">
           <div class="product-image">
             <VyProductImage :grad="productGradient(product)" :h="1" />
             <span v-if="product.badge" class="vy-chip vy-chip-ink">{{ product.badge }}</span>
-            <button type="button" aria-label="Favorito">
-              <Heart :size="15" />
-            </button>
           </div>
 
           <div class="product-info">
@@ -329,154 +281,9 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
 
 .category-row button.active,
 .category-row button:hover {
-  background: var(--vy-ink);
+  background: var(--vy-orange);
   color: #fff;
-  border-color: var(--vy-ink);
-}
-
-.featured-product {
-  padding: 0;
-  margin-bottom: 18px;
-  display: grid;
-  grid-template-columns: minmax(280px, 0.82fr) minmax(320px, 1fr);
-  gap: 0;
-  overflow: hidden;
-}
-
-.featured-image {
-  aspect-ratio: 1 / 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.featured-image :deep(> div),
-.product-image :deep(> div) {
-  width: 100%;
-  height: 100% !important;
-}
-
-.featured-info {
-  min-width: 0;
-  padding: clamp(22px, 3.2vw, 36px);
-}
-
-.featured-info > small,
-.product-info small {
-  display: block;
-  font-size: 11px;
-  color: var(--vy-ink-3);
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin-top: 14px;
-}
-
-.featured-info h2 {
-  font-size: clamp(26px, 3vw, 32px);
-  font-weight: 800;
-  margin-top: 8px;
-  line-height: 1.1;
-}
-
-.featured-info p {
-  font-size: 14px;
-  color: var(--vy-ink-2);
-  margin-top: 14px;
-  line-height: 1.5;
-}
-
-.price-row,
-.featured-actions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 18px;
-  flex-wrap: wrap;
-}
-
-.price-row {
-  align-items: baseline;
-  margin-top: 24px;
-}
-
-.price-row strong {
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 800;
-}
-
-.price-row > span {
-  text-decoration: line-through;
-  color: var(--vy-ink-3);
-  font-size: 14px;
-}
-
-.featured-actions .vy-btn,
-.add-cart-featured {
-  flex: 1;
-  min-width: min(220px, 100%);
-  border-radius: 12px;
-  font-weight: 800;
-}
-
-.add-cart-featured {
-  min-height: 48px;
-  padding: 0 18px;
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  background: linear-gradient(135deg, var(--vy-ink) 0%, #3a2b1c 100%);
-  color: #fff;
-  box-shadow: 0 14px 28px rgba(31, 26, 20, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-
-.add-cart-featured::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transform: translateX(-120%);
-  transition: transform 0.55s ease;
-}
-
-.add-cart-featured:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 34px rgba(31, 26, 20, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.add-cart-featured:hover::before {
-  transform: translateX(120%);
-}
-
-.add-cart-featured.added {
-  background: linear-gradient(135deg, var(--vy-orange) 0%, var(--vy-orange-deep) 100%);
-  box-shadow: 0 16px 30px rgba(242, 135, 5, 0.26);
-}
-
-.add-cart-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.favorite-button {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: var(--vy-surface);
-  border: 1px solid var(--vy-line);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  border-color: var(--vy-orange);
 }
 
 .product-grid {
@@ -508,19 +315,6 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
   top: 10px;
   left: 10px;
   font-size: 10px;
-}
-
-.product-image button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .product-info {
@@ -565,8 +359,7 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
   font-size: 11px;
 }
 
-.product-info footer small,
-.volume-line {
+.product-info footer small {
   display: block;
   margin-top: 3px;
   color: var(--vy-orange-deep);
@@ -579,7 +372,7 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 20%, #4a3826, var(--vy-ink));
+  background: linear-gradient(135deg, var(--vy-orange) 0%, var(--vy-orange-deep) 100%);
   color: #fff;
   display: flex;
   align-items: center;
@@ -591,27 +384,17 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
 
 .add-cart-mini:hover {
   transform: translateY(-2px) scale(1.04);
-  box-shadow: 0 14px 24px rgba(31, 26, 20, 0.22);
+  box-shadow: 0 14px 24px rgba(242, 135, 5, 0.3);
 }
 
 .add-cart-mini.added {
-  background: linear-gradient(135deg, var(--vy-orange) 0%, var(--vy-orange-deep) 100%);
+  background: linear-gradient(135deg, #f6a01f 0%, var(--vy-orange-deep) 100%);
   box-shadow: 0 12px 22px rgba(242, 135, 5, 0.28);
 }
 
 @media (min-width: 1440px) {
   .product-grid {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  }
-}
-
-@media (max-width: 980px) {
-  .featured-product {
-    grid-template-columns: 1fr;
-  }
-
-  .featured-info {
-    padding: 24px;
   }
 }
 
@@ -655,35 +438,12 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
     padding-inline: 14px;
   }
 
-  .featured-info {
-    padding: 20px;
-  }
-
-  .featured-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .add-cart-featured,
-  .favorite-button {
-    width: 100%;
-  }
-
-  .favorite-button {
-    height: 46px;
-    border-radius: 12px;
-  }
-
   .product-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 380px) {
-  .price-row strong {
-    font-size: 26px;
-  }
-
   .product-info footer {
     align-items: flex-start;
     flex-direction: column;
