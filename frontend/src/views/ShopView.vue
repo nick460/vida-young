@@ -311,7 +311,7 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
 
 .product-image {
   position: relative;
-  aspect-ratio: 16 / 10;
+  height: clamp(86px, 8vw, 118px);
   overflow: hidden;
   border-radius: 14px;
   background: #fff;
@@ -327,9 +327,8 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: contain;
-  object-position: center;
-  padding: 10px;
+  object-fit: cover;
+  object-position: top center;
   background: #fff;
 }
 
