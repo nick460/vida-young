@@ -14,6 +14,7 @@ const walletSummary = ref({
 });
 const rewards = ref([]);
 const rangos = ref([]);
+const showRanksModal = ref(false);
 
 const user = computed(() => ({
   name: authStore.usuario?.username || "Administrador Vidayoung",
@@ -41,6 +42,9 @@ const redeemableProducts = computed(() =>
 );
 const orderedRanks = computed(() =>
   [...rangos.value].sort((left, right) => Number(left.qpMinimo || 0) - Number(right.qpMinimo || 0))
+);
+const maxRankQp = computed(() =>
+  Math.max(1, ...orderedRanks.value.map((rango) => Number(rango.qpMinimo || 0)))
 );
 const currentRank = computed(() =>
   [...orderedRanks.value].reverse().find((rango) => currentQp.value >= Number(rango.qpMinimo || 0)) || null
@@ -241,7 +245,7 @@ onMounted(loadDashboardSummary);
                     Ya alcanzaste el rango mas alto registrado con <b>{{ money(currentQp) }} QP</b>.
                   </span>
                   <span v-else>No hay rangos configurados para calcular el avance.</span>
-                  <button class="vy-btn vy-btn-dark" type="button" @click="navigate('rangos')">Ver rangos</button>
+                  <button class="vy-btn vy-btn-dark" type="button" @click="showRanksModal = true">Ver rangos</button>
                 </div>
               </div>
             </div>
@@ -288,6 +292,48 @@ onMounted(loadDashboardSummary);
         </section>
       </main>
     </section>
+
+    <Teleport to="body">
+      <div v-if="showRanksModal" class="rank-modal-backdrop" @click.self="showRanksModal = false">
+        <section class="rank-modal" role="dialog" aria-modal="true" aria-labelledby="rank-modal-title">
+          <header>
+            <div>
+              <div class="vy-eyebrow">Rangos Vidayoung</div>
+              <h2 id="rank-modal-title">Escala de rangos</h2>
+              <p>Avance calculado con tus QP acumulados: <b>{{ money(currentQp) }} QP</b>.</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="showRanksModal = false">X</button>
+          </header>
+
+          <div v-if="orderedRanks.length" class="rank-modal-list">
+            <article
+              v-for="rango in orderedRanks"
+              :key="rango.id"
+              class="rank-modal-row"
+              :class="{
+                reached: currentQp >= Number(rango.qpMinimo || 0),
+                current: currentRank?.id === rango.id
+              }"
+            >
+              <div>
+                <strong>{{ rango.nombre }}</strong>
+                <span>{{ money(rango.qpMinimo) }} QP requeridos</span>
+              </div>
+              <div class="rank-modal-bar">
+                <span
+                  :style="{
+                    width: `${Math.min(100, Math.round((Number(rango.qpMinimo || 0) / maxRankQp) * 100))}%`
+                  }"
+                ></span>
+              </div>
+              <em v-if="currentRank?.id === rango.id">Actual</em>
+              <em v-else-if="currentQp >= Number(rango.qpMinimo || 0)">Alcanzado</em>
+            </article>
+          </div>
+          <p v-else class="empty-ranks">No hay rangos configurados.</p>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -545,6 +591,139 @@ onMounted(loadDashboardSummary);
   gap: 4px;
 }
 
+.rank-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(31, 26, 20, 0.48);
+}
+
+.rank-modal {
+  width: min(680px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 22px;
+  border-radius: 10px;
+  background: var(--vy-surface);
+  border: 1px solid var(--vy-line);
+  box-shadow: 0 24px 70px rgba(31, 26, 20, 0.28);
+}
+
+.rank-modal header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.rank-modal header h2 {
+  font-size: 22px;
+  font-weight: 900;
+  margin-top: 6px;
+}
+
+.rank-modal header p {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--vy-ink-2);
+  margin-top: 6px;
+}
+
+.rank-modal header button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--vy-surface-2);
+  border: 1px solid var(--vy-line);
+  color: var(--vy-ink-2);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.rank-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rank-modal-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px;
+  border-radius: 10px;
+  border: 1px solid var(--vy-line-2);
+  background: #fff;
+}
+
+.rank-modal-row.reached {
+  border-color: rgba(242, 135, 5, 0.42);
+  background: #fffaf0;
+}
+
+.rank-modal-row.current {
+  box-shadow: 0 0 0 2px rgba(242, 135, 5, 0.2);
+}
+
+.rank-modal-row strong,
+.rank-modal-row span {
+  display: block;
+}
+
+.rank-modal-row strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.rank-modal-row span {
+  margin-top: 3px;
+  color: var(--vy-ink-3);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rank-modal-bar {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--vy-line-2);
+  overflow: hidden;
+}
+
+.rank-modal-bar span {
+  display: block;
+  min-width: 6px;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--vy-orange), var(--vy-orange-deep));
+}
+
+.rank-modal-row em {
+  padding: 5px 9px;
+  border-radius: 99px;
+  background: var(--vy-orange);
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.empty-ranks {
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--vy-surface-2);
+  color: var(--vy-ink-2);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .table-wrap {
   overflow-x: auto;
   margin-top: 14px;
@@ -639,6 +818,20 @@ td:nth-child(3) {
   .rank-progress {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .rank-modal-backdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .rank-modal {
+    max-height: calc(100vh - 24px);
+    padding: 18px;
+  }
+
+  .rank-modal-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>
