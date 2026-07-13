@@ -311,11 +311,14 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
 
 .product-image {
   position: relative;
+  width: 100%;
+  height: auto;
   aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 14px;
   background: #fff;
   border: 1px solid rgba(214, 204, 188, 0.72);
+  display: block;
 }
 
 .product-image :deep(> div) {
