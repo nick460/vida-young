@@ -105,12 +105,9 @@ function canEnterRoute(auth, to) {
     return canAccessMenu(auth.usuario?.roles, to.name, menuStore.roleMenuPermissions, menuStore.menuItems);
   }
 
-  if (
-    to.meta.parentMenu &&
-    hasAnyRole(auth.usuario?.roles, to.meta.roles) &&
-    canAccessMenu(auth.usuario?.roles, to.meta.parentMenu, menuStore.roleMenuPermissions, menuStore.menuItems)
-  ) {
-    return true;
+  if (to.meta.parentMenu) {
+    return canAccessMenu(auth.usuario?.roles, to.meta.parentMenu, menuStore.roleMenuPermissions, menuStore.menuItems)
+      || hasAnyRole(auth.usuario?.roles, to.meta.roles);
   }
 
   return hasAnyRole(auth.usuario?.roles, to.meta.roles);
