@@ -60,7 +60,7 @@ const routes = [
   { path: "/pagina-principal-config", name: "pagina-principal-config", component: CompanyHomeConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/wallet", name: "wallet", component: WalletView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/shop", name: "shop", component: ShopView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] } },
-  { path: "/cart", name: "cart", component: CartView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"], parentMenu: "shop" } },
+  { path: "/cart", name: "cart", component: CartView, meta: { sidebar: true, roles: ["*"], parentMenu: "shop" } },
   { path: "/network", name: "network", component: NetworkView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR"] } },
   { path: "/profile", name: "profile", component: ProfileView, meta: { sidebar: true, roles: ["*"] } },
   { path: "/rewards", name: "rewards", component: RewardsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR"] } },
