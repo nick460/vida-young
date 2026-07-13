@@ -183,6 +183,20 @@ ALTER TABLE productos_categorias
     ADD COLUMN IF NOT EXISTS usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     ADD COLUMN IF NOT EXISTS usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM';
 
+ALTER TABLE productos_categorias
+    ALTER COLUMN estado SET DEFAULT 'ACTIVO',
+    ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
+    ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
+
+UPDATE productos_categorias
+SET estado = COALESCE(estado, 'ACTIVO'),
+    fecha_registro = COALESCE(fecha_registro, CURRENT_TIMESTAMP),
+    fecha_modificacion = COALESCE(fecha_modificacion, CURRENT_TIMESTAMP),
+    usuario_registro = COALESCE(usuario_registro, 'SYSTEM'),
+    usuario_modificacion = COALESCE(usuario_modificacion, 'SYSTEM');
+
 INSERT INTO productos_categorias (nombre, sigla)
 SELECT DISTINCT
     p.categoria,
