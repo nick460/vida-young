@@ -3,7 +3,10 @@ package com.vidayoung.platform.Rescontroller;
 import com.vidayoung.platform.Dto.Auth.LoginRequest;
 import com.vidayoung.platform.Dto.Auth.LoginResponse;
 import com.vidayoung.platform.Dto.Auth.ProfileResponse;
+import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
+import com.vidayoung.platform.Model.Entity.Auditoria;
+import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.Usuario;
 import com.vidayoung.platform.Model.Service.UsuarioService;
 import com.vidayoung.platform.Security.JwtService;
@@ -13,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,6 +49,7 @@ public class AuthRestController {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final UsuarioDao usuarioDao;
+    private final ReferidoDao referidoDao;
     private final UsuarioService usuarioService;
 
     @PostMapping("/login")
@@ -72,7 +77,7 @@ public class AuthRestController {
     @GetMapping("/me")
     public ResponseEntity<ProfileResponse> perfil(@AuthenticationPrincipal UserDetails userDetails) {
         Usuario usuario = buscarUsuarioAutenticado(userDetails);
-        return ResponseEntity.ok(ProfileResponse.desdeUsuario(usuario));
+        return ResponseEntity.ok(toProfileResponse(usuario));
     }
 
     @PostMapping("/me/foto")
@@ -99,10 +104,41 @@ public class AuthRestController {
         foto.transferTo(destino);
 
         Usuario actualizado = usuarioService.actualizarFotoPerfil(usuario.getId(), "/uploads/perfiles/" + fileName);
-        return ResponseEntity.ok(ProfileResponse.desdeUsuario(actualizado));
+        return ResponseEntity.ok(toProfileResponse(actualizado));
     }
 
     private Usuario buscarUsuarioAutenticado(UserDetails userDetails) {
         return usuarioDao.findByUsername(userDetails.getUsername()).orElseThrow();
+    }
+
+    private ProfileResponse toProfileResponse(Usuario usuario) {
+        Long personaId = usuario.getPersona() == null ? null : usuario.getPersona().getId();
+
+        if (personaId == null) {
+            return ProfileResponse.desdeUsuario(usuario);
+        }
+
+        Referido referido = referidoDao.findByPersonaId(personaId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElse(null);
+        long directos = referidoDao.findByPatrocinadorId(personaId).stream()
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .count();
+        long redTotal = contarRed(personaId, new HashSet<>());
+
+        return ProfileResponse.desdeUsuario(usuario, referido, directos, redTotal);
+    }
+
+    private long contarRed(Long personaId, Set<Long> visitados) {
+        if (personaId == null || visitados.contains(personaId)) {
+            return 0;
+        }
+
+        visitados.add(personaId);
+
+        return referidoDao.findByPatrocinadorId(personaId).stream()
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .mapToLong(item -> 1 + contarRed(item.getPersona() == null ? null : item.getPersona().getId(), visitados))
+                .sum();
     }
 }

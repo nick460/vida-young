@@ -41,6 +41,7 @@ const routes = [
   { path: "/landing", name: "landing", component: ScreenLanding, meta: { public: true } },
   { path: "/producto/:productId/:ref?", name: "producto-landing", component: ProductLandingView, meta: { public: true } },
   { path: "/herramienta/:slug", name: "herramienta-landing", component: DigitalLandingView, meta: { public: true } },
+  { path: "/referido/:username", name: "referido-publico", component: PreinscripcionReferidoPublicView, meta: { public: true } },
   { path: "/preinscripcion-referido/:patrocinadorId", name: "preinscripcion-referido", component: PreinscripcionReferidoPublicView, meta: { public: true } },
   { path: "/login", name: "login", component: LoginView, meta: { public: true } },
   { path: "/dashboard", name: "dashboard", component: DashboardView, meta: { sidebar: true, roles: ["*"] } },

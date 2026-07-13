@@ -13,6 +13,7 @@ const patrocinador = ref(null);
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const patrocinadorId = computed(() => Number(route.params.patrocinadorId || 0));
+const username = computed(() => String(route.params.username || "").trim());
 
 const sponsorName = computed(() => {
   const persona = patrocinador.value || {};
@@ -61,7 +62,10 @@ async function loadPatrocinador() {
   error.value = "";
 
   try {
-    patrocinador.value = await apiRequest(`/api/public/preinscripciones-referidos/patrocinadores/${patrocinadorId.value}`);
+    const endpoint = username.value
+      ? `/api/public/preinscripciones-referidos/patrocinadores/usuario/${encodeURIComponent(username.value)}`
+      : `/api/public/preinscripciones-referidos/patrocinadores/${patrocinadorId.value}`;
+    patrocinador.value = await apiRequest(endpoint);
   } catch (exception) {
     error.value = "El enlace de referido no es valido o la persona que refiere no existe.";
   } finally {
@@ -77,7 +81,7 @@ async function submitForm() {
     await apiRequest("/api/public/preinscripciones-referidos", {
       method: "POST",
       body: JSON.stringify({
-        patrocinadorId: patrocinadorId.value,
+        patrocinadorId: patrocinador.value?.id || patrocinadorId.value,
         ...form
       })
     });

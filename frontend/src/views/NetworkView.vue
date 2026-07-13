@@ -38,6 +38,11 @@ const maxDepth = computed(() => {
 const volumeLabel = computed(() => activeCount.value ? `${activeCount.value} miembros` : "Sin red");
 const inviteCode = computed(() => authStore.usuario?.username || currentPersona.value?.documento || "VIDAYOUNG");
 const inviteLink = computed(() => {
+  const username = authStore.usuario?.username?.trim();
+  if (username) {
+    return `${window.location.origin}/referido/${encodeURIComponent(username)}`;
+  }
+
   if (!currentPersona.value?.id) return "";
   return `${window.location.origin}/preinscripcion-referido/${currentPersona.value.id}`;
 });

@@ -29,8 +29,10 @@ export const useAuthStore = defineStore("auth", {
         ...(this.usuario || {}),
         id: perfil.usuarioId,
         username: perfil.username,
+        activo: perfil.activo,
         roles: perfil.roles || [],
         persona: perfil.persona,
+        referido: perfil.referido,
         fotoPerfil: perfil.fotoPerfil
       };
       localStorage.setItem("vy_usuario", JSON.stringify(this.usuario));
@@ -41,8 +43,10 @@ export const useAuthStore = defineStore("auth", {
         ...(this.usuario || {}),
         id: perfil.usuarioId,
         username: perfil.username,
+        activo: perfil.activo,
         roles: perfil.roles || [],
         persona: perfil.persona,
+        referido: perfil.referido,
         fotoPerfil: perfil.fotoPerfil
       };
       localStorage.setItem("vy_usuario", JSON.stringify(this.usuario));

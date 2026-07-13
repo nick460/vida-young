@@ -4,13 +4,10 @@ import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import {
   Camera,
-  Check,
   Settings,
-  Sparkles,
   Star,
   UploadCloud
 } from "lucide-vue-next";
-import { USER } from "../data.js";
 import { useAuthStore } from "../stores/authStore.js";
 import { subirFotoPerfil } from "../services/profileService.js";
 import { VyAvatar } from "../components/ui.js";
@@ -23,14 +20,18 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 
 const account = computed(() => ({
-  name: nombreCompleto.value || authStore.usuario?.username || USER.name,
-  email: authStore.usuario?.persona?.email || USER.email,
-  phone: authStore.usuario?.persona?.telefono || "Sin teléfono",
+  name: nombreCompleto.value || authStore.usuario?.username || "Usuario Vidayoung",
+  email: authStore.usuario?.persona?.email || "Sin correo",
+  phone: authStore.usuario?.persona?.telefono || "Sin telefono",
   document: authStore.usuario?.persona?.documento || "Sin documento",
   avatar: iniciales.value,
-  role: authStore.usuario?.roles?.[0] || USER.level,
+  role: authStore.usuario?.roles?.[0] || "USUARIO",
   photo: authStore.usuario?.fotoPerfil || ""
 }));
+
+const referido = computed(() => authStore.usuario?.referido || null);
+const patrocinador = computed(() => referido.value?.patrocinador || null);
+const plan = computed(() => referido.value?.plan || null);
 
 const nombreCompleto = computed(() => {
   const persona = authStore.usuario?.persona;
@@ -38,7 +39,7 @@ const nombreCompleto = computed(() => {
 });
 
 const iniciales = computed(() => {
-  const source = nombreCompleto.value || authStore.usuario?.username || USER.avatar;
+  const source = nombreCompleto.value || authStore.usuario?.username || "VY";
   return source
     .split(" ")
     .filter(Boolean)
@@ -60,32 +61,58 @@ const photoUrl = computed(() => {
   return `${API_URL}${account.value.photo}`;
 });
 
-const stats = [
-  { label: "Red", value: "138" },
-  { label: "Ventas", value: "$12M" },
-  { label: "Bonos", value: "24" }
-];
+const stats = computed(() => [
+  { label: "Red", value: String(referido.value?.redTotal || 0) },
+  { label: "Directos", value: String(referido.value?.referidosDirectos || 0) },
+  { label: "Plan", value: plan.value?.nombre || "Sin plan" }
+]);
+
+const sponsorName = computed(() => fullName(patrocinador.value) || "Sin patrocinador");
+const memberSince = computed(() => formatDate(referido.value?.fechaUnion || authStore.usuario?.persona?.fechaRegistro));
+const membershipStatus = computed(() => {
+  if (!referido.value) return "Sin membresia";
+  return referido.value.membresiaActiva ? "Activa" : "Vencida";
+});
 
 const personalInfo = computed(() => [
   { label: "Nombre", value: account.value.name },
   { label: "Correo", value: account.value.email },
   { label: "Documento", value: account.value.document },
-  { label: "Teléfono", value: account.value.phone },
+  { label: "Telefono", value: account.value.phone },
   { label: "Usuario", value: authStore.usuario?.username || "Sin usuario", mono: true },
-  { label: "Código embajador", value: USER.code, mono: true },
-  { label: "Miembro desde", value: USER.joined },
-  { label: "Patrocinador", value: "Vidayoung Founders" }
+  { label: "Rango actual", value: authStore.usuario?.persona?.rangoActual || "Sin rango" },
+  { label: "Miembro desde", value: memberSince.value },
+  { label: "Patrocinador", value: sponsorName.value },
+  { label: "Plan", value: plan.value?.nombre || "Sin plan" },
+  { label: "Membresia", value: membershipStatus.value },
+  { label: "Fin membresia", value: formatDate(referido.value?.fechaFinMembresia) }
 ]);
 
-const achievements = [
-  { label: "Primera venta", date: "Mar 2024", done: true },
-  { label: "10 referidos directos", date: "Jul 2024", done: true },
-  { label: "Líder Plata", date: "Sep 2024", done: true },
-  { label: "Líder Oro", date: "Nov 2024", done: true },
-  { label: "Líder Diamante", date: "Mar 2025", done: true },
-  { label: "Líder Diamante Élite", date: "Pendiente", done: false }
-];
+const networkInfo = computed(() => [
+  { label: "Referidos directos", value: String(referido.value?.referidosDirectos || 0) },
+  { label: "Red total", value: String(referido.value?.redTotal || 0) },
+  { label: "Patrocinador", value: sponsorName.value },
+  { label: "Ingreso a red", value: memberSince.value },
+  { label: "Estado", value: membershipStatus.value },
+  { label: "Plan vigente", value: plan.value?.nombre || "Sin plan" }
+]);
 
+function fullName(persona) {
+  return [persona?.nombres, persona?.apellidos].filter(Boolean).join(" ").trim();
+}
+
+function formatDate(value) {
+  if (!value) return "Sin datos";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin datos";
+
+  return new Intl.DateTimeFormat("es-BO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit"
+  }).format(date);
+}
 onMounted(async () => {
   loadingProfile.value = true;
   try {
@@ -170,7 +197,7 @@ async function handlePhotoChange(event) {
         <div>
           <div class="vy-eyebrow">Perfil</div>
           <h1>Tu perfil</h1>
-          <p>Datos personales, configuración de cuenta y trayectoria en Vidayoung.</p>
+          <p>Datos personales, cuenta y datos reales de tu red Vidayoung.</p>
         </div>
       </header>
 
@@ -214,7 +241,7 @@ async function handlePhotoChange(event) {
 
         <div class="detail-column">
           <article class="vy-card info-card">
-            <h2>Información personal</h2>
+            <h2>Informacion personal</h2>
             <div class="info-grid">
               <div v-for="item in personalInfo" :key="item.label">
                 <span>{{ item.label }}</span>
@@ -223,24 +250,17 @@ async function handlePhotoChange(event) {
             </div>
           </article>
 
-          <article class="vy-card timeline-card">
+          <article class="vy-card network-data-card">
             <header>
-              <h2>Trayectoria</h2>
-              <span class="vy-chip vy-chip-success">5 de 6 desbloqueados</span>
+              <h2>Red y patrocinio</h2>
+              <span class="vy-chip" :class="referido?.membresiaActiva ? 'vy-chip-success' : 'vy-chip-cream'">{{ membershipStatus }}</span>
             </header>
 
-            <div class="timeline-list">
-              <article v-for="achievement in achievements" :key="achievement.label" class="timeline-item">
-                <span class="timeline-icon" :class="{ pending: !achievement.done }">
-                  <Check v-if="achievement.done" :size="16" stroke-width="2.2" />
-                  <Sparkles v-else :size="16" stroke-width="2" />
-                </span>
-                <div>
-                  <strong :class="{ pending: !achievement.done }">{{ achievement.label }}</strong>
-                  <small>{{ achievement.date }}</small>
-                </div>
-                <em v-if="!achievement.done">En progreso</em>
-              </article>
+            <div class="info-grid network-info-grid">
+              <div v-for="item in networkInfo" :key="item.label">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
             </div>
           </article>
         </div>
@@ -425,12 +445,12 @@ async function handlePhotoChange(event) {
 }
 
 .info-card,
-.timeline-card {
+.network-data-card {
   padding: 22px;
 }
 
 .info-card h2,
-.timeline-card h2 {
+.network-data-card h2 {
   font-size: 16px;
   font-weight: 800;
 }
@@ -449,70 +469,12 @@ async function handlePhotoChange(event) {
   margin-top: 4px;
 }
 
-.timeline-card header {
+.network-data-card header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
   margin-bottom: 18px;
-}
-
-.timeline-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.timeline-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.timeline-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--vy-orange);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.timeline-icon.pending {
-  background: var(--vy-surface-2);
-  color: var(--vy-ink-3);
-  border: 2px dashed var(--vy-line);
-}
-
-.timeline-item div {
-  flex: 1;
-}
-
-.timeline-item strong {
-  display: block;
-  font-weight: 800;
-  font-size: 13.5px;
-}
-
-.timeline-item strong.pending {
-  color: var(--vy-ink-3);
-}
-
-.timeline-item small {
-  display: block;
-  font-size: 11px;
-  color: var(--vy-ink-3);
-  margin-top: 2px;
-}
-
-.timeline-item em {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--vy-orange-deep);
-  font-weight: 800;
 }
 
 @media (max-width: 1040px) {
@@ -531,10 +493,9 @@ async function handlePhotoChange(event) {
     grid-template-columns: 1fr;
   }
 
-  .timeline-card header {
+  .network-data-card header {
     align-items: flex-start;
     flex-direction: column;
   }
 }
 </style>
-

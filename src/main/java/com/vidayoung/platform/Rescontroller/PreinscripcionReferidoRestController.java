@@ -34,14 +34,18 @@ public class PreinscripcionReferidoRestController {
     public ResponseEntity<PatrocinadorResponse> patrocinador(@PathVariable Long patrocinadorId) {
         return personaDao.findById(patrocinadorId)
                 .filter(persona -> Auditoria.ESTADO_ACTIVO.equals(persona.getEstado()))
-                .map(persona -> ResponseEntity.ok(new PatrocinadorResponse(
-                        persona.getId(),
-                        nombreCompleto(persona),
-                        persona.getDocumento(),
-                        usuarioDao.findByPersonaId(persona.getId())
-                                .map(usuario -> usuario.getFotoPerfil())
-                                .orElse(null)
-                )))
+                .map(persona -> ResponseEntity.ok(toPatrocinadorResponse(persona)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/api/public/preinscripciones-referidos/patrocinadores/usuario/{username}")
+    public ResponseEntity<PatrocinadorResponse> patrocinadorPorUsername(@PathVariable String username) {
+        return usuarioDao.findByUsername(username)
+                .filter(usuario -> Boolean.TRUE.equals(usuario.getActivo()))
+                .filter(usuario -> Auditoria.ESTADO_ACTIVO.equals(usuario.getEstado()))
+                .map(usuario -> usuario.getPersona())
+                .filter(persona -> persona != null && Auditoria.ESTADO_ACTIVO.equals(persona.getEstado()))
+                .map(persona -> ResponseEntity.ok(toPatrocinadorResponse(persona)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -99,6 +103,17 @@ public class PreinscripcionReferidoRestController {
 
     private String nombreCompleto(Persona persona) {
         return ((persona.getNombres() == null ? "" : persona.getNombres()) + " " + (persona.getApellidos() == null ? "" : persona.getApellidos())).trim();
+    }
+
+    private PatrocinadorResponse toPatrocinadorResponse(Persona persona) {
+        return new PatrocinadorResponse(
+                persona.getId(),
+                nombreCompleto(persona),
+                persona.getDocumento(),
+                usuarioDao.findByPersonaId(persona.getId())
+                        .map(usuario -> usuario.getFotoPerfil())
+                        .orElse(null)
+        );
     }
 
     public record PatrocinadorResponse(Long id, String nombreCompleto, String documento, String fotoPerfil) {
