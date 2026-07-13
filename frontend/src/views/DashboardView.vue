@@ -43,9 +43,6 @@ const redeemableProducts = computed(() =>
 const orderedRanks = computed(() =>
   [...rangos.value].sort((left, right) => Number(left.qpMinimo || 0) - Number(right.qpMinimo || 0))
 );
-const maxRankQp = computed(() =>
-  Math.max(1, ...orderedRanks.value.map((rango) => Number(rango.qpMinimo || 0)))
-);
 const currentRank = computed(() =>
   [...orderedRanks.value].reverse().find((rango) => currentQp.value >= Number(rango.qpMinimo || 0)) || null
 );
@@ -137,6 +134,16 @@ function formatDate(value) {
 function formatMovementAmount(movement) {
   const prefix = movement.tipo === "DINERO" ? "Bs. " : "";
   return `${prefix}${money(movement.monto)}`;
+}
+
+function rankProgressFor(rango) {
+  const requiredQp = Number(rango?.qpMinimo || 0);
+
+  if (requiredQp <= 0) {
+    return 100;
+  }
+
+  return Math.min(100, Math.max(0, Math.round((currentQp.value / requiredQp) * 100)));
 }
 
 async function loadDashboardSummary() {
@@ -322,12 +329,13 @@ onMounted(loadDashboardSummary);
               <div class="rank-modal-bar">
                 <span
                   :style="{
-                    width: `${Math.min(100, Math.round((Number(rango.qpMinimo || 0) / maxRankQp) * 100))}%`
+                    width: `${rankProgressFor(rango)}%`
                   }"
                 ></span>
               </div>
               <em v-if="currentRank?.id === rango.id">Actual</em>
               <em v-else-if="currentQp >= Number(rango.qpMinimo || 0)">Alcanzado</em>
+              <em v-else class="pending">{{ rankProgressFor(rango) }}%</em>
             </article>
           </div>
           <p v-else class="empty-ranks">No hay rangos configurados.</p>
@@ -713,6 +721,11 @@ onMounted(loadDashboardSummary);
   font-style: normal;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.rank-modal-row em.pending {
+  background: var(--vy-surface-2);
+  color: var(--vy-ink-2);
 }
 
 .empty-ranks {
