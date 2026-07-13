@@ -35,6 +35,11 @@ function productGradient(product) {
   return product.img || "linear-gradient(135deg, #F2E7C4 0%, #F28705 100%)";
 }
 
+function isProductImage(product) {
+  const image = product?.img || "";
+  return image.startsWith("/uploads/") || image.startsWith("http") || image.startsWith("blob:");
+}
+
 function mapProducto(producto) {
   return {
     id: producto.id,
@@ -113,7 +118,8 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
       <section class="product-grid">
         <article v-for="product in productList" :key="product.id" class="vy-card product-card">
           <div class="product-image">
-            <VyProductImage :grad="productGradient(product)" :h="1" />
+            <img v-if="isProductImage(product)" class="catalog-photo" :src="product.img" :alt="product.name" />
+            <VyProductImage v-else :grad="productGradient(product)" :h="1" />
             <span v-if="product.badge" class="vy-chip vy-chip-ink">{{ product.badge }}</span>
           </div>
 
@@ -305,9 +311,26 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
 
 .product-image {
   position: relative;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(214, 204, 188, 0.72);
+}
+
+.product-image :deep(> div) {
+  width: 100%;
+  height: 100% !important;
+}
+
+.catalog-photo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  padding: 10px;
+  background: #fff;
 }
 
 .product-image .vy-chip {
