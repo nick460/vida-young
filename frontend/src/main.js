@@ -36,6 +36,10 @@ import { useAuthStore } from "./stores/authStore.js";
 import { ROLE_ADMIN, canAccessMenu, getDefaultRouteName, hasAnyRole } from "./navigation/menuConfig.js";
 import { useMenuStore } from "./stores/menuStore.js";
 
+const GoogleVerificationView = {
+  template: `<pre style="margin:0;padding:0;font:16px monospace;background:#fff;color:#000">google-site-verification: google31f2ae7a40d7a38f.html</pre>`
+};
+
 const routes = [
   { path: "/", name: "home-publica", component: CompanyHomeView, meta: { public: true } },
   { path: "/landing", name: "landing", component: ScreenLanding, meta: { public: true } },
@@ -66,6 +70,7 @@ const routes = [
   { path: "/rewards", name: "rewards", component: RewardsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR"] } },
   { path: "/stats", name: "stats", component: StatsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/admin", name: "admin", component: ScreenAdmin, meta: { roles: [ROLE_ADMIN] } },
+  { path: "/google31f2ae7a40d7a38f.html", name: "google-verification", component: GoogleVerificationView, meta: { public: true } },
   { path: "/:pathMatch(.*)*", redirect: "/" }
 ];
 
