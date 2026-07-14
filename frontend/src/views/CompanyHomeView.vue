@@ -16,8 +16,83 @@ async function loadHome() {
   loading.value = true;
   try {
     landing.value = await loadCompanyHome();
+    updateSeoMetadata(landing.value);
   } finally {
     loading.value = false;
+  }
+}
+
+function absoluteUrl(value = "") {
+  if (!value) return "";
+  if (value.startsWith("http")) return value;
+  return `${window.location.origin}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function setMeta(selector, attributes) {
+  let element = document.head.querySelector(selector);
+  if (!element) {
+    element = document.createElement("meta");
+    Object.entries(attributes.identity).forEach(([key, value]) => element.setAttribute(key, value));
+    document.head.appendChild(element);
+  }
+
+  Object.entries(attributes.values).forEach(([key, value]) => {
+    if (value) element.setAttribute(key, value);
+  });
+}
+
+function setCanonical(url) {
+  let element = document.head.querySelector("link[rel='canonical']");
+  if (!element) {
+    element = document.createElement("link");
+    element.setAttribute("rel", "canonical");
+    document.head.appendChild(element);
+  }
+  element.setAttribute("href", url);
+}
+
+function updateSeoMetadata(config) {
+  const title = config?.title ? `${config.title} - Vidayoung` : "Vidayoung - Generando bienestar";
+  const description = config?.description || "Bienestar, comunidad y productos funcionales para acompanar tu crecimiento diario.";
+  const url = `${window.location.origin}/`;
+  const imageUrl = absoluteUrl(config?.imageUrl || "");
+
+  document.title = title;
+  setCanonical(url);
+  setMeta("meta[name='description']", {
+    identity: { name: "description" },
+    values: { content: description }
+  });
+  setMeta("meta[property='og:title']", {
+    identity: { property: "og:title" },
+    values: { content: title }
+  });
+  setMeta("meta[property='og:description']", {
+    identity: { property: "og:description" },
+    values: { content: description }
+  });
+  setMeta("meta[property='og:url']", {
+    identity: { property: "og:url" },
+    values: { content: url }
+  });
+  setMeta("meta[name='twitter:title']", {
+    identity: { name: "twitter:title" },
+    values: { content: title }
+  });
+  setMeta("meta[name='twitter:description']", {
+    identity: { name: "twitter:description" },
+    values: { content: description }
+  });
+
+  if (imageUrl) {
+    setMeta("meta[property='og:image']", {
+      identity: { property: "og:image" },
+      values: { content: imageUrl }
+    });
+    setMeta("meta[name='twitter:image']", {
+      identity: { name: "twitter:image" },
+      values: { content: imageUrl }
+    });
   }
 }
 
