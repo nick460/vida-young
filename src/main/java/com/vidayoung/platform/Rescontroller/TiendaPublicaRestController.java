@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -48,6 +49,23 @@ public class TiendaPublicaRestController {
         return ResponseEntity.ok(tiendaPublicaService.listarTiposCliente());
     }
 
+    @GetMapping("/api/public/clientes/documento/{documento}")
+    public ResponseEntity<TiendaPublicaService.ClientePublicoResponse> buscarClientePorDocumento(@PathVariable String documento) {
+        return tiendaPublicaService.buscarClientePorDocumento(documento)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/api/public/tiendas/{username}/clientes/documento/{documento}")
+    public ResponseEntity<TiendaPublicaService.ClientePublicoResponse> buscarClientePorDocumentoEnTienda(
+            @PathVariable String username,
+            @PathVariable String documento
+    ) {
+        return tiendaPublicaService.buscarClientePorDocumento(username, documento)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/api/public/tiendas/{username}/compras")
     public ResponseEntity<CompraPublica> registrarCompraPublica(
             @PathVariable String username,
@@ -59,6 +77,14 @@ public class TiendaPublicaRestController {
     @GetMapping("/api/compras-publicas")
     public ResponseEntity<List<CompraPublica>> listarComprasPublicas() {
         return ResponseEntity.ok(tiendaPublicaService.listarComprasPublicas());
+    }
+
+    @GetMapping("/api/clientes-publicos")
+    public ResponseEntity<List<TiendaPublicaService.ClientePublicoAdminResponse>> listarClientesPublicos(
+            @RequestParam(required = false) Long distribuidorId,
+            @RequestParam(required = false) Long tipoClienteId
+    ) {
+        return ResponseEntity.ok(tiendaPublicaService.listarClientesPublicos(distribuidorId, tipoClienteId));
     }
 
     @PutMapping("/api/compras-publicas/{compraId}/estado")

@@ -189,6 +189,26 @@ VALUES
     ('PREFERENCIAL', 'Cliente preferencial', 'Cliente publico con descuentos configurables por producto.')
 ON CONFLICT (codigo) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS clientes_publicos (
+    id BIGSERIAL PRIMARY KEY,
+    distribuidor_id BIGINT NOT NULL REFERENCES personas(id),
+    tipo_cliente_id BIGINT NOT NULL REFERENCES tipos_cliente_publico(id),
+    nombres VARCHAR(100) NOT NULL,
+    apellidos VARCHAR(100) NOT NULL,
+    documento VARCHAR(40) NOT NULL,
+    email VARCHAR(120),
+    telefono VARCHAR(40),
+    envio_direccion VARCHAR(220),
+    envio_ciudad VARCHAR(80),
+    envio_referencia VARCHAR(220),
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM',
+    CONSTRAINT uk_clientes_publicos_distribuidor_documento UNIQUE (distribuidor_id, documento)
+);
+
 CREATE TABLE IF NOT EXISTS productos_descuentos_cliente (
     id BIGSERIAL PRIMARY KEY,
     producto_id BIGINT NOT NULL REFERENCES productos(id),
@@ -206,11 +226,12 @@ CREATE TABLE IF NOT EXISTS compras_publicas (
     id BIGSERIAL PRIMARY KEY,
     distribuidor_id BIGINT NOT NULL REFERENCES personas(id),
     tipo_cliente_id BIGINT NOT NULL REFERENCES tipos_cliente_publico(id),
+    cliente_publico_id BIGINT NOT NULL REFERENCES clientes_publicos(id),
     fecha_compra TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado_compra VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
     cliente_nombres VARCHAR(100) NOT NULL,
     cliente_apellidos VARCHAR(100) NOT NULL,
-    cliente_documento VARCHAR(40),
+    cliente_documento VARCHAR(40) NOT NULL,
     cliente_email VARCHAR(120),
     cliente_telefono VARCHAR(40),
     envio_requiere BOOLEAN NOT NULL DEFAULT FALSE,
@@ -233,6 +254,9 @@ CREATE TABLE IF NOT EXISTS compras_publicas (
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+ALTER TABLE compras_publicas
+    ADD COLUMN IF NOT EXISTS cliente_publico_id BIGINT REFERENCES clientes_publicos(id);
 
 CREATE TABLE IF NOT EXISTS compras_publicas_detalles (
     id BIGSERIAL PRIMARY KEY,

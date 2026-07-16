@@ -6,6 +6,7 @@ import com.vidayoung.platform.Model.Entity.ProductoDescuentoCliente;
 import com.vidayoung.platform.Model.Entity.TipoClientePublico;
 import com.vidayoung.platform.Model.Entity.Usuario;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,7 +28,13 @@ public interface TiendaPublicaService {
 
     List<CompraPublica> listarComprasPublicas();
 
+    List<ClientePublicoAdminResponse> listarClientesPublicos(Long distribuidorId, Long tipoClienteId);
+
     CompraPublica cambiarEstado(Long compraId, String estadoCompra, String usuarioOperacion);
+
+    Optional<ClientePublicoResponse> buscarClientePorDocumento(String documento);
+
+    Optional<ClientePublicoResponse> buscarClientePorDocumento(String username, String documento);
 
     record ProductoPublicoResponse(
             Long id,
@@ -48,6 +55,39 @@ public interface TiendaPublicaService {
     record ItemCompraPublicaRequest(Long productoId, Integer cantidad) {
     }
 
+    record ClientePublicoResponse(
+            String nombres,
+            String apellidos,
+            String documento,
+            String email,
+            String telefono,
+            Boolean envioRequiere,
+            String envioDireccion,
+            String envioCiudad,
+            String envioReferencia,
+            String origen
+    ) {
+    }
+
+    record ClientePublicoAdminResponse(
+            Long id,
+            Long distribuidorId,
+            String distribuidorNombre,
+            Long tipoClienteId,
+            String tipoClienteCodigo,
+            String tipoClienteNombre,
+            String nombres,
+            String apellidos,
+            String documento,
+            String email,
+            String telefono,
+            String envioDireccion,
+            String envioCiudad,
+            String envioReferencia,
+            LocalDateTime fechaRegistro
+    ) {
+    }
+
     record CompraPublicaRequest(
             List<ItemCompraPublicaRequest> items,
             String tipoClienteCodigo,
@@ -65,4 +105,3 @@ public interface TiendaPublicaService {
     ) {
     }
 }
-

@@ -56,6 +56,12 @@ public class CompraPublica extends Auditoria {
     @ToString.Exclude
     private TipoClientePublico tipoCliente;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "cliente_publico_id", nullable = false)
+    @JsonIgnoreProperties({"distribuidor", "tipoCliente"})
+    @ToString.Exclude
+    private ClientePublico clientePublico;
+
     @Column(name = "fecha_compra", nullable = false)
     private LocalDateTime fechaCompra;
 
@@ -68,7 +74,7 @@ public class CompraPublica extends Auditoria {
     @Column(name = "cliente_apellidos", nullable = false, length = 100)
     private String clienteApellidos;
 
-    @Column(name = "cliente_documento", length = 40)
+    @Column(name = "cliente_documento", nullable = false, length = 40)
     private String clienteDocumento;
 
     @Column(name = "cliente_email", length = 120)
@@ -130,4 +136,3 @@ public class CompraPublica extends Auditoria {
     @Builder.Default
     private List<CompraPublicaDetalle> detalles = new ArrayList<>();
 }
-

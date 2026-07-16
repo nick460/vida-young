@@ -1,6 +1,7 @@
 package com.vidayoung.platform.Model.ServiceImpl;
 
 import com.vidayoung.platform.Model.Dao.BilleteraDao;
+import com.vidayoung.platform.Model.Dao.ClientePublicoDao;
 import com.vidayoung.platform.Model.Dao.CompraPublicaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.ProductoDao;
@@ -9,6 +10,7 @@ import com.vidayoung.platform.Model.Dao.TipoClientePublicoDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Billetera;
+import com.vidayoung.platform.Model.Entity.ClientePublico;
 import com.vidayoung.platform.Model.Entity.CompraPublica;
 import com.vidayoung.platform.Model.Entity.CompraPublicaDetalle;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
@@ -48,6 +50,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
     private final TipoClientePublicoDao tipoClientePublicoDao;
     private final ProductoDescuentoClienteDao productoDescuentoClienteDao;
     private final CompraPublicaDao compraPublicaDao;
+    private final ClientePublicoDao clientePublicoDao;
     private final BilleteraService billeteraService;
     private final BilleteraDao billeteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
@@ -123,10 +126,12 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 .orElseThrow(() -> new IllegalArgumentException("Tienda no encontrada."));
         Persona distribuidor = usuario.getPersona();
         TipoClientePublico tipoCliente = resolverTipoCliente(request.tipoClienteCodigo());
+        ClientePublico clientePublico = guardarClientePublico(distribuidor, tipoCliente, request);
 
         CompraPublica compra = CompraPublica.builder()
                 .distribuidor(distribuidor)
                 .tipoCliente(tipoCliente)
+                .clientePublico(clientePublico)
                 .fechaCompra(LocalDateTime.now())
                 .estadoCompra(CompraPublica.ESTADO_PENDIENTE)
                 .clienteNombres(normalizarTexto(request.clienteNombres()))
@@ -201,6 +206,84 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
     }
 
     @Override
+    public List<ClientePublicoAdminResponse> listarClientesPublicos(Long distribuidorId, Long tipoClienteId) {
+        List<ClientePublico> clientes = distribuidorId == null
+                ? clientePublicoDao.findAllByOrderByFechaRegistroDesc()
+                : clientePublicoDao.findByDistribuidorIdOrderByFechaRegistroDesc(distribuidorId);
+
+        return clientes.stream()
+                .filter(cliente -> Auditoria.ESTADO_ACTIVO.equals(cliente.getEstado()))
+                .filter(cliente -> tipoClienteId == null || (
+                        cliente.getTipoCliente() != null
+                                && cliente.getTipoCliente().getId() != null
+                                && cliente.getTipoCliente().getId().equals(tipoClienteId)
+                ))
+                .map(this::toClientePublicoAdminResponse)
+                .toList();
+    }
+
+    @Override
+    public Optional<ClientePublicoResponse> buscarClientePorDocumento(String documento) {
+        String normalized = normalizarTexto(documento);
+        if (normalized == null) {
+            return Optional.empty();
+        }
+
+        Optional<ClientePublicoResponse> persona = usuarioDao.findAll().stream()
+                .map(Usuario::getPersona)
+                .filter(item -> item != null && Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .filter(item -> normalized.equalsIgnoreCase(normalizarTexto(item.getDocumento())))
+                .findFirst()
+                .map(item -> new ClientePublicoResponse(
+                        item.getNombres(),
+                        item.getApellidos(),
+                        item.getDocumento(),
+                        item.getEmail(),
+                        item.getTelefono(),
+                        Boolean.FALSE,
+                        null,
+                        null,
+                        null,
+                        "PERSONA"
+                ));
+        if (persona.isPresent()) {
+            return persona;
+        }
+
+        return compraPublicaDao.findFirstByClienteDocumentoOrderByFechaCompraDesc(normalized)
+                .filter(compra -> Auditoria.ESTADO_ACTIVO.equals(compra.getEstado()))
+                .map(compra -> new ClientePublicoResponse(
+                        compra.getClienteNombres(),
+                        compra.getClienteApellidos(),
+                        compra.getClienteDocumento(),
+                        compra.getClienteEmail(),
+                        compra.getClienteTelefono(),
+                        compra.getEnvioRequiere(),
+                        compra.getEnvioDireccion(),
+                        compra.getEnvioCiudad(),
+                        compra.getEnvioReferencia(),
+                        "COMPRA_PUBLICA"
+                ));
+    }
+
+    @Override
+    public Optional<ClientePublicoResponse> buscarClientePorDocumento(String username, String documento) {
+        String normalized = normalizarTexto(documento);
+        if (normalized == null) {
+            return Optional.empty();
+        }
+
+        Usuario usuario = buscarDistribuidor(username)
+                .orElseThrow(() -> new IllegalArgumentException("Tienda no encontrada."));
+        Long distribuidorId = usuario.getPersona().getId();
+        Optional<ClientePublicoResponse> clientePublico = clientePublicoDao
+                .findByDistribuidorIdAndDocumentoIgnoreCase(distribuidorId, normalized)
+                .filter(cliente -> Auditoria.ESTADO_ACTIVO.equals(cliente.getEstado()))
+                .map(this::toClientePublicoResponse);
+        return clientePublico.or(() -> buscarClientePorDocumento(documento));
+    }
+
+    @Override
     @Transactional(rollbackOn = Exception.class)
     public CompraPublica cambiarEstado(Long compraId, String estadoCompra, String usuarioOperacion) {
         String estado = normalizarTexto(estadoCompra);
@@ -265,12 +348,78 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 .orElseThrow(() -> new IllegalArgumentException("Tipo de cliente no valido."));
     }
 
+    private ClientePublico guardarClientePublico(Persona distribuidor, TipoClientePublico tipoCliente, CompraPublicaRequest request) {
+        String documento = normalizarTexto(request.clienteDocumento());
+        if (documento == null) {
+            throw new IllegalArgumentException("Ingresa el documento del cliente.");
+        }
+
+        ClientePublico cliente = clientePublicoDao
+                .findByDistribuidorIdAndDocumentoIgnoreCase(distribuidor.getId(), documento)
+                .orElseGet(ClientePublico::new);
+        cliente.setDistribuidor(distribuidor);
+        cliente.setTipoCliente(tipoCliente);
+        cliente.setNombres(normalizarTexto(request.clienteNombres()));
+        cliente.setApellidos(normalizarTexto(request.clienteApellidos()));
+        cliente.setDocumento(documento);
+        cliente.setEmail(normalizarTexto(request.clienteEmail()));
+        cliente.setTelefono(normalizarTexto(request.clienteTelefono()));
+        cliente.setEnvioDireccion(normalizarTexto(request.envioDireccion()));
+        cliente.setEnvioCiudad(normalizarTexto(request.envioCiudad()));
+        cliente.setEnvioReferencia(normalizarTexto(request.envioReferencia()));
+        cliente.setEstado(Auditoria.ESTADO_ACTIVO);
+        return clientePublicoDao.save(cliente);
+    }
+
+    private ClientePublicoResponse toClientePublicoResponse(ClientePublico cliente) {
+        return new ClientePublicoResponse(
+                cliente.getNombres(),
+                cliente.getApellidos(),
+                cliente.getDocumento(),
+                cliente.getEmail(),
+                cliente.getTelefono(),
+                cliente.getEnvioDireccion() != null || cliente.getEnvioCiudad() != null,
+                cliente.getEnvioDireccion(),
+                cliente.getEnvioCiudad(),
+                cliente.getEnvioReferencia(),
+                "CLIENTE_PUBLICO"
+        );
+    }
+
+    private ClientePublicoAdminResponse toClientePublicoAdminResponse(ClientePublico cliente) {
+        Persona distribuidor = cliente.getDistribuidor();
+        TipoClientePublico tipoCliente = cliente.getTipoCliente();
+        String distribuidorNombre = distribuidor == null
+                ? null
+                : (normalizarTexto(distribuidor.getNombres() + " " + distribuidor.getApellidos()));
+        return new ClientePublicoAdminResponse(
+                cliente.getId(),
+                distribuidor == null ? null : distribuidor.getId(),
+                distribuidorNombre,
+                tipoCliente == null ? null : tipoCliente.getId(),
+                tipoCliente == null ? null : tipoCliente.getCodigo(),
+                tipoCliente == null ? null : tipoCliente.getNombre(),
+                cliente.getNombres(),
+                cliente.getApellidos(),
+                cliente.getDocumento(),
+                cliente.getEmail(),
+                cliente.getTelefono(),
+                cliente.getEnvioDireccion(),
+                cliente.getEnvioCiudad(),
+                cliente.getEnvioReferencia(),
+                cliente.getFechaRegistro()
+        );
+    }
+
     private void validarCompra(CompraPublicaRequest request) {
         if (request == null || request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("La compra debe tener al menos un producto.");
         }
         if (normalizarTexto(request.clienteNombres()) == null || normalizarTexto(request.clienteApellidos()) == null) {
             throw new IllegalArgumentException("Ingresa nombre y apellido del cliente.");
+        }
+        if (normalizarTexto(request.clienteDocumento()) == null) {
+            throw new IllegalArgumentException("Ingresa el documento del cliente.");
         }
         if (Boolean.TRUE.equals(request.envioRequiere())
                 && (normalizarTexto(request.envioDireccion()) == null || normalizarTexto(request.envioCiudad()) == null)) {

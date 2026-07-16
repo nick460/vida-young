@@ -17,6 +17,8 @@ const loading = ref(false);
 const error = ref("");
 const cajaCode = ref(generateCajaCode());
 const activeStep = ref(0);
+const searchingDocument = ref(false);
+const documentLookupMessage = ref("");
 const fieldErrors = reactive({});
 
 const bankPayment = {
@@ -104,6 +106,10 @@ function setFieldError(field, message) {
 }
 
 function validateField(field) {
+  if (field === "clienteDocumento") {
+    setFieldError(field, form.clienteDocumento.trim() ? "" : "Ingresa tu documento.");
+  }
+
   if (field === "tipoClienteCodigo") {
     setFieldError(field, form.tipoClienteCodigo ? "" : "Selecciona tu tipo de cliente.");
   }
@@ -150,11 +156,13 @@ function validateStep(step = activeStep.value) {
   }
 
   if (step === 1) {
+    validateField("clienteDocumento");
     validateField("tipoClienteCodigo");
     validateField("clienteNombres");
     validateField("clienteApellidos");
     validateField("contacto");
-    return !fieldErrors.tipoClienteCodigo
+    return !fieldErrors.clienteDocumento
+      && !fieldErrors.tipoClienteCodigo
       && !fieldErrors.clienteNombres
       && !fieldErrors.clienteApellidos
       && !fieldErrors.clienteTelefono
@@ -209,6 +217,32 @@ function goToStep(index) {
   }
 
   nextStep();
+}
+
+async function searchByDocument() {
+  documentLookupMessage.value = "";
+  validateField("clienteDocumento");
+  if (fieldErrors.clienteDocumento) return;
+
+  searchingDocument.value = true;
+  try {
+    const cliente = await apiRequest(`/api/public/tiendas/${encodeURIComponent(username.value)}/clientes/documento/${encodeURIComponent(form.clienteDocumento.trim())}`);
+    form.clienteNombres = cliente.nombres || "";
+    form.clienteApellidos = cliente.apellidos || "";
+    form.clienteDocumento = cliente.documento || form.clienteDocumento;
+    form.clienteEmail = cliente.email || "";
+    form.clienteTelefono = cliente.telefono || "";
+    form.envioRequiere = Boolean(cliente.envioRequiere);
+    form.envioDireccion = cliente.envioDireccion || "";
+    form.envioCiudad = cliente.envioCiudad || "";
+    form.envioReferencia = cliente.envioReferencia || "";
+    ["clienteDocumento", "clienteNombres", "clienteApellidos", "clienteTelefono", "clienteEmail", "envioCiudad", "envioDireccion"].forEach((field) => setFieldError(field, ""));
+    documentLookupMessage.value = "Encontramos tus datos y completamos el formulario.";
+  } catch {
+    documentLookupMessage.value = "No encontramos datos para ese documento. Completa tus datos una sola vez para esta compra.";
+  } finally {
+    searchingDocument.value = false;
+  }
 }
 
 async function checkout() {
@@ -324,16 +358,32 @@ onMounted(load);
           </div>
 
           <div v-if="activeStep === 1" class="form-grid">
+            <div class="step-help full-field">
+              <strong>Busca tus datos por documento</strong>
+              <p>Si ya hiciste una compra antes o ya estas registrado, completaremos tus datos para que no vuelvas a escribir todo.</p>
+            </div>
+            <label class="document-field full-field" :class="{ invalid: fieldErrors.clienteDocumento }">
+              <span>Documento</span>
+              <div class="document-search-row">
+                <input
+                  v-model.trim="form.clienteDocumento"
+                  placeholder="Ingresa tu documento"
+                  @input="validateField('clienteDocumento'); documentLookupMessage = ''"
+                  @keyup.enter.prevent="searchByDocument"
+                />
+                <button type="button" :disabled="searchingDocument" @click="searchByDocument">
+                  {{ searchingDocument ? "Buscando..." : "Buscar datos" }}
+                </button>
+              </div>
+              <small v-if="fieldErrors.clienteDocumento">{{ fieldErrors.clienteDocumento }}</small>
+              <small v-else-if="documentLookupMessage" class="lookup-message">{{ documentLookupMessage }}</small>
+            </label>
             <label :class="{ invalid: fieldErrors.tipoClienteCodigo }">
               <span>Tipo de cliente</span>
               <select v-model="form.tipoClienteCodigo" @change="validateField('tipoClienteCodigo')">
                 <option v-for="tipo in tiposCliente" :key="tipo.id" :value="tipo.codigo">{{ tipo.nombre }}</option>
               </select>
               <small v-if="fieldErrors.tipoClienteCodigo">{{ fieldErrors.tipoClienteCodigo }}</small>
-            </label>
-            <label>
-              <span>Documento</span>
-              <input v-model.trim="form.clienteDocumento" placeholder="Opcional" />
             </label>
             <label :class="{ invalid: fieldErrors.clienteNombres }">
               <span>Nombres</span>
@@ -528,7 +578,7 @@ onMounted(load);
 .summary-total strong { font-family: var(--font-display); font-size: 22px; }
 .summary-card p { margin-top: 12px; color: var(--vy-ink-3); font-size: 12px; font-weight: 700; line-height: 1.45; }
 .checkout-card { grid-column: 1 / -1; }
-.checkout-stepper { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+.checkout-stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
 .checkout-stepper button { min-height: 54px; padding: 8px; border-radius: 12px; border: 1px solid var(--vy-line); background: var(--vy-surface-2); color: var(--vy-ink-2); display: flex; align-items: center; gap: 8px; text-align: left; }
 .checkout-stepper b { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--vy-ink); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
 .checkout-stepper span { font-size: 12px; font-weight: 900; }
@@ -546,8 +596,12 @@ label span { display: block; margin-bottom: 7px; color: var(--vy-ink-3); font-si
 input, select, textarea { width: 100%; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }
 input, select { min-height: 42px; padding: 0 12px; }
 textarea { padding: 12px; resize: vertical; }
+.document-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.document-search-row button { min-height: 42px; padding: 0 14px; border-radius: 12px; background: var(--vy-ink); color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; }
+.document-search-row button:disabled { cursor: wait; opacity: 0.72; }
 label.invalid input, label.invalid select, label.invalid textarea, input.invalid { border-color: var(--vy-danger); background: rgba(196, 69, 42, 0.06); }
 label > small, .field-error { display: block; margin-top: 6px; color: var(--vy-danger); font-size: 11px; font-weight: 900; line-height: 1.35; }
+.lookup-message { color: var(--vy-success); }
 .full-field { grid-column: 1 / -1; }
 .toggle-field { display: inline-flex; align-items: center; gap: 10px; }
 .toggle-field input { width: 18px; min-height: 18px; }
@@ -591,6 +645,8 @@ label > small, .field-error { display: block; margin-top: 6px; color: var(--vy-d
   .checkout-stepper button.active { flex-basis: 118px; justify-content: flex-start; }
   .checkout-stepper button:not(.active) span { display: none; }
   .checkout-stepper b { width: 28px; height: 28px; }
+  .document-search-row { grid-template-columns: 1fr; }
+  .document-search-row button { width: 100%; }
   .step-actions { flex-direction: column; }
   .step-actions .vy-btn { width: 100%; }
 }
