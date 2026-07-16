@@ -4,6 +4,7 @@ import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import {
   Camera,
+  Copy,
   Settings,
   Star,
   UploadCloud
@@ -61,6 +62,18 @@ const photoUrl = computed(() => {
   return `${API_URL}${account.value.photo}`;
 });
 
+const publicStoreLink = computed(() => {
+  const username = authStore.usuario?.username || "";
+  if (!username) return "";
+  return `${window.location.origin}/tienda/${encodeURIComponent(username)}`;
+});
+
+const referralSignupLink = computed(() => {
+  const username = authStore.usuario?.username || "";
+  if (!username) return "";
+  return `${window.location.origin}/referido/${encodeURIComponent(username)}`;
+});
+
 const stats = computed(() => [
   { label: "Red", value: String(referido.value?.redTotal || 0) },
   { label: "Directos", value: String(referido.value?.referidosDirectos || 0) },
@@ -112,6 +125,56 @@ function formatDate(value) {
     month: "short",
     day: "2-digit"
   }).format(date);
+}
+
+async function copyStoreLink() {
+  if (!publicStoreLink.value) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(publicStoreLink.value);
+    await Swal.fire({
+      title: "Link copiado",
+      text: "Ya puedes compartir tu tienda publica.",
+      icon: "success",
+      confirmButtonText: "Listo",
+      confirmButtonColor: "#F28705"
+    });
+  } catch {
+    await Swal.fire({
+      title: "No se pudo copiar",
+      text: publicStoreLink.value,
+      icon: "info",
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#F28705"
+    });
+  }
+}
+
+async function copyReferralLink() {
+  if (!referralSignupLink.value) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(referralSignupLink.value);
+    await Swal.fire({
+      title: "Link copiado",
+      text: "Ya puedes compartir tu link de inscripcion de referidos.",
+      icon: "success",
+      confirmButtonText: "Listo",
+      confirmButtonColor: "#F28705"
+    });
+  } catch {
+    await Swal.fire({
+      title: "No se pudo copiar",
+      text: referralSignupLink.value,
+      icon: "info",
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#F28705"
+    });
+  }
 }
 onMounted(async () => {
   loadingProfile.value = true;
@@ -237,6 +300,22 @@ async function handlePhotoChange(event) {
             <UploadCloud :size="17" stroke-width="2" />
             <span>{{ uploadingPhoto ? "Guardando foto..." : "Cambiar foto" }}</span>
           </button>
+
+          <div class="store-link-box">
+            <span>Mi tienda publica</span>
+            <strong>{{ publicStoreLink }}</strong>
+            <button type="button" @click="copyStoreLink">
+              <Copy :size="15" /> Copiar link
+            </button>
+          </div>
+
+          <div class="store-link-box">
+            <span>Inscripcion de referidos</span>
+            <strong>{{ referralSignupLink }}</strong>
+            <button type="button" @click="copyReferralLink">
+              <Copy :size="15" /> Copiar link
+            </button>
+          </div>
         </article>
 
         <div class="detail-column">
@@ -436,6 +515,49 @@ async function handlePhotoChange(event) {
 .profile-action-button:disabled {
   cursor: wait;
   opacity: 0.74;
+}
+
+.store-link-box {
+  margin-top: 14px;
+  padding: 13px;
+  border-radius: 12px;
+  border: 1px solid var(--vy-line);
+  background: var(--vy-surface);
+  text-align: left;
+}
+
+.store-link-box > span {
+  display: block;
+  color: var(--vy-ink-3);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.store-link-box strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--vy-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.store-link-box button {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 10px;
+  border-radius: 10px;
+  background: var(--vy-orange);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .detail-column {
