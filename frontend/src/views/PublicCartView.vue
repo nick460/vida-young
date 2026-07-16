@@ -3,9 +3,10 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { ArrowLeft, CircleMinus, Minus, Plus, Send, ShoppingCart } from "lucide-vue-next";
+import { ArrowLeft, CircleMinus, Copy, Landmark, Minus, Plus, QrCode, Send, ShoppingCart, Store } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { clearPublicCart, readPublicCart, writePublicCart } from "../services/publicCartService.js";
+import paymentQr from "../assets/paymentQr.png";
 
 const route = useRoute();
 const router = useRouter();
@@ -14,6 +15,18 @@ const items = ref([]);
 const tiposCliente = ref([]);
 const loading = ref(false);
 const error = ref("");
+const cajaCode = ref(generateCajaCode());
+
+const bankPayment = {
+  banco: "BANCO ECONOMICO",
+  cuenta: "1234 5678 9101 1121 4"
+};
+
+const paymentOptions = [
+  { id: "TRANSFERENCIA", title: "Transferencia", subtitle: "Bancaria", icon: Landmark },
+  { id: "QR", title: "Codigo QR", subtitle: "Escanea y paga", icon: QrCode },
+  { id: "CAJA", title: "Pago en Caja", subtitle: "Presencial", icon: Store }
+];
 
 const form = reactive({
   tipoClienteCodigo: "NORMAL",
@@ -37,6 +50,19 @@ const gananciaDistribuidor = computed(() => Math.max(0, total.value - totalEmpre
 
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function generateCajaCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function copyText(value) {
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    error.value = "No se pudo copiar automaticamente.";
+  }
 }
 
 function persist() {
@@ -63,6 +89,13 @@ function validate() {
   if (!form.clienteNombres.trim() || !form.clienteApellidos.trim()) return "Ingresa nombre y apellido.";
   if (!form.clienteTelefono.trim() && !form.clienteEmail.trim()) return "Ingresa telefono o correo de contacto.";
   if (form.envioRequiere && (!form.envioDireccion.trim() || !form.envioCiudad.trim())) return "Ingresa direccion y ciudad de envio.";
+  if (form.metodoPago === "CAJA") {
+    form.referenciaPago = `Codigo de caja ${cajaCode.value}`;
+  } else if (form.metodoPago === "QR" && !form.referenciaPago.trim()) {
+    form.referenciaPago = "Pago por codigo QR";
+  } else if (form.metodoPago === "TRANSFERENCIA" && !form.referenciaPago.trim()) {
+    form.referenciaPago = `Transferencia a ${bankPayment.banco}`;
+  }
   return "";
 }
 
@@ -185,18 +218,62 @@ onMounted(load);
               <span>Correo</span>
               <input v-model.trim="form.clienteEmail" type="email" />
             </label>
-            <label>
-              <span>Metodo de pago</span>
-              <select v-model="form.metodoPago">
-                <option value="TRANSFERENCIA">Transferencia</option>
-                <option value="QR">QR</option>
-                <option value="CAJA">Caja</option>
-              </select>
-            </label>
-            <label>
-              <span>Referencia de pago</span>
-              <input v-model.trim="form.referenciaPago" placeholder="Numero de operacion, nota o codigo" />
-            </label>
+            <section class="payment-card full-field">
+              <div class="payment-heading">
+                <div>
+                  <div class="vy-eyebrow">Metodo de pago</div>
+                  <h2>Selecciona como pagaras el pedido</h2>
+                </div>
+              </div>
+
+              <div class="payment-options">
+                <button
+                  v-for="option in paymentOptions"
+                  :key="option.id"
+                  type="button"
+                  class="payment-option"
+                  :class="{ active: form.metodoPago === option.id }"
+                  @click="form.metodoPago = option.id"
+                >
+                  <span class="payment-icon"><component :is="option.icon" :size="24" /></span>
+                  <strong>{{ option.title }}</strong>
+                  <small>{{ option.subtitle }}</small>
+                </button>
+              </div>
+
+              <div v-if="form.metodoPago === 'TRANSFERENCIA'" class="payment-detail">
+                <h3>Datos bancarios</h3>
+                <label>Banco</label>
+                <div class="copy-row">
+                  <strong>{{ bankPayment.banco }}</strong>
+                  <button type="button" @click="copyText(bankPayment.banco)"><Copy :size="14" /> Copiar</button>
+                </div>
+                <label>Numero de cuenta</label>
+                <div class="copy-row">
+                  <strong>{{ bankPayment.cuenta }}</strong>
+                  <button type="button" @click="copyText(bankPayment.cuenta)"><Copy :size="14" /> Copiar</button>
+                </div>
+                <label>Referencia de pago</label>
+                <input v-model.trim="form.referenciaPago" placeholder="Numero de operacion o nota de transferencia" />
+              </div>
+
+              <div v-if="form.metodoPago === 'QR'" class="payment-detail qr-detail">
+                <div>
+                  <h3>Pago por QR</h3>
+                  <p>Escanea la imagen QR desde tu app bancaria y paga el total del pedido.</p>
+                  <label>Referencia de pago</label>
+                  <input v-model.trim="form.referenciaPago" placeholder="Numero de operacion o nota del pago QR" />
+                </div>
+                <img :src="paymentQr" alt="QR de pago" />
+              </div>
+
+              <div v-if="form.metodoPago === 'CAJA'" class="payment-detail caja-detail">
+                <h3>Pago en caja</h3>
+                <p>Presenta este codigo en ventanilla junto a tus datos para pagar el pedido.</p>
+                <div class="cash-code">{{ cajaCode }}</div>
+                <button type="button" @click="copyText(cajaCode)"><Copy :size="14" /> Copiar codigo</button>
+              </div>
+            </section>
             <label class="toggle-field full-field">
               <input v-model="form.envioRequiere" type="checkbox" />
               <span>Requiere envio</span>
@@ -264,8 +341,29 @@ textarea { padding: 12px; resize: vertical; }
 .toggle-field { display: inline-flex; align-items: center; gap: 10px; }
 .toggle-field input { width: 18px; min-height: 18px; }
 .toggle-field span { margin: 0; }
+.payment-card { padding: 16px; border: 1px solid var(--vy-line); border-radius: 16px; background: var(--vy-surface); }
+.payment-heading { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.payment-heading h2 { margin-top: 6px; font-size: 20px; font-weight: 900; }
+.payment-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.payment-option { min-height: 132px; padding: 18px 14px; border: 2px solid var(--vy-line); border-radius: 16px; background: var(--vy-surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--vy-ink-2); }
+.payment-option:hover, .payment-option.active { border-color: var(--vy-orange); background: #fff7e8; transform: translateY(-1px); }
+.payment-option strong { font-size: 14px; font-weight: 900; color: var(--vy-ink); }
+.payment-option small { font-size: 12px; font-weight: 800; color: var(--vy-ink-3); }
+.payment-icon { width: 48px; height: 48px; border-radius: 50%; background: rgba(242, 135, 5, 0.14); color: var(--vy-orange-deep); display: inline-flex; align-items: center; justify-content: center; }
+.payment-option.active .payment-icon { background: var(--vy-orange); color: #fff; }
+.payment-detail { margin-top: 16px; padding: 16px; border-radius: 16px; border: 1px solid var(--vy-line); background: var(--vy-surface-2); }
+.payment-detail h3 { font-size: 16px; font-weight: 900; margin-bottom: 12px; }
+.payment-detail label { display: block; margin: 12px 0 6px; color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
+.payment-detail p { color: var(--vy-ink-2); font-size: 13px; font-weight: 700; line-height: 1.45; }
+.copy-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-radius: 12px; background: #fff; border: 1px solid var(--vy-line-2); }
+.copy-row strong { font-size: 14px; font-weight: 900; word-break: break-word; }
+.copy-row button, .caja-detail button { min-height: 36px; padding: 0 12px; border-radius: 10px; background: var(--vy-ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; font-weight: 900; flex-shrink: 0; }
+.qr-detail { display: grid; grid-template-columns: minmax(0, 1fr) 220px; align-items: center; gap: 18px; }
+.qr-detail img { width: 220px; border-radius: 18px; border: 1px solid var(--vy-line); background: #fff; padding: 10px; box-shadow: var(--vy-shadow-sm); }
+.caja-detail { text-align: center; }
+.cash-code { width: fit-content; margin: 14px auto; padding: 12px 24px; border-radius: 14px; background: #fff; border: 1px solid var(--vy-line); font-family: var(--font-mono); font-size: 30px; font-weight: 900; letter-spacing: 0.16em; color: var(--vy-ink); }
 .checkout-button { width: 100%; margin-top: 16px; min-height: 46px; border-radius: 12px; font-weight: 900; }
 .vy-btn-primary { background: var(--vy-orange); color: #fff; }
 .empty-cart { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: var(--vy-ink-2); }
-@media (max-width: 980px) { .workspace { padding: 24px 20px 32px; } .cart-layout, .cart-row, .form-grid { grid-template-columns: 1fr; } .full-field { grid-column: auto; } }
+@media (max-width: 980px) { .workspace { padding: 24px 20px 32px; } .cart-layout, .cart-row, .form-grid, .payment-options, .qr-detail { grid-template-columns: 1fr; } .full-field { grid-column: auto; } .qr-detail img { width: min(100%, 260px); justify-self: center; } .copy-row { align-items: stretch; flex-direction: column; } }
 </style>
