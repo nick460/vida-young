@@ -30,6 +30,7 @@ const paymentOptions = [
 ];
 
 const checkoutSteps = [
+  { title: "Pedido", hint: "Confirma los productos y cantidades antes de continuar." },
   { title: "Tus datos", hint: "Indicanos quien realiza el pedido." },
   { title: "Envio", hint: "Confirma si necesitas entrega a domicilio." },
   { title: "Pago", hint: "Elige como pagaras y guarda la referencia." },
@@ -103,17 +104,21 @@ function validate() {
 }
 
 function validateStep(step = activeStep.value) {
-  if (step === 0) {
+  if (step === 0 && !items.value.length) {
+    return "Agrega al menos un producto.";
+  }
+
+  if (step === 1) {
     if (!form.tipoClienteCodigo) return "Selecciona tu tipo de cliente.";
     if (!form.clienteNombres.trim() || !form.clienteApellidos.trim()) return "Ingresa nombre y apellido.";
     if (!form.clienteTelefono.trim() && !form.clienteEmail.trim()) return "Ingresa telefono o correo de contacto.";
   }
 
-  if (step === 1 && form.envioRequiere && (!form.envioDireccion.trim() || !form.envioCiudad.trim())) {
+  if (step === 2 && form.envioRequiere && (!form.envioDireccion.trim() || !form.envioCiudad.trim())) {
     return "Ingresa direccion y ciudad de envio.";
   }
 
-  if (step === 2) {
+  if (step === 3) {
     if (!form.metodoPago) return "Selecciona un metodo de pago.";
     if ((form.metodoPago === "TRANSFERENCIA" || form.metodoPago === "QR") && !form.referenciaPago.trim()) {
       return "Ingresa la referencia del pago para poder identificarlo.";
@@ -211,35 +216,6 @@ onMounted(load);
       <div v-if="error" class="error-box">{{ error }}</div>
 
       <section v-if="items.length" class="cart-layout">
-        <article class="vy-card cart-list">
-          <div v-for="item in items" :key="item.id" class="cart-row">
-            <div class="cart-info">
-              <small>{{ item.sku }} - {{ item.cat || "Producto" }}</small>
-              <strong>{{ item.name }}</strong>
-              <span>Bs. {{ money(item.price) }} <template v-if="item.discount">- descuento Bs. {{ money(item.discount) }}</template></span>
-            </div>
-            <div class="quantity-box">
-              <button type="button" @click="decrement(item)"><Minus :size="13" /></button>
-              <b>{{ item.quantity }}</b>
-              <button type="button" @click="increment(item)"><Plus :size="13" /></button>
-            </div>
-            <strong class="line-total">Bs. {{ money(Number(item.price || 0) * Number(item.quantity || 0)) }}</strong>
-            <button type="button" class="remove-button" @click="removeItem(item)">
-              <CircleMinus :size="16" />
-            </button>
-          </div>
-        </article>
-
-        <aside class="vy-card summary-card">
-          <div class="summary-icon"><ShoppingCart :size="18" /></div>
-          <h2>Resumen</h2>
-          <div class="summary-line"><span>Total cliente</span><b>Bs. {{ money(total) }}</b></div>
-          <div class="summary-line"><span>Base empresa</span><b>Bs. {{ money(totalEmpresa) }}</b></div>
-          <div class="summary-line"><span>Descuentos</span><b>Bs. {{ money(totalDescuento) }}</b></div>
-          <div class="summary-total"><span>Para distribuidor</span><strong>Bs. {{ money(gananciaDistribuidor) }}</strong></div>
-          <p>El sistema conserva el descuento aplicado para justificar la ganancia final del distribuidor.</p>
-        </aside>
-
         <form class="vy-card checkout-card" @submit.prevent="checkout">
           <nav class="checkout-stepper" aria-label="Pasos del pedido">
             <button
@@ -260,7 +236,38 @@ onMounted(load);
             <p>{{ currentStep.hint }}</p>
           </section>
 
-          <div v-if="activeStep === 0" class="form-grid">
+          <div v-if="activeStep === 0" class="order-step-grid">
+            <article class="cart-list">
+              <div v-for="item in items" :key="item.id" class="cart-row">
+                <div class="cart-info">
+                  <small>{{ item.sku }} - {{ item.cat || "Producto" }}</small>
+                  <strong>{{ item.name }}</strong>
+                  <span>Bs. {{ money(item.price) }} <template v-if="item.discount">- descuento Bs. {{ money(item.discount) }}</template></span>
+                </div>
+                <div class="quantity-box">
+                  <button type="button" @click="decrement(item)"><Minus :size="13" /></button>
+                  <b>{{ item.quantity }}</b>
+                  <button type="button" @click="increment(item)"><Plus :size="13" /></button>
+                </div>
+                <strong class="line-total">Bs. {{ money(Number(item.price || 0) * Number(item.quantity || 0)) }}</strong>
+                <button type="button" class="remove-button" @click="removeItem(item)">
+                  <CircleMinus :size="16" />
+                </button>
+              </div>
+            </article>
+
+            <aside class="summary-card">
+              <div class="summary-icon"><ShoppingCart :size="18" /></div>
+              <h2>Resumen</h2>
+              <div class="summary-line"><span>Total cliente</span><b>Bs. {{ money(total) }}</b></div>
+              <div class="summary-line"><span>Base empresa</span><b>Bs. {{ money(totalEmpresa) }}</b></div>
+              <div class="summary-line"><span>Descuentos</span><b>Bs. {{ money(totalDescuento) }}</b></div>
+              <div class="summary-total"><span>Para distribuidor</span><strong>Bs. {{ money(gananciaDistribuidor) }}</strong></div>
+              <p>El sistema conserva el descuento aplicado para justificar la ganancia final del distribuidor.</p>
+            </aside>
+          </div>
+
+          <div v-if="activeStep === 1" class="form-grid">
             <label>
               <span>Tipo de cliente</span>
               <select v-model="form.tipoClienteCodigo">
@@ -289,7 +296,7 @@ onMounted(load);
             </label>
           </div>
 
-          <div v-if="activeStep === 1" class="form-grid">
+          <div v-if="activeStep === 2" class="form-grid">
             <div class="step-help full-field">
               <strong>Entrega del producto</strong>
               <p>Si retirarás tu pedido directamente o coordinarás por otro medio, deja desmarcada la opcion de envio.</p>
@@ -314,7 +321,7 @@ onMounted(load);
             </template>
           </div>
 
-          <div v-if="activeStep === 2" class="form-grid">
+          <div v-if="activeStep === 3" class="form-grid">
             <section class="payment-card full-field">
               <div class="payment-heading">
                 <div>
@@ -373,7 +380,7 @@ onMounted(load);
             </section>
           </div>
 
-          <div v-if="activeStep === 3" class="review-grid">
+          <div v-if="activeStep === 4" class="review-grid">
             <section>
               <h3>Datos del cliente</h3>
               <p>{{ form.clienteNombres }} {{ form.clienteApellidos }}</p>
@@ -427,8 +434,10 @@ onMounted(load);
 .page-header p { margin-top: 4px; color: var(--vy-ink-2); font-size: 14px; }
 .back-button { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--vy-line); background: var(--vy-surface); display: inline-flex; align-items: center; justify-content: center; }
 .error-box { margin-bottom: 14px; padding: 13px 15px; border-radius: 12px; background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); font-weight: 800; }
-.cart-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.7fr); gap: 16px; align-items: start; }
-.cart-list, .summary-card, .checkout-card, .empty-cart { padding: 20px; }
+.cart-layout { display: block; }
+.checkout-card, .empty-cart { padding: 20px; }
+.order-step-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.7fr); gap: 16px; align-items: start; }
+.cart-list, .summary-card { padding: 16px; border: 1px solid var(--vy-line); border-radius: 16px; background: var(--vy-surface-2); }
 .cart-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid var(--vy-line-2); }
 .cart-row:first-child { border-top: 0; padding-top: 0; }
 .cart-info small, .cart-info span { display: block; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
@@ -497,6 +506,6 @@ textarea { padding: 12px; resize: vertical; }
 .vy-btn-ghost { background: var(--vy-surface); border: 1px solid var(--vy-line); color: var(--vy-ink-2); }
 .vy-btn-primary { background: var(--vy-orange); color: #fff; }
 .empty-cart { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: var(--vy-ink-2); }
-@media (max-width: 980px) { .workspace { padding: 24px 20px 32px; } .cart-layout, .cart-row, .form-grid, .payment-options, .qr-detail, .review-grid { grid-template-columns: 1fr; } .checkout-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); } .full-field { grid-column: auto; } .qr-detail img { width: min(100%, 260px); justify-self: center; } .copy-row { align-items: stretch; flex-direction: column; } }
+@media (max-width: 980px) { .workspace { padding: 24px 20px 32px; } .order-step-grid, .cart-row, .form-grid, .payment-options, .qr-detail, .review-grid { grid-template-columns: 1fr; } .checkout-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); } .full-field { grid-column: auto; } .qr-detail img { width: min(100%, 260px); justify-self: center; } .copy-row { align-items: stretch; flex-direction: column; } }
 @media (max-width: 520px) { .checkout-stepper { grid-template-columns: 1fr; } .step-actions { flex-direction: column; } .step-actions .vy-btn { width: 100%; } }
 </style>
