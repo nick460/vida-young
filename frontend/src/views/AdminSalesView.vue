@@ -40,6 +40,7 @@ const saleModalOpen = ref(false);
 const personaSelect = ref(null);
 const proofModalCompra = ref(null);
 const receiptModalCompra = ref(null);
+const publicReviewModalCompra = ref(null);
 
 const cajaCode = ref(generateCajaCode());
 const alertClasses = {
@@ -132,6 +133,14 @@ function openReceiptModal(compra) {
 
 function closeReceiptModal() {
   receiptModalCompra.value = null;
+}
+
+function openPublicReviewModal(compra) {
+  publicReviewModalCompra.value = compra;
+}
+
+function closePublicReviewModal() {
+  publicReviewModalCompra.value = null;
 }
 
 function destroyPersonaSelect2() {
@@ -588,16 +597,23 @@ async function updateCompraEstado(compra, estadoCompra) {
 
 async function updateCompraPublicaEstado(compra, estadoCompra) {
   error.value = "";
+  if (saving.value) return;
 
+  saving.value = true;
   try {
     await apiRequest(`/api/compras-publicas/${compra.id}/estado`, {
       method: "PUT",
       body: JSON.stringify({ estadoCompra })
     });
+    if (publicReviewModalCompra.value?.id === compra.id) {
+      closePublicReviewModal();
+    }
     await showSuccess("Venta publica actualizada", `Pedido publico #${compra.id} actualizado a ${estadoCompra}.`);
     await loadAll();
   } catch (exception) {
     await showError("No se pudo actualizar", exception.message || "No se pudo actualizar la venta publica.");
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -771,7 +787,10 @@ onMounted(loadAll);
                 <td><span class="status-pill">{{ compra.estadoCompra }}</span></td>
                 <td>
                   <div class="table-actions">
-                    <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" title="Validar" @click="updateCompraPublicaEstado(compra, 'VALIDADA')">
+                    <button v-if="compra.comprobantePagoUrl" type="button" title="Ver comprobante" @click="openProofModal(compra)">
+                      <FileText :size="15" />
+                    </button>
+                    <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" title="Revisar y validar" @click="openPublicReviewModal(compra)">
                       <CheckCircle2 :size="15" />
                     </button>
                     <button type="button" title="Entregar" @click="updateCompraPublicaEstado(compra, 'ENTREGADA')">
@@ -1039,6 +1058,105 @@ onMounted(loadAll);
         </article>
       </div>
 
+      <div v-if="publicReviewModalCompra" class="public-review-backdrop" @click.self="closePublicReviewModal">
+        <article class="public-review-modal">
+          <header>
+            <div>
+              <span class="vy-eyebrow">Validacion de venta publica</span>
+              <h2>Pedido #{{ publicReviewModalCompra.id }}</h2>
+              <p>{{ publicReviewModalCompra.estadoCompra }} - {{ publicReviewModalCompra.metodoPago || "Sin metodo" }}</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="closePublicReviewModal">
+              <X :size="18" />
+            </button>
+          </header>
+
+          <section class="public-review-body">
+            <div class="review-grid">
+              <div>
+                <small>Cliente</small>
+                <strong>{{ publicReviewModalCompra.clienteNombres }} {{ publicReviewModalCompra.clienteApellidos }}</strong>
+                <span>{{ publicReviewModalCompra.clienteDocumento || "Sin documento" }}</span>
+              </div>
+              <div>
+                <small>Contacto</small>
+                <strong>{{ publicReviewModalCompra.clienteTelefono || "Sin telefono" }}</strong>
+                <span>{{ publicReviewModalCompra.clienteEmail || "Sin correo" }}</span>
+              </div>
+              <div>
+                <small>Distribuidor</small>
+                <strong>{{ fullName(publicReviewModalCompra.distribuidor) }}</strong>
+                <span>{{ publicReviewModalCompra.distribuidor?.documento || "Sin documento" }}</span>
+              </div>
+              <div>
+                <small>Tipo de cliente</small>
+                <strong>{{ publicReviewModalCompra.tipoCliente?.nombre || "Cliente" }}</strong>
+                <span v-if="Number(publicReviewModalCompra.totalDescuento || 0) > 0">Descuento aplicado Bs. {{ money(publicReviewModalCompra.totalDescuento) }}</span>
+                <span v-else>Sin descuento aplicado</span>
+              </div>
+              <div>
+                <small>Envio</small>
+                <strong>{{ publicReviewModalCompra.envioRequiere ? publicReviewModalCompra.envioCiudad || "Requiere envio" : "No requiere envio" }}</strong>
+                <span>{{ publicReviewModalCompra.envioRequiere ? publicReviewModalCompra.envioDireccion || "Sin direccion" : "Retiro o coordinacion directa" }}</span>
+              </div>
+              <div>
+                <small>Pago</small>
+                <strong>{{ publicReviewModalCompra.metodoPago || "Sin metodo" }}</strong>
+                <span>{{ publicReviewModalCompra.referenciaPago || publicReviewModalCompra.comprobantePagoNombre || "Sin referencia" }}</span>
+              </div>
+            </div>
+
+            <button v-if="publicReviewModalCompra.comprobantePagoUrl" class="proof-link" type="button" @click="openProofModal(publicReviewModalCompra)">
+              <FileText :size="15" /> Ver comprobante de pago
+            </button>
+
+            <div class="public-detail-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Cant.</th>
+                    <th>Precio publico</th>
+                    <th>Descuento</th>
+                    <th>Cliente paga</th>
+                    <th>Empresa</th>
+                    <th>Distribuidor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="detalle in publicReviewModalCompra.detalles || []" :key="detalle.id">
+                    <td>
+                      <strong>{{ detalle.producto?.nombre || "Producto" }}</strong>
+                      <small>{{ detalle.producto?.sku || "" }}</small>
+                    </td>
+                    <td>{{ detalle.cantidad }}</td>
+                    <td>Bs. {{ money(detalle.precioPublicoUnitario) }}</td>
+                    <td>Bs. {{ money(detalle.subtotalDescuento) }}</td>
+                    <td><strong>Bs. {{ money(detalle.subtotalCliente) }}</strong></td>
+                    <td>Bs. {{ money(detalle.subtotalEmpresa) }}</td>
+                    <td>Bs. {{ money(detalle.gananciaDistribuidor) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <section class="review-totals">
+              <div><span>Total cliente</span><strong>Bs. {{ money(publicReviewModalCompra.totalCliente) }}</strong></div>
+              <div><span>Empresa</span><strong>Bs. {{ money(publicReviewModalCompra.totalEmpresa) }}</strong></div>
+              <div><span>Descuentos</span><strong>Bs. {{ money(publicReviewModalCompra.totalDescuento) }}</strong></div>
+              <div><span>Distribuidor</span><strong>Bs. {{ money(publicReviewModalCompra.totalGananciaDistribuidor) }}</strong></div>
+            </section>
+          </section>
+
+          <footer>
+            <button class="vy-btn vy-btn-ghost" type="button" :disabled="saving" @click="closePublicReviewModal">Cancelar</button>
+            <button class="vy-btn vy-btn-primary" type="button" :disabled="saving" @click="updateCompraPublicaEstado(publicReviewModalCompra, 'VALIDADA')">
+              <CheckCircle2 :size="16" /> {{ saving ? "Validando..." : "Validar pedido" }}
+            </button>
+          </footer>
+        </article>
+      </div>
+
       <div v-if="proofModalCompra" class="proof-modal-backdrop" @click.self="closeProofModal">
         <article class="proof-modal">
           <header>
@@ -1240,7 +1358,35 @@ onMounted(loadAll);
 .sale-modal > header button { width: 38px; height: 38px; border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; }
 .sale-modal-body { overflow: auto; padding-top: 16px; }
 .sale-modal .sale-card { padding: 0; }
-.proof-modal-backdrop { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.5); backdrop-filter: blur(6px); }
+.public-review-backdrop { position: fixed; inset: 0; z-index: 121; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.55); backdrop-filter: blur(7px); }
+.public-review-modal { width: min(1080px, 100%); max-height: calc(100vh - 40px); padding: 20px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); overflow: hidden; display: flex; flex-direction: column; }
+.public-review-modal > header, .public-review-modal > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.public-review-modal > header { padding-bottom: 14px; border-bottom: 1px solid var(--vy-line-2); }
+.public-review-modal h2 { margin-top: 4px; font-size: 22px; font-weight: 900; }
+.public-review-modal p { margin-top: 3px; color: var(--vy-ink-3); font-size: 13px; font-weight: 800; }
+.public-review-modal > header button { width: 38px; height: 38px; border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; }
+.public-review-body { margin: 16px 0; overflow: auto; }
+.review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.review-grid div { padding: 14px; border: 1px solid var(--vy-line); border-radius: 14px; background: var(--vy-surface-2); }
+.review-grid small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.review-grid strong { display: block; margin-top: 5px; color: var(--vy-ink); font-size: 14px; font-weight: 900; }
+.review-grid span { display: block; margin-top: 4px; color: var(--vy-ink-2); font-size: 12px; font-weight: 800; line-height: 1.35; }
+.public-detail-table { margin-top: 16px; overflow-x: auto; border: 1px solid var(--vy-line); border-radius: 14px; }
+.public-detail-table table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13px; }
+.public-detail-table th { padding: 11px 10px; background: var(--vy-ink); color: #fff; text-align: left; font-size: 11px; font-weight: 900; text-transform: uppercase; white-space: nowrap; }
+.public-detail-table td { padding: 12px 10px; border-bottom: 1px solid var(--vy-line-2); color: var(--vy-ink-2); vertical-align: top; }
+.public-detail-table tr:last-child td { border-bottom: 0; }
+.public-detail-table td:nth-child(n + 2), .public-detail-table th:nth-child(n + 2) { text-align: right; white-space: nowrap; }
+.public-detail-table td strong, .public-detail-table td small { display: block; }
+.public-detail-table td strong { color: var(--vy-ink); font-weight: 900; }
+.public-detail-table td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.review-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.review-totals div { padding: 13px; border: 1px solid var(--vy-line); border-radius: 14px; background: #fffaf0; }
+.review-totals span, .review-totals strong { display: block; }
+.review-totals span { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.review-totals strong { margin-top: 5px; color: var(--vy-ink); font-size: 16px; font-weight: 900; }
+.public-review-modal > footer { justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--vy-line-2); }
+.proof-modal-backdrop { position: fixed; inset: 0; z-index: 130; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.5); backdrop-filter: blur(6px); }
 .proof-modal { width: min(900px, 100%); max-height: calc(100vh - 40px); padding: 20px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); overflow: hidden; display: flex; flex-direction: column; }
 .proof-modal header, .proof-modal footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .proof-modal header { padding-bottom: 14px; border-bottom: 1px solid var(--vy-line-2); }
@@ -1292,6 +1438,10 @@ onMounted(loadAll);
   .proof-modal { padding: 16px; }
   .proof-modal header, .proof-modal footer { align-items: stretch; flex-direction: column; }
   .proof-modal footer .vy-btn { width: 100%; }
+  .public-review-modal { padding: 16px; }
+  .public-review-modal > header, .public-review-modal > footer { align-items: stretch; flex-direction: column; }
+  .public-review-modal > footer .vy-btn { width: 100%; }
+  .review-grid, .review-totals { grid-template-columns: 1fr; }
   .receipt-modal { padding: 16px; }
   .receipt-modal > header, .receipt-modal > footer, .receipt-sheet-header { align-items: stretch; flex-direction: column; }
   .receipt-modal > footer .vy-btn { width: 100%; }
