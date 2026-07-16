@@ -17,6 +17,7 @@ const loading = ref(false);
 const error = ref("");
 const cajaCode = ref(generateCajaCode());
 const activeStep = ref(0);
+const fieldErrors = reactive({});
 
 const bankPayment = {
   banco: "BANCO ECONOMICO",
@@ -94,47 +95,103 @@ function removeItem(item) {
   persist();
 }
 
-function validate() {
-  if (!items.value.length) return "Agrega al menos un producto.";
-  for (let step = 0; step < checkoutSteps.length - 1; step += 1) {
-    const message = validateStep(step);
-    if (message) return message;
+function setFieldError(field, message) {
+  if (message) {
+    fieldErrors[field] = message;
+  } else {
+    delete fieldErrors[field];
   }
-  return "";
+}
+
+function validateField(field) {
+  if (field === "tipoClienteCodigo") {
+    setFieldError(field, form.tipoClienteCodigo ? "" : "Selecciona tu tipo de cliente.");
+  }
+
+  if (field === "clienteNombres") {
+    setFieldError(field, form.clienteNombres.trim() ? "" : "Ingresa tu nombre.");
+  }
+
+  if (field === "clienteApellidos") {
+    setFieldError(field, form.clienteApellidos.trim() ? "" : "Ingresa tu apellido.");
+  }
+
+  if (field === "contacto") {
+    const message = form.clienteTelefono.trim() || form.clienteEmail.trim()
+      ? ""
+      : "Ingresa telefono o correo.";
+    setFieldError("clienteTelefono", message);
+    setFieldError("clienteEmail", message);
+  }
+
+  if (field === "envioCiudad") {
+    setFieldError(field, !form.envioRequiere || form.envioCiudad.trim() ? "" : "Ingresa la ciudad.");
+  }
+
+  if (field === "envioDireccion") {
+    setFieldError(field, !form.envioRequiere || form.envioDireccion.trim() ? "" : "Ingresa la direccion.");
+  }
+
+  if (field === "metodoPago") {
+    setFieldError(field, form.metodoPago ? "" : "Selecciona un metodo.");
+  }
+
+  if (field === "referenciaPago") {
+    const needsReference = form.metodoPago === "TRANSFERENCIA" || form.metodoPago === "QR";
+    setFieldError(field, !needsReference || form.referenciaPago.trim() ? "" : "Ingresa la referencia del pago.");
+  }
+
+  return !fieldErrors[field];
 }
 
 function validateStep(step = activeStep.value) {
-  if (step === 0 && !items.value.length) {
-    return "Agrega al menos un producto.";
+  if (step === 0) {
+    return items.value.length > 0;
   }
 
   if (step === 1) {
-    if (!form.tipoClienteCodigo) return "Selecciona tu tipo de cliente.";
-    if (!form.clienteNombres.trim() || !form.clienteApellidos.trim()) return "Ingresa nombre y apellido.";
-    if (!form.clienteTelefono.trim() && !form.clienteEmail.trim()) return "Ingresa telefono o correo de contacto.";
+    validateField("tipoClienteCodigo");
+    validateField("clienteNombres");
+    validateField("clienteApellidos");
+    validateField("contacto");
+    return !fieldErrors.tipoClienteCodigo
+      && !fieldErrors.clienteNombres
+      && !fieldErrors.clienteApellidos
+      && !fieldErrors.clienteTelefono
+      && !fieldErrors.clienteEmail;
   }
 
-  if (step === 2 && form.envioRequiere && (!form.envioDireccion.trim() || !form.envioCiudad.trim())) {
-    return "Ingresa direccion y ciudad de envio.";
+  if (step === 2) {
+    validateField("envioCiudad");
+    validateField("envioDireccion");
+    return !fieldErrors.envioCiudad && !fieldErrors.envioDireccion;
   }
 
   if (step === 3) {
-    if (!form.metodoPago) return "Selecciona un metodo de pago.";
-    if ((form.metodoPago === "TRANSFERENCIA" || form.metodoPago === "QR") && !form.referenciaPago.trim()) {
-      return "Ingresa la referencia del pago para poder identificarlo.";
-    }
+    validateField("metodoPago");
+    validateField("referenciaPago");
+    return !fieldErrors.metodoPago && !fieldErrors.referenciaPago;
   }
 
   if (form.metodoPago === "CAJA") {
     form.referenciaPago = `Codigo de caja ${cajaCode.value}`;
   }
 
-  return "";
+  return true;
+}
+
+function validateAllSteps() {
+  for (let step = 0; step < checkoutSteps.length - 1; step += 1) {
+    if (!validateStep(step)) {
+      activeStep.value = step;
+      return false;
+    }
+  }
+  return true;
 }
 
 function nextStep() {
-  error.value = validateStep(activeStep.value);
-  if (error.value) return;
+  if (!validateStep(activeStep.value)) return;
   activeStep.value = Math.min(activeStep.value + 1, checkoutSteps.length - 1);
   error.value = "";
 }
@@ -155,8 +212,7 @@ function goToStep(index) {
 }
 
 async function checkout() {
-  error.value = validate();
-  if (error.value) return;
+  if (!validateAllSteps()) return;
 
   loading.value = true;
   try {
@@ -268,31 +324,36 @@ onMounted(load);
           </div>
 
           <div v-if="activeStep === 1" class="form-grid">
-            <label>
+            <label :class="{ invalid: fieldErrors.tipoClienteCodigo }">
               <span>Tipo de cliente</span>
-              <select v-model="form.tipoClienteCodigo">
+              <select v-model="form.tipoClienteCodigo" @change="validateField('tipoClienteCodigo')">
                 <option v-for="tipo in tiposCliente" :key="tipo.id" :value="tipo.codigo">{{ tipo.nombre }}</option>
               </select>
+              <small v-if="fieldErrors.tipoClienteCodigo">{{ fieldErrors.tipoClienteCodigo }}</small>
             </label>
             <label>
               <span>Documento</span>
               <input v-model.trim="form.clienteDocumento" placeholder="Opcional" />
             </label>
-            <label>
+            <label :class="{ invalid: fieldErrors.clienteNombres }">
               <span>Nombres</span>
-              <input v-model.trim="form.clienteNombres" placeholder="Tu nombre" />
+              <input v-model.trim="form.clienteNombres" placeholder="Tu nombre" @input="validateField('clienteNombres')" />
+              <small v-if="fieldErrors.clienteNombres">{{ fieldErrors.clienteNombres }}</small>
             </label>
-            <label>
+            <label :class="{ invalid: fieldErrors.clienteApellidos }">
               <span>Apellidos</span>
-              <input v-model.trim="form.clienteApellidos" placeholder="Tu apellido" />
+              <input v-model.trim="form.clienteApellidos" placeholder="Tu apellido" @input="validateField('clienteApellidos')" />
+              <small v-if="fieldErrors.clienteApellidos">{{ fieldErrors.clienteApellidos }}</small>
             </label>
-            <label>
+            <label :class="{ invalid: fieldErrors.clienteTelefono }">
               <span>Telefono</span>
-              <input v-model.trim="form.clienteTelefono" placeholder="Para coordinar el pedido" />
+              <input v-model.trim="form.clienteTelefono" placeholder="Para coordinar el pedido" @input="validateField('contacto')" />
+              <small v-if="fieldErrors.clienteTelefono">{{ fieldErrors.clienteTelefono }}</small>
             </label>
-            <label>
+            <label :class="{ invalid: fieldErrors.clienteEmail }">
               <span>Correo</span>
-              <input v-model.trim="form.clienteEmail" type="email" placeholder="Opcional si dejas telefono" />
+              <input v-model.trim="form.clienteEmail" type="email" placeholder="Opcional si dejas telefono" @input="validateField('contacto')" />
+              <small v-if="fieldErrors.clienteEmail">{{ fieldErrors.clienteEmail }}</small>
             </label>
           </div>
 
@@ -302,17 +363,19 @@ onMounted(load);
               <p>Si retirarás tu pedido directamente o coordinarás por otro medio, deja desmarcada la opcion de envio.</p>
             </div>
             <label class="toggle-field full-field">
-              <input v-model="form.envioRequiere" type="checkbox" />
+              <input v-model="form.envioRequiere" type="checkbox" @change="validateField('envioCiudad'); validateField('envioDireccion')" />
               <span>Requiere envio</span>
             </label>
             <template v-if="form.envioRequiere">
-              <label>
+              <label :class="{ invalid: fieldErrors.envioCiudad }">
                 <span>Ciudad</span>
-                <input v-model.trim="form.envioCiudad" placeholder="Ej. Santa Cruz" />
+                <input v-model.trim="form.envioCiudad" placeholder="Ej. Santa Cruz" @input="validateField('envioCiudad')" />
+                <small v-if="fieldErrors.envioCiudad">{{ fieldErrors.envioCiudad }}</small>
               </label>
-              <label>
+              <label :class="{ invalid: fieldErrors.envioDireccion }">
                 <span>Direccion</span>
-                <input v-model.trim="form.envioDireccion" placeholder="Calle, zona, numero de casa" />
+                <input v-model.trim="form.envioDireccion" placeholder="Calle, zona, numero de casa" @input="validateField('envioDireccion')" />
+                <small v-if="fieldErrors.envioDireccion">{{ fieldErrors.envioDireccion }}</small>
               </label>
               <label class="full-field">
                 <span>Referencia de envio</span>
@@ -337,7 +400,7 @@ onMounted(load);
                   type="button"
                   class="payment-option"
                   :class="{ active: form.metodoPago === option.id }"
-                  @click="form.metodoPago = option.id"
+                  @click="form.metodoPago = option.id; validateField('metodoPago'); validateField('referenciaPago')"
                 >
                   <span class="payment-icon"><component :is="option.icon" :size="24" /></span>
                   <strong>{{ option.title }}</strong>
@@ -358,7 +421,13 @@ onMounted(load);
                   <button type="button" @click="copyText(bankPayment.cuenta)"><Copy :size="14" /> Copiar</button>
                 </div>
                 <label>Referencia de pago</label>
-                <input v-model.trim="form.referenciaPago" placeholder="Numero de operacion o nota de transferencia" />
+                <input
+                  v-model.trim="form.referenciaPago"
+                  :class="{ invalid: fieldErrors.referenciaPago }"
+                  placeholder="Numero de operacion o nota de transferencia"
+                  @input="validateField('referenciaPago')"
+                />
+                <small v-if="fieldErrors.referenciaPago" class="field-error">{{ fieldErrors.referenciaPago }}</small>
               </div>
 
               <div v-if="form.metodoPago === 'QR'" class="payment-detail qr-detail">
@@ -366,7 +435,13 @@ onMounted(load);
                   <h3>Pago por QR</h3>
                   <p>Escanea la imagen QR desde tu app bancaria y paga el total del pedido.</p>
                   <label>Referencia de pago</label>
-                  <input v-model.trim="form.referenciaPago" placeholder="Numero de operacion o nota del pago QR" />
+                  <input
+                    v-model.trim="form.referenciaPago"
+                    :class="{ invalid: fieldErrors.referenciaPago }"
+                    placeholder="Numero de operacion o nota del pago QR"
+                    @input="validateField('referenciaPago')"
+                  />
+                  <small v-if="fieldErrors.referenciaPago" class="field-error">{{ fieldErrors.referenciaPago }}</small>
                 </div>
                 <img :src="paymentQr" alt="QR de pago" />
               </div>
@@ -471,6 +546,8 @@ label span { display: block; margin-bottom: 7px; color: var(--vy-ink-3); font-si
 input, select, textarea { width: 100%; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }
 input, select { min-height: 42px; padding: 0 12px; }
 textarea { padding: 12px; resize: vertical; }
+label.invalid input, label.invalid select, label.invalid textarea, input.invalid { border-color: var(--vy-danger); background: rgba(196, 69, 42, 0.06); }
+label > small, .field-error { display: block; margin-top: 6px; color: var(--vy-danger); font-size: 11px; font-weight: 900; line-height: 1.35; }
 .full-field { grid-column: 1 / -1; }
 .toggle-field { display: inline-flex; align-items: center; gap: 10px; }
 .toggle-field input { width: 18px; min-height: 18px; }
@@ -507,5 +584,14 @@ textarea { padding: 12px; resize: vertical; }
 .vy-btn-primary { background: var(--vy-orange); color: #fff; }
 .empty-cart { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: var(--vy-ink-2); }
 @media (max-width: 980px) { .workspace { padding: 24px 20px 32px; } .order-step-grid, .cart-row, .form-grid, .payment-options, .qr-detail, .review-grid { grid-template-columns: 1fr; } .checkout-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); } .full-field { grid-column: auto; } .qr-detail img { width: min(100%, 260px); justify-self: center; } .copy-row { align-items: stretch; flex-direction: column; } }
-@media (max-width: 520px) { .checkout-stepper { grid-template-columns: 1fr; } .step-actions { flex-direction: column; } .step-actions .vy-btn { width: 100%; } }
+@media (max-width: 520px) {
+  .checkout-stepper { display: flex; gap: 8px; margin-inline: -20px; padding-inline: 20px; overflow-x: auto; scrollbar-width: none; }
+  .checkout-stepper::-webkit-scrollbar { display: none; }
+  .checkout-stepper button { flex: 0 0 62px; min-height: 44px; padding: 8px; justify-content: center; }
+  .checkout-stepper button.active { flex-basis: 118px; justify-content: flex-start; }
+  .checkout-stepper button:not(.active) span { display: none; }
+  .checkout-stepper b { width: 28px; height: 28px; }
+  .step-actions { flex-direction: column; }
+  .step-actions .vy-btn { width: 100%; }
+}
 </style>
