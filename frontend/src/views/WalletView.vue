@@ -2,7 +2,12 @@
 import { computed, onMounted, ref } from "vue";
 import {
   ArrowDownToLine,
-  Copy
+  BadgeCheck,
+  Box,
+  Copy,
+  Gem,
+  RefreshCw,
+  WalletCards
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { useAuthStore } from "../stores/authStore.js";
@@ -17,6 +22,7 @@ const resumen = ref({
   cierresMensuales: []
 });
 const proyeccionActivacion = ref(null);
+const movementFilter = ref("TODOS");
 
 const personaId = computed(() => auth.usuario?.persona?.id || "");
 const billetera = computed(() => resumen.value.billetera || {});
@@ -24,6 +30,21 @@ const movimientos = computed(() => resumen.value.movimientos || []);
 const membresias = computed(() => resumen.value.membresias || []);
 const cierresMensuales = computed(() => resumen.value.cierresMensuales || []);
 const activationPlans = computed(() => proyeccionActivacion.value?.planes || []);
+const activeMembership = computed(() =>
+  membresias.value.find((membresia) => membresia.estadoMembresia === "ACTIVA")
+);
+const filteredMovimientos = computed(() => {
+  if (movementFilter.value === "TODOS") return movimientos.value;
+  return movimientos.value.filter((movimiento) => movimiento.tipo === movementFilter.value);
+});
+const movementFilters = [
+  { id: "TODOS", label: "Todos" },
+  { id: "DINERO", label: "Dinero" },
+  { id: "PRODUCTOS", label: "Productos" },
+  { id: "PV", label: "PV" },
+  { id: "QP", label: "QP" },
+  { id: "CR", label: "CR" }
+];
 
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", {
@@ -39,6 +60,11 @@ function formatDate(value) {
     month: "short",
     day: "2-digit"
   });
+}
+
+function movementAmount(movimiento) {
+  const prefix = movimiento.tipo === "DINERO" || movimiento.tipo === "PRODUCTOS" ? "Bs. " : "";
+  return `${prefix}${money(movimiento.monto)}`;
 }
 
 async function loadWallet() {
@@ -73,59 +99,68 @@ onMounted(loadWallet);
       <header class="page-header">
         <div>
           <div class="vy-eyebrow">Finanzas</div>
-          <h1>Billetera y membresias</h1>
-          <p>Consulta dinero disponible, PV, QP, CR e historial mensual de membresias.</p>
+          <h1>Mi cartera</h1>
+          <p>Consulta saldos disponibles, puntos de red, membresia y movimientos de tu cuenta.</p>
         </div>
-        <button class="vy-btn vy-btn-primary" type="button">
-          <ArrowDownToLine :size="16" stroke-width="2" />
-          Retirar fondos
+        <button class="vy-btn vy-btn-primary" type="button" :disabled="loading" @click="loadWallet">
+          <RefreshCw :size="16" stroke-width="2" />
+          Actualizar
         </button>
       </header>
 
-      <section class="wallet-grid">
-        <article class="balance-card">
-          <div class="balance-orb"></div>
+      <section class="wallet-overview">
+        <article class="balance-card cash-card">
           <header>
+            <span class="card-icon"><WalletCards :size="24" /></span>
             <div>
-              <span>Saldo disponible</span>
+              <span>Efectivo disponible</span>
               <strong>Bs. {{ money(billetera.saldoDinero) }}</strong>
-              <p>Dinero normal acumulado en la billetera.</p>
+              <p>Dinero listo para solicitar retiro cuando administracion lo habilite.</p>
             </div>
-            <b>VY</b>
           </header>
-          <footer>
-            <button class="vy-btn vy-btn-primary" type="button">
-              <ArrowDownToLine :size="15" />
-              Retirar fondos
-            </button>
-            <button class="vy-btn ghost-dark" type="button">
-              <Copy :size="15" />
-              Actualizado
-            </button>
-          </footer>
         </article>
 
-        <article class="vy-card points-card">
-          <div class="point-row">
-            <span>PV</span>
-            <strong>{{ money(billetera.saldoPv) }}</strong>
-            <small>Puntos de volumen acumulados.</small>
+        <article class="balance-card product-card">
+          <header>
+            <span class="card-icon"><Box :size="24" /></span>
+            <div>
+              <span>Productos canjeables</span>
+              <strong>Bs. {{ money(billetera.saldoProductos) }}</strong>
+              <p>Saldo disponible para canjear por productos de la tienda.</p>
+            </div>
+          </header>
+        </article>
+
+        <article class="vy-card membership-summary">
+          <span class="card-icon"><BadgeCheck :size="22" /></span>
+          <div>
+            <span>Membresia actual</span>
+            <strong>{{ activeMembership?.plan?.nombre || "Sin membresia activa" }}</strong>
+            <small>{{ activeMembership ? `Vigente hasta ${formatDate(activeMembership.fechaFin)}` : "Activa un plan para habilitar beneficios." }}</small>
           </div>
-          <div class="point-row primary">
-            <span>QP</span>
-            <strong>{{ money(billetera.saldoQp) }}</strong>
-            <small>Puntos calificables de planes y activaciones.</small>
-          </div>
-          <div class="point-row">
-            <span>CR</span>
-            <strong>{{ money(billetera.saldoCr) }}</strong>
-            <small>Credito de recompensa acumulado por compras.</small>
-          </div>
-          <div class="point-row product-balance">
-            <span>Productos</span>
+        </article>
+      </section>
+
+      <section class="points-grid">
+        <article class="point-card">
+          <span>PV</span>
+          <strong>{{ money(billetera.saldoPv) }}</strong>
+          <small>Volumen personal acumulado.</small>
+        </article>
+        <article class="point-card primary">
+          <span>QP</span>
+          <strong>{{ money(billetera.saldoQp) }}</strong>
+          <small>Puntos calificables para rangos.</small>
+        </article>
+        <article class="point-card">
+          <span>CR</span>
+          <strong>{{ money(billetera.saldoCr) }}</strong>
+          <small>Credito independiente de compras.</small>
+        </article>
+        <article class="point-card">
+          <span>Productos</span>
             <strong>{{ money(billetera.saldoProductos) }}</strong>
-            <small>Saldo disponible para canjear por productos.</small>
-          </div>
+          <small>Canjeable en catalogo.</small>
         </article>
       </section>
 
@@ -136,14 +171,18 @@ onMounted(loadWallet);
         <header class="history-header">
           <div>
             <h2>Movimientos de billetera</h2>
-            <p>Dinero, PV, QP y CR registrados en tu cuenta.</p>
+            <p>Entradas, salidas y ajustes de dinero, productos, PV, QP y CR.</p>
           </div>
           <div class="filters">
-            <button class="active" type="button">Todos</button>
-            <button type="button">Dinero</button>
-            <button type="button">PV</button>
-            <button type="button">QP</button>
-            <button type="button">CR</button>
+            <button
+              v-for="filter in movementFilters"
+              :key="filter.id"
+              :class="{ active: movementFilter === filter.id }"
+              type="button"
+              @click="movementFilter = filter.id"
+            >
+              {{ filter.label }}
+            </button>
           </div>
         </header>
 
@@ -159,14 +198,14 @@ onMounted(loadWallet);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="movimiento in movimientos" :key="movimiento.id">
+              <tr v-for="movimiento in filteredMovimientos" :key="movimiento.id">
                 <td>#{{ movimiento.id }}</td>
                 <td>{{ movimiento.concepto }}</td>
                 <td>{{ formatDate(movimiento.fechaRegistro) }}</td>
                 <td><span class="vy-chip vy-chip-success">{{ movimiento.tipo }}</span></td>
-                <td>{{ movimiento.tipo === "DINERO" ? "Bs. " : "" }}{{ money(movimiento.monto) }}</td>
+                <td>{{ movementAmount(movimiento) }}</td>
               </tr>
-              <tr v-if="!movimientos.length && !loading">
+              <tr v-if="!filteredMovimientos.length && !loading">
                 <td colspan="5">No hay movimientos registrados.</td>
               </tr>
             </tbody>
@@ -315,126 +354,164 @@ onMounted(loadWallet);
 }
 
 .page-header .vy-btn,
-.balance-card .vy-btn,
 .methods-card button {
   border-radius: 12px;
   font-weight: 800;
 }
 
-.wallet-grid {
+.wallet-overview {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
 
 .balance-card {
-  padding: 24px;
-  border-radius: var(--r-lg);
-  background: linear-gradient(135deg, var(--vy-ink) 0%, #2d2418 100%);
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid var(--vy-line);
+  background: var(--vy-ink);
   color: #fff;
-  position: relative;
-  overflow: hidden;
+  box-shadow: var(--vy-shadow-sm);
 }
 
-.balance-orb {
-  position: absolute;
-  right: -40px;
-  top: -40px;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(242, 135, 5, 0.4), transparent 70%);
-}
-
-.balance-card header,
-.balance-card footer {
-  position: relative;
+.balance-card header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  gap: 18px;
+  gap: 14px;
 }
 
-.balance-card header span {
+.card-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(242, 135, 5, 0.18);
+  color: var(--vy-orange);
+}
+
+.balance-card header span:not(.card-icon),
+.membership-summary > div > span {
   display: block;
   font-size: 11px;
-  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 700;
-  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.68);
+  font-weight: 900;
 }
 
 .balance-card header strong {
   display: block;
-  font-family: var(--font-display);
-  font-size: 40px;
-  font-weight: 800;
-  line-height: 1;
+  margin-top: 7px;
+  font-size: 30px;
+  font-weight: 900;
 }
 
 .balance-card header p {
-  margin-top: 10px;
+  margin-top: 6px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.balance-card header b {
-  font-family: var(--font-display);
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.72);
   font-weight: 800;
 }
 
-.balance-card footer {
-  justify-content: flex-start;
-  margin-top: 28px;
+.product-card {
+  background: #fffaf0;
+  color: var(--vy-ink);
 }
 
-.ghost-dark {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.product-card .card-icon {
+  background: rgba(63, 143, 92, 0.12);
+  color: var(--vy-success);
 }
 
-.points-card {
-  padding: 22px;
+.product-card header span:not(.card-icon),
+.product-card header p {
+  color: var(--vy-ink-3);
 }
 
-.point-row {
+.product-card header strong {
+  color: var(--vy-ink);
+}
+
+.membership-summary {
+  padding: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.membership-summary .card-icon {
+  background: var(--vy-cream);
+  color: var(--vy-orange-deep);
+}
+
+.membership-summary > div > span {
+  color: var(--vy-ink-3);
+}
+
+.membership-summary strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--vy-ink);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.membership-summary small {
+  display: block;
+  margin-top: 5px;
+  color: var(--vy-ink-2);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.points-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.point-card {
   padding: 16px;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--vy-line);
-  margin-bottom: 10px;
+  background: var(--vy-surface);
+  box-shadow: var(--vy-shadow-sm);
 }
 
-.point-row.primary {
-  border: 2px solid var(--vy-orange);
+.point-card.primary {
+  border-color: var(--vy-orange);
   background: rgba(242, 135, 5, 0.04);
 }
 
-.point-row span {
+.point-card span {
   display: block;
   font-size: 11px;
-  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--vy-ink-3);
-  font-weight: 800;
+  font-weight: 900;
 }
 
-.point-row strong {
+.point-card strong {
   display: block;
-  margin-top: 8px;
-  font-family: var(--font-display);
-  font-size: 30px;
-  font-weight: 800;
+  margin-top: 7px;
+  color: var(--vy-ink);
+  font-size: 24px;
+  font-weight: 900;
 }
 
-.point-row small {
+.point-card small {
   display: block;
   margin-top: 4px;
-  color: var(--vy-orange-deep);
+  color: var(--vy-ink-3);
   font-size: 12px;
   font-weight: 800;
+  line-height: 1.35;
 }
 
 .history-card {
@@ -660,10 +737,10 @@ td:nth-child(3) {
 }
 
 @media (max-width: 1040px) {
-  .wallet-grid {
-    grid-template-columns: 1fr;
+  .wallet-overview,
+  .points-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
   .activation-projection-grid {
     grid-template-columns: 1fr;
   }
@@ -676,10 +753,11 @@ td:nth-child(3) {
 @media (max-width: 720px) {
   .page-header,
   .history-header,
-  .balance-card header,
-  .balance-card footer {
+  .wallet-overview,
+  .points-grid {
     align-items: stretch;
     flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   table {
