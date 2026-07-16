@@ -20,6 +20,7 @@ import com.vidayoung.platform.Model.Entity.ProductoDescuentoCliente;
 import com.vidayoung.platform.Model.Entity.TipoClientePublico;
 import com.vidayoung.platform.Model.Entity.Usuario;
 import com.vidayoung.platform.Model.Service.BilleteraService;
+import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.ProductoService;
 import com.vidayoung.platform.Model.Service.TiendaPublicaService;
 import jakarta.transaction.Transactional;
@@ -52,6 +53,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
     private final CompraPublicaDao compraPublicaDao;
     private final ClientePublicoDao clientePublicoDao;
     private final BilleteraService billeteraService;
+    private final CarteraEmpresaService carteraEmpresaService;
     private final BilleteraDao billeteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
 
@@ -304,6 +306,12 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
         compra = compraPublicaDao.save(compra);
 
         if (!esEstadoPagado(anterior) && esEstadoPagado(nuevo)) {
+            carteraEmpresaService.registrarIngreso(
+                    REFERENCIA_VENTA_PUBLICA,
+                    compra.getId(),
+                    zeroIfNull(compra.getTotalCliente()),
+                    "Ingreso por venta publica #" + compra.getId()
+            );
             acreditarGananciaDistribuidor(compra);
         }
 

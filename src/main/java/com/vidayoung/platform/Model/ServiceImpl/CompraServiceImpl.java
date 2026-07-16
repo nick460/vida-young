@@ -21,6 +21,7 @@ import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
 import com.vidayoung.platform.Model.Entity.Producto;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Service.BilleteraService;
+import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.CompraService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
@@ -53,6 +54,7 @@ public class CompraServiceImpl implements CompraService {
     private final PlanActivacionNivelDao planActivacionNivelDao;
     private final BeneficioActivacionCompraDao beneficioActivacionCompraDao;
     private final BilleteraService billeteraService;
+    private final CarteraEmpresaService carteraEmpresaService;
 
     @Override
     @Transactional(rollbackOn = Exception.class)
@@ -226,6 +228,12 @@ public class CompraServiceImpl implements CompraService {
                 .filter(value -> value != null)
                 .reduce(0, Integer::sum);
 
+        carteraEmpresaService.registrarIngreso(
+                "VENTA_INTERNA",
+                compra.getId(),
+                zeroIfNull(compra.getSubtotal()),
+                "Ingreso por venta interna #" + compra.getId()
+        );
         acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()), zeroIfNull(compra.getTotalCr()));
 
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {

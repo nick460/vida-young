@@ -12,6 +12,7 @@ import RewardsView from "./views/RewardsView.vue";
 import ShopView from "./views/ShopView.vue";
 import StatsView from "./views/StatsView.vue";
 import WalletView from "./views/WalletView.vue";
+import CompanyWalletView from "./views/CompanyWalletView.vue";
 import CartView from "./views/CartView.vue";
 import RolesMenusView from "./views/RolesMenusView.vue";
 import CustomMenuView from "./views/CustomMenuView.vue";
@@ -66,6 +67,7 @@ const routes = [
   { path: "/landings-productos-config", name: "landing-productos-config", component: ProductLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },
   { path: "/landings-temas-config", name: "landing-temas-config", component: DigitalLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },
   { path: "/pagina-principal-config", name: "pagina-principal-config", component: CompanyHomeConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/caja-empresa", name: "caja-empresa", component: CompanyWalletView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/wallet", name: "wallet", component: WalletView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/shop", name: "shop", component: ShopView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] } },
   { path: "/cart", name: "cart", component: CartView, meta: { sidebar: true, roles: ["*"], parentMenu: "shop" } },

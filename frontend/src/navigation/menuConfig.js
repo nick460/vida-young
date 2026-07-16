@@ -16,6 +16,7 @@ export const BASE_MENU_ITEMS = [
   { id: "ventanilla", label: "Ventanilla", icon: "Store", roles: [ROLE_ADMIN] },
   { id: "registro-referido", label: "Registro referido", icon: "UserPlus", roles: [ROLE_ADMIN] },
   { id: "herramientas-digitales", label: "Herramientas digitales", icon: "Wrench", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] },
+  { id: "caja-empresa", label: "Caja empresa", icon: "Building2", roles: [ROLE_ADMIN] },
   { id: "wallet", label: "Finanzas", icon: "Wallet", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] },
   { id: "shop", label: "Tienda", icon: "ShoppingBag", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] },
   { id: "network", label: "Mi red", icon: "Users", badge: "138", roles: [ROLE_ADMIN, "EMBAJADOR"] },

@@ -19,6 +19,7 @@ import com.vidayoung.platform.Model.Entity.Plan;
 import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Service.BilleteraService;
+import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -46,6 +47,7 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final RangoDao rangoDao;
     private final RecompensaDao recompensaDao;
     private final ReferidoDao referidoDao;
+    private final CarteraEmpresaService carteraEmpresaService;
 
     @Override
     @Transactional
@@ -137,6 +139,12 @@ public class BilleteraServiceImpl implements BilleteraService {
         }
 
         BigDecimal qpPlan = zeroIfNull(referido.getPlan().getQp());
+        carteraEmpresaService.registrarIngreso(
+                REFERENCIA_AFILIACION,
+                referenciaId,
+                zeroIfNull(referido.getPlan().getPrecio()),
+                "Ingreso por afiliacion de " + nombreCompleto(referido.getPersona()) + " al plan " + referido.getPlan().getNombre()
+        );
         if (referido.getPatrocinador() != null
                 && qpPlan.compareTo(BigDecimal.ZERO) > 0
                 && !movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
@@ -193,6 +201,13 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .qpPlan(zeroIfNull(plan.getQp()))
                 .estadoMembresia(HistorialMembresia.MEMBRESIA_ACTIVA)
                 .build());
+
+        carteraEmpresaService.registrarIngreso(
+                "MEMBRESIA_ACTIVACION",
+                historial.getId(),
+                zeroIfNull(plan.getPrecio()),
+                "Ingreso por activacion de " + nombreCompleto(persona) + " al plan " + plan.getNombre()
+        );
 
         BigDecimal qpPlan = zeroIfNull(plan.getQp());
         if (qpPlan.compareTo(BigDecimal.ZERO) > 0) {

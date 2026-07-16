@@ -101,12 +101,13 @@ VALUES
     ('ventanilla', 'Ventanilla', 'Store', FALSE, 110),
     ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 120),
     ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 130),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 140),
-    ('shop', 'Tienda', 'ShoppingBag', FALSE, 150),
-    ('network', 'Mi red', 'Users', FALSE, 160),
-    ('rewards', 'Recompensas', 'Gift', FALSE, 170),
-    ('stats', 'Estadisticas', 'BarChart3', FALSE, 180),
-    ('profile', 'Perfil', 'User', FALSE, 190)
+    ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 140),
+    ('wallet', 'Finanzas', 'Wallet', FALSE, 150),
+    ('shop', 'Tienda', 'ShoppingBag', FALSE, 160),
+    ('network', 'Mi red', 'Users', FALSE, 170),
+    ('rewards', 'Recompensas', 'Gift', FALSE, 180),
+    ('stats', 'Estadisticas', 'BarChart3', FALSE, 190),
+    ('profile', 'Perfil', 'User', FALSE, 200)
 ON CONFLICT (menu_id) DO UPDATE
 SET label = EXCLUDED.label,
     icon = EXCLUDED.icon,
@@ -581,6 +582,38 @@ CREATE TABLE IF NOT EXISTS movimientos_billetera (
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
 
+CREATE TABLE IF NOT EXISTS carteras_empresa (
+    id BIGSERIAL PRIMARY KEY,
+    codigo VARCHAR(40) NOT NULL UNIQUE,
+    nombre VARCHAR(120) NOT NULL,
+    saldo_actual NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE TABLE IF NOT EXISTS movimientos_cartera_empresa (
+    id BIGSERIAL PRIMARY KEY,
+    cartera_id BIGINT NOT NULL REFERENCES carteras_empresa(id),
+    tipo VARCHAR(20) NOT NULL,
+    concepto VARCHAR(180) NOT NULL,
+    referencia_tipo VARCHAR(60),
+    referencia_id BIGINT,
+    monto NUMERIC(12, 2) NOT NULL,
+    saldo_resultado NUMERIC(12, 2) NOT NULL,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+INSERT INTO carteras_empresa (codigo, nombre, saldo_actual)
+SELECT 'PRINCIPAL', 'Caja principal de la empresa', 0
+WHERE NOT EXISTS (SELECT 1 FROM carteras_empresa WHERE codigo = 'PRINCIPAL');
+
 CREATE TABLE IF NOT EXISTS historial_membresias (
     id BIGSERIAL PRIMARY KEY,
     persona_id BIGINT NOT NULL REFERENCES personas(id),
@@ -633,6 +666,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_historial_membresias_referencia
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_billetera_referencia
     ON movimientos_billetera (referencia_tipo, referencia_id, tipo)
+    WHERE referencia_tipo IS NOT NULL AND referencia_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_cartera_empresa_referencia
+    ON movimientos_cartera_empresa (referencia_tipo, referencia_id, tipo)
     WHERE referencia_tipo IS NOT NULL AND referencia_id IS NOT NULL;
 
 ALTER TABLE billeteras
@@ -897,3 +934,66 @@ CREATE TABLE IF NOT EXISTS beneficios_activacion_compras (
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+INSERT INTO movimientos_cartera_empresa (cartera_id, tipo, concepto, referencia_tipo, referencia_id, monto, saldo_resultado)
+SELECT c.id, ingreso.tipo, ingreso.concepto, ingreso.referencia_tipo, ingreso.referencia_id, ingreso.monto, 0
+FROM carteras_empresa c
+JOIN (
+    SELECT
+        'INGRESO' AS tipo,
+        'Ingreso historico por venta interna #' || co.id AS concepto,
+        'VENTA_INTERNA' AS referencia_tipo,
+        co.id AS referencia_id,
+        COALESCE(co.subtotal, 0) AS monto
+    FROM compras co
+    WHERE co.estado_compra IN ('VALIDADA', 'ENTREGADA', 'CONFIRMADA')
+      AND COALESCE(co.subtotal, 0) > 0
+    UNION ALL
+    SELECT
+        'INGRESO' AS tipo,
+        'Ingreso historico por venta publica #' || cp.id AS concepto,
+        'VENTA_PUBLICA' AS referencia_tipo,
+        cp.id AS referencia_id,
+        COALESCE(cp.total_cliente, 0) AS monto
+    FROM compras_publicas cp
+    WHERE cp.estado_compra IN ('VALIDADA', 'ENTREGADA')
+      AND COALESCE(cp.total_cliente, 0) > 0
+    UNION ALL
+    SELECT
+        'INGRESO' AS tipo,
+        'Ingreso historico por membresia #' || hm.id AS concepto,
+        COALESCE(hm.referencia_tipo, 'MEMBRESIA_ACTIVACION') AS referencia_tipo,
+        COALESCE(hm.referencia_id, hm.id) AS referencia_id,
+        COALESCE(hm.precio_plan, 0) AS monto
+    FROM historial_membresias hm
+    WHERE COALESCE(hm.precio_plan, 0) > 0
+) ingreso ON c.codigo = 'PRINCIPAL'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM movimientos_cartera_empresa existente
+    WHERE existente.referencia_tipo = ingreso.referencia_tipo
+      AND existente.referencia_id = ingreso.referencia_id
+      AND existente.tipo = ingreso.tipo
+);
+
+WITH acumulados AS (
+    SELECT
+        m.id,
+        SUM(m.monto) OVER (ORDER BY m.fecha_registro, m.id) AS saldo
+    FROM movimientos_cartera_empresa m
+    JOIN carteras_empresa c ON c.id = m.cartera_id
+    WHERE c.codigo = 'PRINCIPAL'
+)
+UPDATE movimientos_cartera_empresa m
+SET saldo_resultado = acumulados.saldo
+FROM acumulados
+WHERE m.id = acumulados.id;
+
+UPDATE carteras_empresa c
+SET saldo_actual = COALESCE((
+    SELECT SUM(m.monto)
+    FROM movimientos_cartera_empresa m
+    WHERE m.cartera_id = c.id
+      AND m.estado = 'ACTIVO'
+), 0)
+WHERE c.codigo = 'PRINCIPAL';
