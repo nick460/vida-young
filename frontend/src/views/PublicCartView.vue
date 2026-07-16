@@ -16,6 +16,7 @@ const tiposCliente = ref([]);
 const loading = ref(false);
 const error = ref("");
 const cajaCode = ref(generateCajaCode());
+const activeStep = ref(0);
 
 const bankPayment = {
   banco: "BANCO ECONOMICO",
@@ -26,6 +27,13 @@ const paymentOptions = [
   { id: "TRANSFERENCIA", title: "Transferencia", subtitle: "Bancaria", icon: Landmark },
   { id: "QR", title: "Codigo QR", subtitle: "Escanea y paga", icon: QrCode },
   { id: "CAJA", title: "Pago en Caja", subtitle: "Presencial", icon: Store }
+];
+
+const checkoutSteps = [
+  { title: "Tus datos", hint: "Indicanos quien realiza el pedido." },
+  { title: "Envio", hint: "Confirma si necesitas entrega a domicilio." },
+  { title: "Pago", hint: "Elige como pagaras y guarda la referencia." },
+  { title: "Revision", hint: "Revisa todo antes de registrar el pedido." }
 ];
 
 const form = reactive({
@@ -47,6 +55,7 @@ const total = computed(() => items.value.reduce((sum, item) => sum + Number(item
 const totalEmpresa = computed(() => items.value.reduce((sum, item) => sum + Number(item.distributorPrice || 0) * Number(item.quantity || 0), 0));
 const totalDescuento = computed(() => items.value.reduce((sum, item) => sum + Number(item.discount || 0) * Number(item.quantity || 0), 0));
 const gananciaDistribuidor = computed(() => Math.max(0, total.value - totalEmpresa.value));
+const currentStep = computed(() => checkoutSteps[activeStep.value]);
 
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -86,17 +95,58 @@ function removeItem(item) {
 
 function validate() {
   if (!items.value.length) return "Agrega al menos un producto.";
-  if (!form.clienteNombres.trim() || !form.clienteApellidos.trim()) return "Ingresa nombre y apellido.";
-  if (!form.clienteTelefono.trim() && !form.clienteEmail.trim()) return "Ingresa telefono o correo de contacto.";
-  if (form.envioRequiere && (!form.envioDireccion.trim() || !form.envioCiudad.trim())) return "Ingresa direccion y ciudad de envio.";
-  if (form.metodoPago === "CAJA") {
-    form.referenciaPago = `Codigo de caja ${cajaCode.value}`;
-  } else if (form.metodoPago === "QR" && !form.referenciaPago.trim()) {
-    form.referenciaPago = "Pago por codigo QR";
-  } else if (form.metodoPago === "TRANSFERENCIA" && !form.referenciaPago.trim()) {
-    form.referenciaPago = `Transferencia a ${bankPayment.banco}`;
+  for (let step = 0; step < checkoutSteps.length - 1; step += 1) {
+    const message = validateStep(step);
+    if (message) return message;
   }
   return "";
+}
+
+function validateStep(step = activeStep.value) {
+  if (step === 0) {
+    if (!form.tipoClienteCodigo) return "Selecciona tu tipo de cliente.";
+    if (!form.clienteNombres.trim() || !form.clienteApellidos.trim()) return "Ingresa nombre y apellido.";
+    if (!form.clienteTelefono.trim() && !form.clienteEmail.trim()) return "Ingresa telefono o correo de contacto.";
+  }
+
+  if (step === 1 && form.envioRequiere && (!form.envioDireccion.trim() || !form.envioCiudad.trim())) {
+    return "Ingresa direccion y ciudad de envio.";
+  }
+
+  if (step === 2) {
+    if (!form.metodoPago) return "Selecciona un metodo de pago.";
+    if ((form.metodoPago === "TRANSFERENCIA" || form.metodoPago === "QR") && !form.referenciaPago.trim()) {
+      return "Ingresa la referencia del pago para poder identificarlo.";
+    }
+  }
+
+  if (form.metodoPago === "CAJA") {
+    form.referenciaPago = `Codigo de caja ${cajaCode.value}`;
+  }
+
+  return "";
+}
+
+function nextStep() {
+  error.value = validateStep(activeStep.value);
+  if (error.value) return;
+  activeStep.value = Math.min(activeStep.value + 1, checkoutSteps.length - 1);
+  error.value = "";
+}
+
+function previousStep() {
+  activeStep.value = Math.max(activeStep.value - 1, 0);
+  error.value = "";
+}
+
+function goToStep(index) {
+  if (index <= activeStep.value) {
+    activeStep.value = index;
+    error.value = "";
+    return;
+  }
+
+  nextStep();
 }
 
 async function checkout() {
@@ -191,7 +241,26 @@ onMounted(load);
         </aside>
 
         <form class="vy-card checkout-card" @submit.prevent="checkout">
-          <div class="form-grid">
+          <nav class="checkout-stepper" aria-label="Pasos del pedido">
+            <button
+              v-for="(step, index) in checkoutSteps"
+              :key="step.title"
+              type="button"
+              :class="{ active: activeStep === index, done: activeStep > index }"
+              @click="goToStep(index)"
+            >
+              <b>{{ index + 1 }}</b>
+              <span>{{ step.title }}</span>
+            </button>
+          </nav>
+
+          <section class="step-intro">
+            <span>Paso {{ activeStep + 1 }} de {{ checkoutSteps.length }}</span>
+            <h2>{{ currentStep.title }}</h2>
+            <p>{{ currentStep.hint }}</p>
+          </section>
+
+          <div v-if="activeStep === 0" class="form-grid">
             <label>
               <span>Tipo de cliente</span>
               <select v-model="form.tipoClienteCodigo">
@@ -199,25 +268,53 @@ onMounted(load);
               </select>
             </label>
             <label>
+              <span>Documento</span>
+              <input v-model.trim="form.clienteDocumento" placeholder="Opcional" />
+            </label>
+            <label>
               <span>Nombres</span>
-              <input v-model.trim="form.clienteNombres" />
+              <input v-model.trim="form.clienteNombres" placeholder="Tu nombre" />
             </label>
             <label>
               <span>Apellidos</span>
-              <input v-model.trim="form.clienteApellidos" />
-            </label>
-            <label>
-              <span>Documento</span>
-              <input v-model.trim="form.clienteDocumento" />
+              <input v-model.trim="form.clienteApellidos" placeholder="Tu apellido" />
             </label>
             <label>
               <span>Telefono</span>
-              <input v-model.trim="form.clienteTelefono" />
+              <input v-model.trim="form.clienteTelefono" placeholder="Para coordinar el pedido" />
             </label>
             <label>
               <span>Correo</span>
-              <input v-model.trim="form.clienteEmail" type="email" />
+              <input v-model.trim="form.clienteEmail" type="email" placeholder="Opcional si dejas telefono" />
             </label>
+          </div>
+
+          <div v-if="activeStep === 1" class="form-grid">
+            <div class="step-help full-field">
+              <strong>Entrega del producto</strong>
+              <p>Si retirarás tu pedido directamente o coordinarás por otro medio, deja desmarcada la opcion de envio.</p>
+            </div>
+            <label class="toggle-field full-field">
+              <input v-model="form.envioRequiere" type="checkbox" />
+              <span>Requiere envio</span>
+            </label>
+            <template v-if="form.envioRequiere">
+              <label>
+                <span>Ciudad</span>
+                <input v-model.trim="form.envioCiudad" placeholder="Ej. Santa Cruz" />
+              </label>
+              <label>
+                <span>Direccion</span>
+                <input v-model.trim="form.envioDireccion" placeholder="Calle, zona, numero de casa" />
+              </label>
+              <label class="full-field">
+                <span>Referencia de envio</span>
+                <textarea v-model.trim="form.envioReferencia" rows="3" placeholder="Horarios, punto de referencia o instrucciones para ubicarte" />
+              </label>
+            </template>
+          </div>
+
+          <div v-if="activeStep === 2" class="form-grid">
             <section class="payment-card full-field">
               <div class="payment-heading">
                 <div>
@@ -274,28 +371,43 @@ onMounted(load);
                 <button type="button" @click="copyText(cajaCode)"><Copy :size="14" /> Copiar codigo</button>
               </div>
             </section>
-            <label class="toggle-field full-field">
-              <input v-model="form.envioRequiere" type="checkbox" />
-              <span>Requiere envio</span>
-            </label>
-            <template v-if="form.envioRequiere">
-              <label>
-                <span>Ciudad</span>
-                <input v-model.trim="form.envioCiudad" />
-              </label>
-              <label>
-                <span>Direccion</span>
-                <input v-model.trim="form.envioDireccion" />
-              </label>
-              <label class="full-field">
-                <span>Referencia de envio</span>
-                <textarea v-model.trim="form.envioReferencia" rows="3" />
-              </label>
-            </template>
           </div>
-          <button class="vy-btn vy-btn-primary checkout-button" type="submit" :disabled="loading">
-            <Send :size="16" /> Registrar pedido
-          </button>
+
+          <div v-if="activeStep === 3" class="review-grid">
+            <section>
+              <h3>Datos del cliente</h3>
+              <p>{{ form.clienteNombres }} {{ form.clienteApellidos }}</p>
+              <span>{{ form.clienteTelefono || "Sin telefono" }} · {{ form.clienteEmail || "Sin correo" }}</span>
+              <span>Tipo: {{ form.tipoClienteCodigo }}</span>
+            </section>
+            <section>
+              <h3>Envio</h3>
+              <p>{{ form.envioRequiere ? `${form.envioCiudad} - ${form.envioDireccion}` : "No requiere envio" }}</p>
+              <span>{{ form.envioReferencia || "Sin referencia adicional" }}</span>
+            </section>
+            <section>
+              <h3>Pago</h3>
+              <p>{{ form.metodoPago }}</p>
+              <span>{{ form.metodoPago === "CAJA" ? `Codigo ${cajaCode}` : form.referenciaPago || "Referencia pendiente" }}</span>
+            </section>
+            <section>
+              <h3>Total</h3>
+              <p>Bs. {{ money(total) }}</p>
+              <span>Tu pedido quedara pendiente de validacion.</span>
+            </section>
+          </div>
+
+          <footer class="step-actions">
+            <button class="vy-btn vy-btn-ghost" type="button" :disabled="activeStep === 0 || loading" @click="previousStep">
+              Atras
+            </button>
+            <button v-if="activeStep < checkoutSteps.length - 1" class="vy-btn vy-btn-primary" type="button" @click="nextStep">
+              Siguiente
+            </button>
+            <button v-else class="vy-btn vy-btn-primary" type="submit" :disabled="loading">
+              <Send :size="16" /> Registrar pedido
+            </button>
+          </footer>
         </form>
       </section>
 
@@ -332,6 +444,19 @@ onMounted(load);
 .summary-total strong { font-family: var(--font-display); font-size: 22px; }
 .summary-card p { margin-top: 12px; color: var(--vy-ink-3); font-size: 12px; font-weight: 700; line-height: 1.45; }
 .checkout-card { grid-column: 1 / -1; }
+.checkout-stepper { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+.checkout-stepper button { min-height: 54px; padding: 8px; border-radius: 12px; border: 1px solid var(--vy-line); background: var(--vy-surface-2); color: var(--vy-ink-2); display: flex; align-items: center; gap: 8px; text-align: left; }
+.checkout-stepper b { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--vy-ink); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.checkout-stepper span { font-size: 12px; font-weight: 900; }
+.checkout-stepper button.active { border-color: var(--vy-orange); background: #fff7e8; color: var(--vy-orange-deep); }
+.checkout-stepper button.active b, .checkout-stepper button.done b { background: var(--vy-orange); color: #fff; }
+.step-intro { margin-bottom: 16px; padding: 14px; border-radius: 14px; background: #fffaf0; border: 1px solid rgba(242, 135, 5, 0.22); }
+.step-intro span { color: var(--vy-orange-deep); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.step-intro h2 { margin-top: 4px; font-size: 20px; font-weight: 900; }
+.step-intro p { margin-top: 4px; color: var(--vy-ink-2); font-size: 13px; font-weight: 800; line-height: 1.45; }
+.step-help { padding: 14px; border-radius: 14px; background: var(--vy-surface-2); border: 1px solid var(--vy-line); }
+.step-help strong { display: block; font-size: 14px; font-weight: 900; }
+.step-help p { margin-top: 4px; color: var(--vy-ink-2); font-size: 13px; font-weight: 700; line-height: 1.45; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 label span { display: block; margin-bottom: 7px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 input, select, textarea { width: 100%; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }
@@ -362,8 +487,16 @@ textarea { padding: 12px; resize: vertical; }
 .qr-detail img { width: 220px; border-radius: 18px; border: 1px solid var(--vy-line); background: #fff; padding: 10px; box-shadow: var(--vy-shadow-sm); }
 .caja-detail { text-align: center; }
 .cash-code { width: fit-content; margin: 14px auto; padding: 12px 24px; border-radius: 14px; background: #fff; border: 1px solid var(--vy-line); font-family: var(--font-mono); font-size: 30px; font-weight: 900; letter-spacing: 0.16em; color: var(--vy-ink); }
-.checkout-button { width: 100%; margin-top: 16px; min-height: 46px; border-radius: 12px; font-weight: 900; }
+.review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.review-grid section { padding: 14px; border: 1px solid var(--vy-line); border-radius: 14px; background: var(--vy-surface-2); }
+.review-grid h3 { font-size: 13px; font-weight: 900; }
+.review-grid p { margin-top: 6px; color: var(--vy-ink); font-size: 15px; font-weight: 900; line-height: 1.35; }
+.review-grid span { display: block; margin-top: 4px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; line-height: 1.35; }
+.step-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; }
+.step-actions .vy-btn { min-height: 46px; padding: 0 18px; border-radius: 12px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.vy-btn-ghost { background: var(--vy-surface); border: 1px solid var(--vy-line); color: var(--vy-ink-2); }
 .vy-btn-primary { background: var(--vy-orange); color: #fff; }
 .empty-cart { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: var(--vy-ink-2); }
-@media (max-width: 980px) { .workspace { padding: 24px 20px 32px; } .cart-layout, .cart-row, .form-grid, .payment-options, .qr-detail { grid-template-columns: 1fr; } .full-field { grid-column: auto; } .qr-detail img { width: min(100%, 260px); justify-self: center; } .copy-row { align-items: stretch; flex-direction: column; } }
+@media (max-width: 980px) { .workspace { padding: 24px 20px 32px; } .cart-layout, .cart-row, .form-grid, .payment-options, .qr-detail, .review-grid { grid-template-columns: 1fr; } .checkout-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); } .full-field { grid-column: auto; } .qr-detail img { width: min(100%, 260px); justify-self: center; } .copy-row { align-items: stretch; flex-direction: column; } }
+@media (max-width: 520px) { .checkout-stepper { grid-template-columns: 1fr; } .step-actions { flex-direction: column; } .step-actions .vy-btn { width: 100%; } }
 </style>
