@@ -102,6 +102,15 @@ public class CompraPublica extends Auditoria {
     @Column(name = "referencia_pago", length = 180)
     private String referenciaPago;
 
+    @Column(name = "comprobante_pago_url", length = 255)
+    private String comprobantePagoUrl;
+
+    @Column(name = "comprobante_pago_nombre", length = 180)
+    private String comprobantePagoNombre;
+
+    @Column(name = "comprobante_pago_tipo", length = 80)
+    private String comprobantePagoTipo;
+
     @Column(name = "total_cliente", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal totalCliente = BigDecimal.ZERO;

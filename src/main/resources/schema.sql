@@ -240,6 +240,9 @@ CREATE TABLE IF NOT EXISTS compras_publicas (
     envio_referencia VARCHAR(220),
     metodo_pago VARCHAR(30),
     referencia_pago VARCHAR(180),
+    comprobante_pago_url VARCHAR(255),
+    comprobante_pago_nombre VARCHAR(180),
+    comprobante_pago_tipo VARCHAR(80),
     total_cliente NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_empresa NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_descuento NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -256,7 +259,10 @@ CREATE TABLE IF NOT EXISTS compras_publicas (
 );
 
 ALTER TABLE compras_publicas
-    ADD COLUMN IF NOT EXISTS cliente_publico_id BIGINT REFERENCES clientes_publicos(id);
+    ADD COLUMN IF NOT EXISTS cliente_publico_id BIGINT REFERENCES clientes_publicos(id),
+    ADD COLUMN IF NOT EXISTS comprobante_pago_url VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS comprobante_pago_nombre VARCHAR(180),
+    ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80);
 
 CREATE TABLE IF NOT EXISTS compras_publicas_detalles (
     id BIGSERIAL PRIMARY KEY,

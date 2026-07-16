@@ -145,6 +145,9 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 .envioReferencia(normalizarTexto(request.envioReferencia()))
                 .metodoPago(normalizarTexto(request.metodoPago()))
                 .referenciaPago(normalizarTexto(request.referenciaPago()))
+                .comprobantePagoUrl(normalizarTexto(request.comprobantePagoUrl()))
+                .comprobantePagoNombre(normalizarTexto(request.comprobantePagoNombre()))
+                .comprobantePagoTipo(normalizarTexto(request.comprobantePagoTipo()))
                 .build();
         compra = compraPublicaDao.save(compra);
 
@@ -424,6 +427,11 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
         if (Boolean.TRUE.equals(request.envioRequiere())
                 && (normalizarTexto(request.envioDireccion()) == null || normalizarTexto(request.envioCiudad()) == null)) {
             throw new IllegalArgumentException("Ingresa direccion y ciudad de envio.");
+        }
+        String metodoPago = Optional.ofNullable(normalizarTexto(request.metodoPago())).orElse("");
+        if (("TRANSFERENCIA".equalsIgnoreCase(metodoPago) || "QR".equalsIgnoreCase(metodoPago))
+                && normalizarTexto(request.comprobantePagoUrl()) == null) {
+            throw new IllegalArgumentException("Adjunta el comprobante de pago antes de registrar el pedido.");
         }
     }
 

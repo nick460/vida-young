@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { ArrowLeft, CircleMinus, Copy, Landmark, Minus, Plus, QrCode, Send, ShoppingCart, Store } from "lucide-vue-next";
+import { ArrowLeft, CircleMinus, Copy, FileText, Landmark, Minus, Plus, QrCode, Send, ShoppingCart, Store, UploadCloud } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { clearPublicCart, readPublicCart, writePublicCart } from "../services/publicCartService.js";
 import paymentQr from "../assets/paymentQr.png";
@@ -19,6 +19,7 @@ const cajaCode = ref(generateCajaCode());
 const activeStep = ref(0);
 const searchingDocument = ref(false);
 const documentLookupMessage = ref("");
+const comprobanteFile = ref(null);
 const fieldErrors = reactive({});
 
 const bankPayment = {
@@ -67,6 +68,27 @@ function money(value) {
 
 function generateCajaCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function handleComprobante(event) {
+  const [file] = event.target.files || [];
+  error.value = "";
+  setFieldError("comprobante", "");
+
+  if (!file) {
+    comprobanteFile.value = null;
+    return;
+  }
+
+  const allowedTypes = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
+  if (!allowedTypes.includes(file.type)) {
+    comprobanteFile.value = null;
+    event.target.value = "";
+    setFieldError("comprobante", "El comprobante debe ser imagen PNG/JPG/WEBP o PDF.");
+    return;
+  }
+
+  comprobanteFile.value = file;
 }
 
 async function copyText(value) {
@@ -147,6 +169,11 @@ function validateField(field) {
     setFieldError(field, !needsReference || form.referenciaPago.trim() ? "" : "Ingresa la referencia del pago.");
   }
 
+  if (field === "comprobante") {
+    const needsProof = form.metodoPago === "TRANSFERENCIA" || form.metodoPago === "QR";
+    setFieldError(field, !needsProof || comprobanteFile.value ? "" : "Adjunta el comprobante de pago.");
+  }
+
   return !fieldErrors[field];
 }
 
@@ -178,7 +205,8 @@ function validateStep(step = activeStep.value) {
   if (step === 3) {
     validateField("metodoPago");
     validateField("referenciaPago");
-    return !fieldErrors.metodoPago && !fieldErrors.referenciaPago;
+    validateField("comprobante");
+    return !fieldErrors.metodoPago && !fieldErrors.referenciaPago && !fieldErrors.comprobante;
   }
 
   if (form.metodoPago === "CAJA") {
@@ -246,23 +274,33 @@ async function searchByDocument() {
 }
 
 async function checkout() {
+  if (loading.value) return;
   if (!validateAllSteps()) return;
 
   loading.value = true;
   try {
-    const response = await apiRequest(`/api/public/tiendas/${encodeURIComponent(username.value)}/compras`, {
+    const compraPayload = {
+      ...form,
+      items: items.value.map((item) => ({
+        productoId: Number(item.id),
+        cantidad: Number(item.quantity || 1)
+      }))
+    };
+
+    const formData = new FormData();
+    formData.append("compra", new Blob([JSON.stringify(compraPayload)], { type: "application/json" }));
+    if (comprobanteFile.value) {
+      formData.append("comprobante", comprobanteFile.value);
+    }
+
+    const response = await apiRequest(`/api/public/tiendas/${encodeURIComponent(username.value)}/compras/comprobante`, {
       method: "POST",
-      body: JSON.stringify({
-        ...form,
-        items: items.value.map((item) => ({
-          productoId: Number(item.id),
-          cantidad: Number(item.quantity || 1)
-        }))
-      })
+      body: formData
     });
 
     clearPublicCart(username.value);
     items.value = [];
+    comprobanteFile.value = null;
     await Swal.fire({
       title: "Pedido registrado",
       html: `Pedido #<b>${response.id}</b><br>Total: <b>Bs. ${money(response.totalCliente)}</b><br>Queda pendiente de validacion.`,
@@ -304,6 +342,13 @@ onMounted(load);
       </header>
 
       <div v-if="error" class="error-box">{{ error }}</div>
+      <div v-if="loading" class="submit-overlay" role="status" aria-live="polite">
+        <div class="submit-loader">
+          <span class="spinner"></span>
+          <strong>Realizando registro de pedido</strong>
+          <small>Espera un momento. No cierres esta pantalla ni vuelvas a presionar el boton.</small>
+        </div>
+      </div>
 
       <section v-if="items.length" class="cart-layout">
         <form class="vy-card checkout-card" @submit.prevent="checkout">
@@ -478,6 +523,15 @@ onMounted(load);
                   @input="validateField('referenciaPago')"
                 />
                 <small v-if="fieldErrors.referenciaPago" class="field-error">{{ fieldErrors.referenciaPago }}</small>
+                <label class="proof-upload">
+                  <UploadCloud :size="22" />
+                  <span>
+                    <strong>{{ comprobanteFile ? comprobanteFile.name : "Adjuntar comprobante" }}</strong>
+                    <small>Imagen PNG/JPG/WEBP o PDF de la transferencia</small>
+                  </span>
+                  <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" @change="handleComprobante" />
+                </label>
+                <small v-if="fieldErrors.comprobante" class="field-error">{{ fieldErrors.comprobante }}</small>
               </div>
 
               <div v-if="form.metodoPago === 'QR'" class="payment-detail qr-detail">
@@ -492,6 +546,15 @@ onMounted(load);
                     @input="validateField('referenciaPago')"
                   />
                   <small v-if="fieldErrors.referenciaPago" class="field-error">{{ fieldErrors.referenciaPago }}</small>
+                  <label class="proof-upload">
+                    <FileText :size="22" />
+                    <span>
+                      <strong>{{ comprobanteFile ? comprobanteFile.name : "Adjuntar comprobante" }}</strong>
+                      <small>Imagen o PDF del pago realizado por QR</small>
+                    </span>
+                    <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" @change="handleComprobante" />
+                  </label>
+                  <small v-if="fieldErrors.comprobante" class="field-error">{{ fieldErrors.comprobante }}</small>
                 </div>
                 <img :src="paymentQr" alt="QR de pago" />
               </div>
@@ -533,11 +596,13 @@ onMounted(load);
             <button class="vy-btn vy-btn-ghost" type="button" :disabled="activeStep === 0 || loading" @click="previousStep">
               Atras
             </button>
-            <button v-if="activeStep < checkoutSteps.length - 1" class="vy-btn vy-btn-primary" type="button" @click="nextStep">
+            <button v-if="activeStep < checkoutSteps.length - 1" class="vy-btn vy-btn-primary" type="button" :disabled="loading" @click="nextStep">
               Siguiente
             </button>
             <button v-else class="vy-btn vy-btn-primary" type="submit" :disabled="loading">
-              <Send :size="16" /> Registrar pedido
+              <span v-if="loading" class="button-spinner"></span>
+              <Send v-else :size="16" />
+              {{ loading ? "Registrando..." : "Registrar pedido" }}
             </button>
           </footer>
         </form>
@@ -559,6 +624,14 @@ onMounted(load);
 .page-header p { margin-top: 4px; color: var(--vy-ink-2); font-size: 14px; }
 .back-button { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--vy-line); background: var(--vy-surface); display: inline-flex; align-items: center; justify-content: center; }
 .error-box { margin-bottom: 14px; padding: 13px 15px; border-radius: 12px; background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); font-weight: 800; }
+.submit-overlay { position: fixed; inset: 0; z-index: 80; padding: 20px; background: rgba(255, 250, 240, 0.82); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; }
+.submit-loader { width: min(100%, 360px); padding: 22px; border-radius: 16px; border: 1px solid var(--vy-line); background: #fff; box-shadow: var(--vy-shadow); text-align: center; }
+.submit-loader strong { display: block; margin-top: 12px; color: var(--vy-ink); font-size: 16px; font-weight: 900; }
+.submit-loader small { display: block; margin-top: 7px; color: var(--vy-ink-2); font-size: 12px; font-weight: 800; line-height: 1.45; }
+.spinner, .button-spinner { display: inline-block; border-radius: 50%; border-style: solid; border-color: rgba(242, 135, 5, 0.24); border-top-color: var(--vy-orange); animation: spin 0.8s linear infinite; }
+.spinner { width: 42px; height: 42px; border-width: 4px; }
+.button-spinner { width: 16px; height: 16px; border-width: 2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .cart-layout { display: block; }
 .checkout-card, .empty-cart { padding: 20px; }
 .order-step-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.7fr); gap: 16px; align-items: start; }
@@ -623,6 +696,13 @@ label > small, .field-error { display: block; margin-top: 6px; color: var(--vy-d
 .copy-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-radius: 12px; background: #fff; border: 1px solid var(--vy-line-2); }
 .copy-row strong { font-size: 14px; font-weight: 900; word-break: break-word; }
 .copy-row button, .caja-detail button { min-height: 36px; padding: 0 12px; border-radius: 10px; background: var(--vy-ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; font-weight: 900; flex-shrink: 0; }
+.proof-upload { margin-top: 14px; padding: 14px; border: 1.5px dashed rgba(242, 135, 5, 0.42); border-radius: 14px; background: #fff; color: var(--vy-ink); display: flex; align-items: center; gap: 12px; cursor: pointer; transition: border-color 0.16s ease, background 0.16s ease; }
+.proof-upload:hover { border-color: var(--vy-orange); background: #fffaf0; }
+.proof-upload > svg { color: var(--vy-orange-deep); flex-shrink: 0; }
+.proof-upload span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.proof-upload strong { font-size: 13px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proof-upload small { color: var(--vy-ink-3); font-size: 12px; font-weight: 800; line-height: 1.35; }
+.proof-upload input { display: none; }
 .qr-detail { display: grid; grid-template-columns: minmax(0, 1fr) 220px; align-items: center; gap: 18px; }
 .qr-detail img { width: 220px; border-radius: 18px; border: 1px solid var(--vy-line); background: #fff; padding: 10px; box-shadow: var(--vy-shadow-sm); }
 .caja-detail { text-align: center; }

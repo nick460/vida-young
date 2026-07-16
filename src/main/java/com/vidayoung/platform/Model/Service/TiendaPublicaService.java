@@ -101,7 +101,10 @@ public interface TiendaPublicaService {
             String envioCiudad,
             String envioReferencia,
             String metodoPago,
-            String referenciaPago
+            String referenciaPago,
+            String comprobantePagoUrl,
+            String comprobantePagoNombre,
+            String comprobantePagoTipo
     ) {
     }
 }
