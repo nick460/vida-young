@@ -10,5 +10,7 @@ public interface MovimientoBilleteraDao extends JpaRepository<MovimientoBilleter
 
     List<MovimientoBilletera> findByBilleteraPersonaIdOrderByFechaRegistroDesc(Long personaId);
 
+    List<MovimientoBilletera> findByReferenciaTipoAndReferenciaIdAndTipo(String referenciaTipo, Long referenciaId, String tipo);
+
     boolean existsByReferenciaTipoAndReferenciaIdAndTipo(String referenciaTipo, Long referenciaId, String tipo);
 }

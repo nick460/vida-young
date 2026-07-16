@@ -17,8 +17,8 @@ const accumulatedRewards = computed(() => recompensas.value.map((item) => ({
   plan: item.planIngreso,
   fechaUnion: item.referido?.fechaUnion,
   nivel: Number(item.nivelGenerado || 0),
-  montoDirecto: Number(item.montoEfectivo || 0),
-  valorProductos: Number(item.valorProductos || 0),
+  montoDirecto: Math.max(0, Number(item.montoEfectivo || 0) - Number(item.montoEfectivoRetirado || 0)),
+  valorProductos: Math.max(0, Number(item.valorProductos || 0) - Number(item.valorProductosRetirado || 0)),
   cobrable: item.cobrable !== false,
   motivoNoCobrable: item.motivoNoCobrable || "No cobrable porque la membresia no esta activa."
 })));

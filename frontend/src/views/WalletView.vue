@@ -121,6 +121,11 @@ onMounted(loadWallet);
             <strong>{{ money(billetera.saldoCr) }}</strong>
             <small>Credito de recompensa acumulado por compras.</small>
           </div>
+          <div class="point-row product-balance">
+            <span>Productos</span>
+            <strong>{{ money(billetera.saldoProductos) }}</strong>
+            <small>Saldo disponible para canjear por productos.</small>
+          </div>
         </article>
       </section>
 
@@ -253,6 +258,7 @@ onMounted(loadWallet);
                 <th>PV</th>
                 <th>QP</th>
                 <th>CR</th>
+                <th>Productos</th>
                 <th>Rango</th>
                 <th>Estado</th>
               </tr>
@@ -265,13 +271,14 @@ onMounted(loadWallet);
                 <td>{{ money(cierre.saldoPv) }}</td>
                 <td>{{ money(cierre.saldoQp) }}</td>
                 <td>{{ money(cierre.saldoCr) }}</td>
+                <td>{{ money(cierre.saldoProductos) }}</td>
                 <td>
                   <span class="rank-pill">{{ cierre.rangoNombre || cierre.rango?.nombre || "Sin rango" }}</span>
                 </td>
                 <td><span class="vy-chip vy-chip-orange">{{ cierre.estadoPlanilla }}</span></td>
               </tr>
               <tr v-if="!cierresMensuales.length && !loading">
-                <td colspan="8">No hay cierres mensuales registrados.</td>
+                <td colspan="9">No hay cierres mensuales registrados.</td>
               </tr>
             </tbody>
           </table>

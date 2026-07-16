@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -20,20 +21,16 @@ import lombok.Setter;
 import lombok.ToString;
 
 @Entity
-@Table(name = "movimientos_billetera")
+@Table(name = "retiros_billetera")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
-public class MovimientoBilletera extends Auditoria {
+public class RetiroBilletera extends Auditoria {
 
-    public static final String TIPO_DINERO = "DINERO";
-    public static final String TIPO_PV = "PV";
-    public static final String TIPO_QP = "QP";
-    public static final String TIPO_CR = "CR";
-    public static final String TIPO_PRODUCTOS = "PRODUCTOS";
+    public static final String ESTADO_PROCESADO = "PROCESADO";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,26 +38,25 @@ public class MovimientoBilletera extends Auditoria {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "billetera_id", nullable = false)
-    @JsonIgnoreProperties({"persona"})
+    @JoinColumn(name = "persona_id", nullable = false)
+    @JsonIgnoreProperties({"usuario"})
     @ToString.Exclude
-    private Billetera billetera;
+    private Persona persona;
 
-    @Column(nullable = false, length = 20)
-    private String tipo;
+    @Column(name = "monto_dinero", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal montoDinero = BigDecimal.ZERO;
 
-    @Column(nullable = false, length = 160)
-    private String concepto;
+    @Column(name = "monto_productos", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal montoProductos = BigDecimal.ZERO;
 
-    @Column(name = "referencia_tipo", length = 60)
-    private String referenciaTipo;
+    @Column(nullable = false, length = 30)
+    private String estadoRetiro;
 
-    @Column(name = "referencia_id")
-    private Long referenciaId;
+    @Column(name = "fecha_retiro", nullable = false)
+    private LocalDateTime fechaRetiro;
 
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal monto;
-
-    @Column(name = "saldo_resultado", nullable = false, precision = 12, scale = 2)
-    private BigDecimal saldoResultado;
+    @Column(length = 240)
+    private String observacion;
 }

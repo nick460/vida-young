@@ -232,7 +232,7 @@ public class ReferidoServiceImpl implements ReferidoService {
                     .orElse(false);
 
             if (nivelAlcanza && (efectivo.compareTo(BigDecimal.ZERO) > 0 || productos.compareTo(BigDecimal.ZERO) > 0)) {
-                recompensaDao.save(Recompensa.builder()
+                Recompensa recompensa = recompensaDao.save(Recompensa.builder()
                         .referido(referido)
                         .beneficiario(beneficiario)
                         .planIngreso(referido.getPlan())
@@ -242,6 +242,7 @@ public class ReferidoServiceImpl implements ReferidoService {
                         .cobrable(beneficiarioActivo)
                         .motivoNoCobrable(beneficiarioActivo ? null : "No cobrable porque la membresia no esta activa.")
                         .build());
+                billeteraService.sincronizarSaldoProductosRecompensa(recompensa.getId());
             }
 
             beneficiario = beneficiarioReferido
@@ -264,7 +265,8 @@ public class ReferidoServiceImpl implements ReferidoService {
 
         recompensaDao.findByReferidoId(referido.getId()).forEach(recompensa -> {
             recompensa.setEstado(Auditoria.ESTADO_ELIMINADO);
-            recompensaDao.save(recompensa);
+            recompensa = recompensaDao.save(recompensa);
+            billeteraService.sincronizarSaldoProductosRecompensa(recompensa.getId());
         });
     }
 

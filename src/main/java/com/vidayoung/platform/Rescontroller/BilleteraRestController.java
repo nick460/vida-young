@@ -1,11 +1,15 @@
 package com.vidayoung.platform.Rescontroller;
 
 import com.vidayoung.platform.Model.Dao.PersonaDao;
+import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
+import com.vidayoung.platform.Model.Entity.Auditoria;
+import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import com.vidayoung.platform.Model.Service.BilleteraService;
+import java.math.BigDecimal;
 import java.util.List;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,7 @@ public class BilleteraRestController {
 
     private final BilleteraService billeteraService;
     private final PersonaDao personaDao;
+    private final RecompensaDao recompensaDao;
 
     @GetMapping("/persona/{personaId}")
     public ResponseEntity<BilleteraResumenResponse> resumenPorPersona(@PathVariable Long personaId) {
@@ -36,7 +41,9 @@ public class BilleteraRestController {
                             billetera,
                             billeteraService.listarMovimientos(personaId),
                             billeteraService.listarHistorialMembresias(personaId),
-                            billeteraService.listarCierresMensuales(personaId)
+                            billeteraService.listarCierresMensuales(personaId),
+                            efectivoRecompensasDisponible(personaId),
+                            zeroIfNull(billetera.getSaldoProductos())
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -60,6 +67,19 @@ public class BilleteraRestController {
     @PostMapping("/cierres-mensuales")
     public ResponseEntity<Integer> cerrarMesBilleteras() {
         return ResponseEntity.ok(billeteraService.cerrarMesBilleteras());
+    }
+
+    @PostMapping("/persona/{personaId}/retiros")
+    public ResponseEntity<RetiroBilletera> registrarRetiro(
+            @PathVariable Long personaId,
+            @RequestBody RetiroRequest request
+    ) {
+        return ResponseEntity.ok(billeteraService.registrarRetiro(
+                personaId,
+                request.getMontoDinero(),
+                request.getMontoProductos(),
+                request.getObservacion()
+        ));
     }
 
     @PostMapping("/persona/{personaId}/activaciones")
@@ -86,6 +106,10 @@ public class BilleteraRestController {
         private final List<HistorialMembresia> membresias;
 
         private final List<CierreMensualBilletera> cierresMensuales;
+
+        private final BigDecimal efectivoRecompensasDisponible;
+
+        private final BigDecimal productosRecompensasDisponible;
     }
 
     @Getter
@@ -93,5 +117,36 @@ public class BilleteraRestController {
     public static class ActivacionRequest {
 
         private Long planId;
+    }
+
+    @Getter
+    @Setter
+    public static class RetiroRequest {
+
+        private BigDecimal montoDinero;
+
+        private BigDecimal montoProductos;
+
+        private String observacion;
+    }
+
+    private BigDecimal efectivoRecompensasDisponible(Long personaId) {
+        return recompensaDao.findByBeneficiarioId(personaId).stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .map(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado())).max(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal productosRecompensasDisponible(Long personaId) {
+        return recompensaDao.findByBeneficiarioId(personaId).stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .map(recompensa -> zeroIfNull(recompensa.getValorProductos()).subtract(zeroIfNull(recompensa.getValorProductosRetirado())).max(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

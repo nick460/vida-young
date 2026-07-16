@@ -510,6 +510,8 @@ CREATE TABLE IF NOT EXISTS recompensas (
     nivel_generado INTEGER NOT NULL,
     monto_efectivo NUMERIC(12, 2) NOT NULL DEFAULT 0,
     valor_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    monto_efectivo_retirado NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    valor_productos_retirado NUMERIC(12, 2) NOT NULL DEFAULT 0,
     cobrable BOOLEAN NOT NULL DEFAULT TRUE,
     motivo_no_cobrable VARCHAR(180),
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
@@ -521,7 +523,9 @@ CREATE TABLE IF NOT EXISTS recompensas (
 
 ALTER TABLE recompensas
     ADD COLUMN IF NOT EXISTS cobrable BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS motivo_no_cobrable VARCHAR(180);
+    ADD COLUMN IF NOT EXISTS motivo_no_cobrable VARCHAR(180),
+    ADD COLUMN IF NOT EXISTS monto_efectivo_retirado NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS valor_productos_retirado NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS preinscripciones_referidos (
     id BIGSERIAL PRIMARY KEY,
@@ -558,6 +562,7 @@ CREATE TABLE IF NOT EXISTS billeteras (
     saldo_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    saldo_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -575,6 +580,21 @@ CREATE TABLE IF NOT EXISTS movimientos_billetera (
     referencia_id BIGINT,
     monto NUMERIC(12, 2) NOT NULL,
     saldo_resultado NUMERIC(12, 2) NOT NULL,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE TABLE IF NOT EXISTS retiros_billetera (
+    id BIGSERIAL PRIMARY KEY,
+    persona_id BIGINT NOT NULL REFERENCES personas(id),
+    monto_dinero NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    monto_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    estado_retiro VARCHAR(30) NOT NULL DEFAULT 'PROCESADO',
+    fecha_retiro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    observacion VARCHAR(240),
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -641,6 +661,7 @@ CREATE TABLE IF NOT EXISTS cierres_mensuales_billetera (
     saldo_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    saldo_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
     rango_id BIGINT REFERENCES rangos(id),
     rango_nombre VARCHAR(100),
     rango_qp_minimo NUMERIC(12, 2),
@@ -656,6 +677,7 @@ CREATE TABLE IF NOT EXISTS cierres_mensuales_billetera (
 
 ALTER TABLE cierres_mensuales_billetera
     ADD COLUMN IF NOT EXISTS saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS saldo_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS rango_id BIGINT REFERENCES rangos(id),
     ADD COLUMN IF NOT EXISTS rango_nombre VARCHAR(100),
     ADD COLUMN IF NOT EXISTS rango_qp_minimo NUMERIC(12, 2);
@@ -674,6 +696,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_cartera_empresa_referencia
 
 ALTER TABLE billeteras
     ADD COLUMN IF NOT EXISTS saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS saldo_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ALTER COLUMN estado SET DEFAULT 'ACTIVO',
     ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
     ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
@@ -694,8 +717,8 @@ ALTER TABLE movimientos_billetera
     ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
     ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
 
-INSERT INTO billeteras (persona_id, saldo_dinero, saldo_pv, saldo_qp, saldo_cr)
-SELECT p.id, 0, 0, 0, 0
+INSERT INTO billeteras (persona_id, saldo_dinero, saldo_pv, saldo_qp, saldo_cr, saldo_productos)
+SELECT p.id, 0, 0, 0, 0, 0
 FROM personas p
 WHERE NOT EXISTS (
     SELECT 1 FROM billeteras b WHERE b.persona_id = p.id
@@ -779,6 +802,45 @@ SET saldo_cr = COALESCE((
     FROM movimientos_billetera mb
     WHERE mb.billetera_id = b.id
       AND mb.tipo = 'CR'
+      AND mb.estado = 'ACTIVO'
+), 0);
+
+INSERT INTO movimientos_billetera (
+    billetera_id,
+    tipo,
+    concepto,
+    referencia_tipo,
+    referencia_id,
+    monto,
+    saldo_resultado
+)
+SELECT
+    b.id,
+    'PRODUCTOS',
+    'Productos canjeables por recompensa #' || r.id,
+    'RECOMPENSA_PRODUCTOS',
+    r.id,
+    GREATEST(COALESCE(r.valor_productos, 0) - COALESCE(r.valor_productos_retirado, 0), 0),
+    0
+FROM recompensas r
+JOIN billeteras b ON b.persona_id = r.beneficiario_id
+WHERE r.estado = 'ACTIVO'
+  AND r.cobrable = TRUE
+  AND GREATEST(COALESCE(r.valor_productos, 0) - COALESCE(r.valor_productos_retirado, 0), 0) > 0
+  AND NOT EXISTS (
+    SELECT 1
+    FROM movimientos_billetera mb
+    WHERE mb.referencia_tipo = 'RECOMPENSA_PRODUCTOS'
+      AND mb.referencia_id = r.id
+      AND mb.tipo = 'PRODUCTOS'
+);
+
+UPDATE billeteras b
+SET saldo_productos = COALESCE((
+    SELECT SUM(mb.monto)
+    FROM movimientos_billetera mb
+    WHERE mb.billetera_id = b.id
+      AND mb.tipo = 'PRODUCTOS'
       AND mb.estado = 'ACTIVO'
 ), 0);
 
