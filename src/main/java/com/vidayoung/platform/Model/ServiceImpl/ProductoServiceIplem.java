@@ -64,6 +64,10 @@ public class ProductoServiceIplem implements ProductoService {
             producto.setPv(BigDecimal.ZERO);
         }
 
+        if (producto.getPrecioPublico() == null || producto.getPrecioPublico().compareTo(BigDecimal.ZERO) <= 0) {
+            producto.setPrecioPublico(producto.getPrecio());
+        }
+
         if (producto.getQp() == null) {
             producto.setQp(BigDecimal.ZERO);
         }

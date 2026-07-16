@@ -30,6 +30,8 @@ import CompanyHomeView from "./views/CompanyHomeView.vue";
 import ProductLandingConfigView from "./views/ProductLandingConfigView.vue";
 import ProductLandingView from "./views/ProductLandingView.vue";
 import PreinscripcionReferidoPublicView from "./views/PreinscripcionReferidoPublicView.vue";
+import PublicStoreView from "./views/PublicStoreView.vue";
+import PublicCartView from "./views/PublicCartView.vue";
 import { ScreenLanding } from "./screens/publico.js";
 import { ScreenAdmin } from "./screens/admin.js";
 import { useAuthStore } from "./stores/authStore.js";
@@ -46,6 +48,8 @@ const routes = [
   { path: "/producto/:productId/:ref?", name: "producto-landing", component: ProductLandingView, meta: { public: true } },
   { path: "/herramienta/:slug", name: "herramienta-landing", component: DigitalLandingView, meta: { public: true } },
   { path: "/referido/:username", name: "referido-publico", component: PreinscripcionReferidoPublicView, meta: { public: true } },
+  { path: "/tienda/:username", name: "tienda-publica", component: PublicStoreView, meta: { public: true } },
+  { path: "/tienda/:username/carrito", name: "tienda-publica-carrito", component: PublicCartView, meta: { public: true } },
   { path: "/preinscripcion-referido/:patrocinadorId", name: "preinscripcion-referido", component: PreinscripcionReferidoPublicView, meta: { public: true } },
   { path: "/login", name: "login", component: LoginView, meta: { public: true } },
   { path: "/dashboard", name: "dashboard", component: DashboardView, meta: { sidebar: true, roles: ["*"] } },

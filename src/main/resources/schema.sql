@@ -164,7 +164,95 @@ ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS precio_publico NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE productos
+SET precio_publico = precio
+WHERE precio_publico IS NULL OR precio_publico <= 0;
+
+CREATE TABLE IF NOT EXISTS tipos_cliente_publico (
+    id BIGSERIAL PRIMARY KEY,
+    codigo VARCHAR(40) NOT NULL UNIQUE,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion VARCHAR(220),
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+INSERT INTO tipos_cliente_publico (codigo, nombre, descripcion)
+VALUES
+    ('NORMAL', 'Cliente normal', 'Cliente publico sin descuentos especiales.'),
+    ('PREFERENCIAL', 'Cliente preferencial', 'Cliente publico con descuentos configurables por producto.')
+ON CONFLICT (codigo) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS productos_descuentos_cliente (
+    id BIGSERIAL PRIMARY KEY,
+    producto_id BIGINT NOT NULL REFERENCES productos(id),
+    tipo_cliente_id BIGINT NOT NULL REFERENCES tipos_cliente_publico(id),
+    descuento_monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM',
+    CONSTRAINT uk_producto_descuento_tipo UNIQUE (producto_id, tipo_cliente_id)
+);
+
+CREATE TABLE IF NOT EXISTS compras_publicas (
+    id BIGSERIAL PRIMARY KEY,
+    distribuidor_id BIGINT NOT NULL REFERENCES personas(id),
+    tipo_cliente_id BIGINT NOT NULL REFERENCES tipos_cliente_publico(id),
+    fecha_compra TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    estado_compra VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
+    cliente_nombres VARCHAR(100) NOT NULL,
+    cliente_apellidos VARCHAR(100) NOT NULL,
+    cliente_documento VARCHAR(40),
+    cliente_email VARCHAR(120),
+    cliente_telefono VARCHAR(40),
+    envio_requiere BOOLEAN NOT NULL DEFAULT FALSE,
+    envio_direccion VARCHAR(220),
+    envio_ciudad VARCHAR(80),
+    envio_referencia VARCHAR(220),
+    metodo_pago VARCHAR(30),
+    referencia_pago VARCHAR(180),
+    total_cliente NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_empresa NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_descuento NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_ganancia_distribuidor NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    usuario_validacion VARCHAR(80),
+    fecha_validacion TIMESTAMP,
+    usuario_entrega VARCHAR(80),
+    fecha_entrega TIMESTAMP,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE TABLE IF NOT EXISTS compras_publicas_detalles (
+    id BIGSERIAL PRIMARY KEY,
+    compra_id BIGINT NOT NULL REFERENCES compras_publicas(id),
+    producto_id BIGINT NOT NULL REFERENCES productos(id),
+    cantidad INTEGER NOT NULL,
+    precio_distribuidor_unitario NUMERIC(12, 2) NOT NULL,
+    precio_publico_unitario NUMERIC(12, 2) NOT NULL,
+    descuento_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    precio_final_unitario NUMERIC(12, 2) NOT NULL,
+    subtotal_cliente NUMERIC(12, 2) NOT NULL,
+    subtotal_empresa NUMERIC(12, 2) NOT NULL,
+    subtotal_descuento NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ganancia_distribuidor NUMERIC(12, 2) NOT NULL,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
 
 CREATE TABLE IF NOT EXISTS productos_categorias (
     id BIGSERIAL PRIMARY KEY,

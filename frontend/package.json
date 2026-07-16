@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
+    "jquery": "^4.0.0",
     "jspdf": "^4.2.1",
     "lucide-vue-next": "^1.0.0",
     "pinia": "^2.1.7",
+    "select2": "^4.1.0",
     "sweetalert2": "^11.26.24",
     "vite": "^7.0.0",
     "vue": "^3.4.27",

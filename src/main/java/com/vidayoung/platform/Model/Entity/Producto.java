@@ -45,6 +45,10 @@ public class Producto extends Auditoria {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal precio;
 
+    @Column(name = "precio_publico", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal precioPublico = BigDecimal.ZERO;
+
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal pv = BigDecimal.ZERO;

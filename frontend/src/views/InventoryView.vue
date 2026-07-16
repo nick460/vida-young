@@ -20,6 +20,8 @@ const loading = ref(false);
 const error = ref("");
 const productos = ref([]);
 const categorias = ref([]);
+const tiposClientePublico = ref([]);
+const descuentosCliente = ref([]);
 const query = ref("");
 const productModalOpen = ref(false);
 const editingProductId = ref(null);
@@ -40,12 +42,15 @@ const productForm = reactive({
   descripcion: "",
   categoria: "",
   precio: 0,
+  precioPublico: 0,
   pv: 0,
   qp: 0,
   cr: 0,
   imagenUrl: "",
   listarEnShop: false
 });
+
+const productDiscountForm = reactive({});
 
 const categoryForm = reactive({
   nombre: "",
@@ -214,17 +219,28 @@ async function loadAll() {
   error.value = "";
 
   try {
-    const [productosData, categoriasData] = await Promise.all([
+    const [productosData, categoriasData, tiposData] = await Promise.all([
       apiRequest("/api/productos"),
-      apiRequest("/api/producto-categorias")
+      apiRequest("/api/producto-categorias"),
+      apiRequest("/api/tipos-cliente-publico")
     ]);
     productos.value = productosData;
     categorias.value = categoriasData;
+    tiposClientePublico.value = tiposData;
+    const discountLists = await Promise.all(tiposData.map((tipo) => apiRequest(`/api/tipos-cliente-publico/${tipo.id}/descuentos`)));
+    descuentosCliente.value = discountLists.flat();
   } catch {
     error.value = "No se pudo cargar inventario. Verifica que el backend este activo y la sesion sea valida.";
   } finally {
     loading.value = false;
   }
+}
+
+function resetDiscountForm() {
+  Object.keys(productDiscountForm).forEach((key) => delete productDiscountForm[key]);
+  tiposClientePublico.value.forEach((tipo) => {
+    productDiscountForm[tipo.id] = 0;
+  });
 }
 
 async function saveCategory() {
@@ -255,13 +271,15 @@ function resetProductForm() {
   productImagePreview.value = "";
   productSubmitted.value = false;
   setErrors(productErrors, {});
+  resetDiscountForm();
   Object.assign(productForm, {
     sku: "",
     nombre: "",
     descripcion: "",
     categoria: "",
-    precio: 0,
-    pv: 0,
+      precio: 0,
+      precioPublico: 0,
+      pv: 0,
     qp: 0,
     cr: 0,
     imagenUrl: "",
@@ -280,12 +298,19 @@ function openProductModal(producto = null) {
       descripcion: producto.descripcion || "",
       categoria: producto.categoria || "",
       precio: producto.precio || 0,
+      precioPublico: producto.precioPublico || producto.precio || 0,
       pv: producto.pv || 0,
       qp: producto.qp || 0,
       cr: producto.cr || 0,
       imagenUrl: producto.imagenUrl || "",
       listarEnShop: Boolean(producto.listarEnShop)
     });
+    resetDiscountForm();
+    descuentosCliente.value
+      .filter((descuento) => Number(descuento.producto?.id) === Number(producto.id))
+      .forEach((descuento) => {
+        productDiscountForm[descuento.tipoCliente?.id] = Number(descuento.descuentoMonto || 0);
+      });
   } else {
     resetProductForm();
   }
@@ -316,6 +341,7 @@ async function saveProduct() {
       body: JSON.stringify({
         ...productForm,
         precio: Number(productForm.precio || 0),
+        precioPublico: Number(productForm.precioPublico || productForm.precio || 0),
         pv: Number(productForm.pv || 0),
         qp: Number(productForm.qp || 0),
         cr: Number(productForm.cr || 0),
@@ -331,6 +357,14 @@ async function saveProduct() {
         body: formData
       });
     }
+
+    await Promise.all(tiposClientePublico.value.map((tipo) => apiRequest(`/api/productos/${savedProduct.id}/descuentos-cliente`, {
+      method: "POST",
+      body: JSON.stringify({
+        tipoClienteId: tipo.id,
+        descuentoMonto: Number(productDiscountForm[tipo.id] || 0)
+      })
+    })));
 
     closeProductModal();
     await loadAll();
@@ -514,6 +548,14 @@ watch(productForm, () => {
               <span>Precio</span>
               <input v-model.number="productForm.precio" type="number" min="0" step="0.01" />
               <small v-if="productErrors.precio">{{ productErrors.precio }}</small>
+            </label>
+            <label>
+              <span>Precio publico</span>
+              <input v-model.number="productForm.precioPublico" type="number" min="0" step="0.01" />
+            </label>
+            <label v-for="tipo in tiposClientePublico" :key="tipo.id">
+              <span>Descuento {{ tipo.nombre }}</span>
+              <input v-model.number="productDiscountForm[tipo.id]" type="number" min="0" step="0.01" />
             </label>
             <label :class="{ invalid: productErrors.pv }">
               <span>PV</span>
