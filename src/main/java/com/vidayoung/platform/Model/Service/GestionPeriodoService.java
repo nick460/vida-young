@@ -21,6 +21,8 @@ public interface GestionPeriodoService {
 
     Optional<PeriodoGestion> buscarPeriodoActivo();
 
+    PeriodoGestion buscarPorId(Long periodoId);
+
     PeriodoGestion obtenerPeriodoActivo();
 
     PeriodoGestion activarPeriodo(Long periodoId);

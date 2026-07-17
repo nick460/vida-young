@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -23,7 +24,14 @@ public class CarteraEmpresaRestController {
     }
 
     @GetMapping("/movimientos")
-    public ResponseEntity<List<MovimientoCarteraEmpresa>> listarMovimientos() {
-        return ResponseEntity.ok(carteraEmpresaService.listarMovimientos());
+    public ResponseEntity<List<MovimientoCarteraEmpresa>> listarMovimientos(@RequestParam(required = false) Long periodoId) {
+        return ResponseEntity.ok(carteraEmpresaService.listarMovimientos(periodoId));
+    }
+
+    @GetMapping("/resumen-periodo")
+    public ResponseEntity<CarteraEmpresaService.ResumenPeriodoCartera> obtenerResumenPeriodo(
+            @RequestParam(required = false) Long periodoId
+    ) {
+        return ResponseEntity.ok(carteraEmpresaService.obtenerResumenPeriodo(periodoId));
     }
 }

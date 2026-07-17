@@ -4,6 +4,7 @@ import com.vidayoung.platform.Model.Dao.CarteraEmpresaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoCarteraEmpresaDao;
 import com.vidayoung.platform.Model.Entity.CarteraEmpresa;
 import com.vidayoung.platform.Model.Entity.MovimientoCarteraEmpresa;
+import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import jakarta.transaction.Transactional;
@@ -47,6 +48,46 @@ public class CarteraEmpresaServiceImpl implements CarteraEmpresaService {
     public List<MovimientoCarteraEmpresa> listarMovimientos() {
         CarteraEmpresa cartera = asegurarCarteraPrincipal();
         return movimientoCarteraEmpresaDao.findByCarteraIdOrderByFechaRegistroDesc(cartera.getId());
+    }
+
+    @Override
+    public List<MovimientoCarteraEmpresa> listarMovimientos(Long periodoId) {
+        if (periodoId == null) {
+            return listarMovimientos();
+        }
+        CarteraEmpresa cartera = asegurarCarteraPrincipal();
+        return movimientoCarteraEmpresaDao.findByCarteraIdAndPeriodoIdOrderByFechaRegistroDesc(cartera.getId(), periodoId);
+    }
+
+    @Override
+    public ResumenPeriodoCartera obtenerResumenPeriodo(Long periodoId) {
+        CarteraEmpresa cartera = asegurarCarteraPrincipal();
+        PeriodoGestion periodo = periodoId == null
+                ? gestionPeriodoService.obtenerPeriodoActivo()
+                : gestionPeriodoService.buscarPorId(periodoId);
+        List<MovimientoCarteraEmpresa> movimientosPeriodo = listarMovimientos(periodo.getId());
+        BigDecimal saldoInicial = zeroIfNull(movimientoCarteraEmpresaDao.sumMontoBeforePeriodo(cartera.getId(), periodo.getId()));
+        BigDecimal movimientoNeto = zeroIfNull(movimientoCarteraEmpresaDao.sumMontoByPeriodo(cartera.getId(), periodo.getId()));
+        BigDecimal ingresos = movimientosPeriodo.stream()
+                .filter(movimiento -> MovimientoCarteraEmpresa.TIPO_INGRESO.equals(movimiento.getTipo()))
+                .map(MovimientoCarteraEmpresa::getMonto)
+                .map(this::zeroIfNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal egresos = movimientosPeriodo.stream()
+                .filter(movimiento -> MovimientoCarteraEmpresa.TIPO_EGRESO.equals(movimiento.getTipo()))
+                .map(MovimientoCarteraEmpresa::getMonto)
+                .map(this::zeroIfNull)
+                .map(BigDecimal::abs)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new ResumenPeriodoCartera(
+                periodo.getId(),
+                saldoInicial,
+                ingresos,
+                egresos,
+                saldoInicial.add(movimientoNeto),
+                movimientosPeriodo.size()
+        );
     }
 
     private MovimientoCarteraEmpresa registrarMovimiento(

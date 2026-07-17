@@ -1,15 +1,24 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import $ from "jquery";
+import select2 from "select2";
+import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { ArrowDownToLine, Building2, CalendarClock, RefreshCw, TrendingDown, TrendingUp, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
+
+select2($);
 
 const loading = ref(false);
 const processing = ref(false);
 const error = ref("");
 const cartera = ref(null);
 const movimientos = ref([]);
+const resumenPeriodo = ref(null);
+const periodosCaja = ref([]);
+const selectedPeriodoId = ref("");
+const periodoSelect = ref(null);
 const personas = ref([]);
 const retiroModalOpen = ref(false);
 const selectedPersonaId = ref("");
@@ -23,16 +32,8 @@ const retiroForm = ref({
   observacion: ""
 });
 
-const ingresos = computed(() =>
-  movimientos.value
-    .filter((movimiento) => movimiento.tipo === "INGRESO")
-    .reduce((sum, movimiento) => sum + Number(movimiento.monto || 0), 0)
-);
-
-const egresos = computed(() =>
-  movimientos.value
-    .filter((movimiento) => movimiento.tipo === "EGRESO")
-    .reduce((sum, movimiento) => sum + Math.abs(Number(movimiento.monto || 0)), 0)
+const selectedPeriodo = computed(() =>
+  periodosCaja.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
 );
 
 const totalPages = computed(() => Math.max(1, Math.ceil(movimientos.value.length / Number(pageSize.value || 10))));
@@ -67,17 +68,85 @@ function formatDate(value) {
   });
 }
 
+function destroyPeriodoSelect2() {
+  if (!periodoSelect.value) return;
+  const element = $(periodoSelect.value);
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.off("change.caja-periodo");
+    element.select2("destroy");
+  }
+}
+
+async function initPeriodoSelect2() {
+  await nextTick();
+  if (!periodoSelect.value) return;
+
+  destroyPeriodoSelect2();
+  const element = $(periodoSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona un mes",
+      allowClear: false,
+      dropdownParent: $(".company-wallet-view"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedPeriodoId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.caja-periodo", async () => {
+    selectedPeriodoId.value = element.val() || "";
+    await loadCompanyWallet();
+  });
+}
+
+async function loadPeriodoOptions() {
+  const [activePeriodo, gestionesData] = await Promise.all([
+    apiRequest("/api/gestiones/periodos/activo"),
+    apiRequest("/api/gestiones")
+  ]);
+  const periodosPorGestion = await Promise.all(
+    (Array.isArray(gestionesData) ? gestionesData : []).map(async (gestion) => {
+      const periodos = await apiRequest(`/api/gestiones/${gestion.id}/periodos`);
+      return periodos.map((periodo) => ({ ...periodo, gestion: periodo.gestion || gestion }));
+    })
+  );
+
+  periodosCaja.value = periodosPorGestion
+    .flat()
+    .sort((left, right) => {
+      const leftYear = Number(left.gestion?.anio || 0);
+      const rightYear = Number(right.gestion?.anio || 0);
+      if (leftYear !== rightYear) return rightYear - leftYear;
+      return Number(right.mes || 0) - Number(left.mes || 0);
+    });
+
+  if (!selectedPeriodoId.value) {
+    selectedPeriodoId.value = String(activePeriodo?.id || periodosCaja.value[0]?.id || "");
+  }
+}
+
 async function loadCompanyWallet() {
   loading.value = true;
   error.value = "";
 
   try {
-    const [carteraData, movimientosData] = await Promise.all([
+    if (!periodosCaja.value.length) {
+      await loadPeriodoOptions();
+      await initPeriodoSelect2();
+    }
+    const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
+    const [carteraData, movimientosData, resumenData] = await Promise.all([
       apiRequest("/api/cartera-empresa"),
-      apiRequest("/api/cartera-empresa/movimientos")
+      apiRequest(`/api/cartera-empresa/movimientos${query}`),
+      apiRequest(`/api/cartera-empresa/resumen-periodo${query}`)
     ]);
     cartera.value = carteraData;
     movimientos.value = Array.isArray(movimientosData) ? movimientosData : [];
+    resumenPeriodo.value = resumenData;
     page.value = Math.min(page.value, totalPages.value);
   } catch (exception) {
     error.value = exception.message || "No se pudo cargar la cartera de la empresa.";
@@ -197,9 +266,25 @@ function nextPage() {
   page.value = Math.min(totalPages.value, page.value + 1);
 }
 
+watch(periodosCaja, () => {
+  initPeriodoSelect2();
+});
+
+watch(selectedPeriodoId, (value) => {
+  if (!periodoSelect.value) return;
+  const element = $(periodoSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
 onMounted(() => {
   loadCompanyWallet();
   loadPersonas();
+});
+
+onBeforeUnmount(() => {
+  destroyPeriodoSelect2();
 });
 </script>
 
@@ -210,9 +295,21 @@ onMounted(() => {
         <div>
           <div class="vy-eyebrow">Administracion</div>
           <h1>Caja empresa</h1>
-          <p>Dinero real recibido por planes, ventas internas y ventas publicas validadas.</p>
+          <p>
+            Dinero real recibido por planes, ventas internas y ventas publicas validadas.
+            <strong v-if="selectedPeriodo">Mostrando {{ selectedPeriodo.nombre }}.</strong>
+          </p>
         </div>
         <div class="header-actions">
+          <label class="period-filter">
+            <span>Mes</span>
+            <select ref="periodoSelect" v-model="selectedPeriodoId">
+              <option value="" disabled>Selecciona un mes</option>
+              <option v-for="periodo in periodosCaja" :key="periodo.id" :value="periodo.id">
+                {{ periodo.nombre }} - Gestion {{ periodo.gestion?.anio || "" }}
+              </option>
+            </select>
+          </label>
           <button class="vy-btn vy-btn-ghost" type="button" :disabled="processing" @click="openRetiroModal">
             <ArrowDownToLine :size="16" /> Detalle / retiro
           </button>
@@ -231,32 +328,40 @@ onMounted(() => {
       <section class="summary-grid">
         <article class="balance-card">
           <div class="balance-icon"><Building2 :size="26" /></div>
-          <span>Saldo actual en caja</span>
-          <strong>Bs. {{ money(cartera?.saldoActual) }}</strong>
-          <p>{{ cartera?.nombre || "Caja principal de la empresa" }}</p>
+          <span>Saldo final del mes</span>
+          <strong>Bs. {{ money(resumenPeriodo?.saldoFinal) }}</strong>
+          <p>Saldo actual global: Bs. {{ money(cartera?.saldoActual) }}</p>
+        </article>
+
+        <article class="metric-card">
+          <span class="metric-icon"><WalletCards :size="20" /></span>
+          <div>
+            <small>Saldo inicial del mes</small>
+            <strong>Bs. {{ money(resumenPeriodo?.saldoInicial) }}</strong>
+          </div>
         </article>
 
         <article class="metric-card">
           <span class="metric-icon income"><TrendingUp :size="20" /></span>
           <div>
-            <small>Ingresos registrados</small>
-            <strong>Bs. {{ money(ingresos) }}</strong>
+            <small>Ingresos del mes</small>
+            <strong>Bs. {{ money(resumenPeriodo?.ingresos) }}</strong>
           </div>
         </article>
 
         <article class="metric-card">
           <span class="metric-icon outcome"><TrendingDown :size="20" /></span>
           <div>
-            <small>Egresos registrados</small>
-            <strong>Bs. {{ money(egresos) }}</strong>
+            <small>Egresos del mes</small>
+            <strong>Bs. {{ money(resumenPeriodo?.egresos) }}</strong>
           </div>
         </article>
 
         <article class="metric-card">
-          <span class="metric-icon"><WalletCards :size="20" /></span>
+          <span class="metric-icon"><CalendarClock :size="20" /></span>
           <div>
-            <small>Movimientos</small>
-            <strong>{{ movimientos.length }}</strong>
+            <small>Movimientos del mes</small>
+            <strong>{{ resumenPeriodo?.cantidadMovimientos || movimientos.length }}</strong>
           </div>
         </article>
       </section>
@@ -265,7 +370,7 @@ onMounted(() => {
         <header class="section-header">
           <div>
             <h2>Movimientos de caja</h2>
-            <p>Auditoria de ingresos y egresos de la cartera principal.</p>
+            <p>Auditoria de ingresos y egresos de {{ selectedPeriodo?.nombre || "el mes seleccionado" }}.</p>
           </div>
         </header>
 
@@ -406,9 +511,12 @@ onMounted(() => {
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
 .page-header h1 { margin-top: 8px; font-size: 30px; font-weight: 900; }
 .page-header p { margin-top: 5px; color: var(--vy-ink-2); font-size: 14px; }
+.page-header p strong { color: var(--vy-orange-deep); font-weight: 900; }
 .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.period-filter { display: grid; gap: 6px; min-width: 260px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.period-filter select { width: 100%; }
 .vy-btn-ghost { border: 1px solid var(--vy-line); background: var(--vy-surface); color: var(--vy-ink-2); }
-.summary-grid { display: grid; grid-template-columns: minmax(280px, 1.4fr) repeat(3, minmax(180px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.summary-grid { display: grid; grid-template-columns: minmax(280px, 1.4fr) repeat(4, minmax(170px, 1fr)); gap: 14px; margin-bottom: 18px; }
 .balance-card, .metric-card { border: 1px solid var(--vy-line); border-radius: 18px; background: var(--vy-surface); box-shadow: var(--vy-shadow-sm); }
 .balance-card { padding: 22px; background: var(--vy-ink); color: #fff; }
 .balance-icon { width: 50px; height: 50px; border-radius: 16px; background: rgba(242, 135, 5, 0.18); color: var(--vy-orange); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 18px; }
@@ -453,6 +561,16 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .field select, .field input, .field textarea { width: 100%; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }
 .field select, .field input { min-height: 42px; padding: 0 12px; }
 .field textarea { padding: 12px; resize: vertical; }
+:deep(.select2-container--default .select2-selection--single) { min-height: 42px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; }
+:deep(.select2-container--default .select2-selection--single .select2-selection__rendered) { padding-left: 12px; padding-right: 34px; color: var(--vy-ink); font-size: 13px; font-weight: 800; line-height: 42px; }
+:deep(.select2-container--default .select2-selection--single .select2-selection__placeholder) { color: var(--vy-ink-3); }
+:deep(.select2-container--default .select2-selection--single .select2-selection__arrow) { height: 42px; right: 8px; }
+:deep(.select2-container--default.select2-container--open .select2-selection--single) { border-color: var(--vy-orange); }
+:deep(.select2-dropdown) { border: 1px solid var(--vy-line); border-radius: 12px; overflow: hidden; color: var(--vy-ink); }
+:deep(.select2-search--dropdown) { padding: 8px; }
+:deep(.select2-container--default .select2-search--dropdown .select2-search__field) { min-height: 36px; border: 1px solid var(--vy-line); border-radius: 9px; outline: 0; padding: 0 10px; }
+:deep(.select2-results__option) { padding: 9px 12px; font-size: 13px; font-weight: 800; }
+:deep(.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable) { background: var(--vy-orange); color: #fff; }
 .person-wallet-detail { margin-top: 14px; display: grid; gap: 14px; }
 .selected-person, .wallet-values div { padding: 14px; border: 1px solid var(--vy-line); border-radius: 14px; background: var(--vy-surface-2); }
 .selected-person small, .wallet-values small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
@@ -471,7 +589,9 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 @media (max-width: 720px) {
   .workspace { padding: 24px 20px 32px; }
   .page-header { align-items: stretch; flex-direction: column; }
-  .header-actions, .header-actions .vy-btn { width: 100%; }
+  .header-actions, .header-actions .vy-btn, .period-filter { width: 100%; }
+  .header-actions { align-items: stretch; flex-direction: column; }
+  .period-filter { min-width: 0; }
   .summary-grid { grid-template-columns: 1fr; }
   .pagination-bar, .retiro-modal > header, .retiro-modal > footer { align-items: stretch; flex-direction: column; }
   .pagination-actions, .pagination-actions button, .retiro-modal > footer .vy-btn { width: 100%; }

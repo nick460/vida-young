@@ -14,4 +14,18 @@ public interface CarteraEmpresaService {
     MovimientoCarteraEmpresa registrarEgreso(String referenciaTipo, Long referenciaId, BigDecimal monto, String concepto);
 
     List<MovimientoCarteraEmpresa> listarMovimientos();
+
+    List<MovimientoCarteraEmpresa> listarMovimientos(Long periodoId);
+
+    ResumenPeriodoCartera obtenerResumenPeriodo(Long periodoId);
+
+    record ResumenPeriodoCartera(
+            Long periodoId,
+            BigDecimal saldoInicial,
+            BigDecimal ingresos,
+            BigDecimal egresos,
+            BigDecimal saldoFinal,
+            Integer cantidadMovimientos
+    ) {
+    }
 }

@@ -164,6 +164,7 @@ function confirmationHtml() {
   const sponsor = personaById(form.patrocinadorId);
   const rows = compensationRowsForSponsor(form.patrocinadorId, form.planId);
   const qp = Number(plan?.qp || 0);
+  const precioPlan = Number(plan?.precio || 0);
   const rewardRows = rows.map((row) => {
     const total = Number(row.efectivo || 0) + Number(row.productos || 0);
     const detail = row.paga
@@ -186,6 +187,7 @@ function confirmationHtml() {
       <div style="padding:12px;border-radius:8px;background:#fff7e7;border:1px solid #f3d6a4;margin-bottom:10px">
         <b>Ingreso a registrar</b>
         <div style="margin-top:6px;color:#4d4337">${escapeHtml(form.nombres)} ${escapeHtml(form.apellidos)} entrara con el plan <b>${escapeHtml(plan?.nombre || "Plan")}</b>.</div>
+        <div style="margin-top:6px;color:#4d4337">Caja empresa recibira <b>Bs. ${money(precioPlan)}</b> por el costo del plan.</div>
       </div>
       <div style="padding:12px;border-radius:8px;background:#f7f3ea;border:1px solid #eadfcd;margin-bottom:10px">
         <b>Movimiento QP</b>

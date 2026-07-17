@@ -121,6 +121,13 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
     }
 
     @Override
+    public PeriodoGestion buscarPorId(Long periodoId) {
+        return periodoGestionDao.findById(periodoId)
+                .filter(periodo -> Auditoria.ESTADO_ACTIVO.equals(periodo.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Periodo no encontrado."));
+    }
+
+    @Override
     @Transactional
     public PeriodoGestion obtenerPeriodoActivo() {
         return buscarPeriodoActivo().orElseGet(this::crearPeriodoActualActivo);
