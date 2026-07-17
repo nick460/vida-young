@@ -23,6 +23,7 @@ const personas = ref([]);
 const productos = ref([]);
 const retiroModalOpen = ref(false);
 const selectedPersonaId = ref("");
+const personaSelect = ref(null);
 const selectedProductoId = ref("");
 const selectedWallet = ref(null);
 const walletLoading = ref(false);
@@ -85,6 +86,15 @@ function destroyPeriodoSelect2() {
   }
 }
 
+function destroyPersonaSelect2() {
+  if (!personaSelect.value) return;
+  const element = $(personaSelect.value);
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.off("change.caja-persona");
+    element.select2("destroy");
+  }
+}
+
 async function initPeriodoSelect2() {
   await nextTick();
   if (!periodoSelect.value) return;
@@ -108,6 +118,34 @@ async function initPeriodoSelect2() {
   element.on("change.caja-periodo", async () => {
     selectedPeriodoId.value = element.val() || "";
     await loadCompanyWallet();
+  });
+}
+
+async function initPersonaSelect2() {
+  if (!retiroModalOpen.value) return;
+
+  await nextTick();
+  if (!personaSelect.value) return;
+
+  destroyPersonaSelect2();
+  const element = $(personaSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona una persona",
+      allowClear: true,
+      dropdownParent: $(".retiro-modal"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedPersonaId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.caja-persona", async () => {
+    selectedPersonaId.value = element.val() || "";
+    await loadSelectedWallet();
   });
 }
 
@@ -192,15 +230,17 @@ async function loadSelectedWallet() {
   }
 }
 
-function openRetiroModal() {
+async function openRetiroModal() {
   retiroModalOpen.value = true;
   if (!personas.value.length) {
-    loadPersonas();
+    await loadPersonas();
   }
+  await initPersonaSelect2();
 }
 
 function closeRetiroModal() {
   if (processing.value) return;
+  destroyPersonaSelect2();
   retiroModalOpen.value = false;
   selectedPersonaId.value = "";
   selectedProductoId.value = "";
@@ -313,6 +353,26 @@ watch(periodosCaja, () => {
   initPeriodoSelect2();
 });
 
+watch(retiroModalOpen, (isOpen) => {
+  if (isOpen) {
+    initPersonaSelect2();
+  } else {
+    destroyPersonaSelect2();
+  }
+});
+
+watch(personas, () => {
+  initPersonaSelect2();
+});
+
+watch(selectedPersonaId, (value) => {
+  if (!personaSelect.value) return;
+  const element = $(personaSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
 watch(selectedPeriodoId, (value) => {
   if (!periodoSelect.value) return;
   const element = $(periodoSelect.value);
@@ -327,6 +387,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  destroyPersonaSelect2();
   destroyPeriodoSelect2();
 });
 </script>
@@ -486,7 +547,7 @@ onBeforeUnmount(() => {
           <section class="retiro-body">
             <label class="field">
               <span>Persona</span>
-              <select v-model="selectedPersonaId" @change="loadSelectedWallet">
+              <select ref="personaSelect" v-model="selectedPersonaId">
                 <option value="">Selecciona una persona</option>
                 <option v-for="persona in personas" :key="persona.id" :value="persona.id">
                   {{ persona.nombres }} {{ persona.apellidos }} - {{ persona.documento || "Sin documento" }}
