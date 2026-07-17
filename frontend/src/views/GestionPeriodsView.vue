@@ -16,6 +16,8 @@ const gestiones = ref([]);
 const periodos = ref([]);
 const selectedGestionId = ref("");
 const editingGestionId = ref(null);
+const gestionModalOpen = ref(false);
+const periodoModalOpen = ref(false);
 const gestionSelect = ref(null);
 const mesSelect = ref(null);
 const gestionForm = ref({
@@ -107,6 +109,7 @@ async function initGestionSelect2() {
 }
 
 async function initMesSelect2() {
+  if (!periodoModalOpen.value) return;
   await nextTick();
   if (!mesSelect.value) return;
 
@@ -117,7 +120,7 @@ async function initMesSelect2() {
       width: "100%",
       placeholder: "Selecciona un mes",
       allowClear: false,
-      dropdownParent: $(".gestion-page"),
+      dropdownParent: $(".period-modal"),
       language: {
         noResults: () => "Sin resultados",
         searching: () => "Buscando..."
@@ -133,7 +136,6 @@ async function initMesSelect2() {
 
 async function initSelect2Controls() {
   await initGestionSelect2();
-  await initMesSelect2();
 }
 
 async function loadAll() {
@@ -164,7 +166,7 @@ async function loadPeriodos() {
   periodos.value = await apiRequest(`/api/gestiones/${selectedGestionId.value}/periodos`);
 }
 
-async function createGestion() {
+async function saveGestion() {
   if (saving.value) return;
   saving.value = true;
   error.value = "";
@@ -175,6 +177,7 @@ async function createGestion() {
       body: JSON.stringify(gestionForm.value)
     });
     selectedGestionId.value = String(gestion.id);
+    gestionModalOpen.value = false;
     resetGestionForm();
     await loadAll();
   } catch (exception) {
@@ -184,18 +187,46 @@ async function createGestion() {
   }
 }
 
-function editGestion(gestion) {
+function openCreateGestionModal() {
+  resetGestionForm();
+  gestionModalOpen.value = true;
+}
+
+function openEditGestionModal(gestion) {
   editingGestionId.value = gestion.id;
   gestionForm.value = {
     anio: gestion.anio,
     nombre: gestion.nombre || ""
   };
+  gestionModalOpen.value = true;
+}
+
+function closeGestionModal() {
+  if (saving.value) return;
+  gestionModalOpen.value = false;
+  resetGestionForm();
 }
 
 function resetGestionForm() {
   editingGestionId.value = null;
   gestionForm.value = {
     anio: new Date().getFullYear(),
+    nombre: ""
+  };
+}
+
+async function openPeriodoModal() {
+  if (!selectedGestionId.value) return;
+  periodoModalOpen.value = true;
+  await initMesSelect2();
+}
+
+function closePeriodoModal() {
+  if (saving.value) return;
+  destroySelect2(mesSelect, "meses");
+  periodoModalOpen.value = false;
+  periodoForm.value = {
+    mes: new Date().getMonth() + 1,
     nombre: ""
   };
 }
@@ -209,7 +240,12 @@ async function createPeriodo() {
       method: "POST",
       body: JSON.stringify(periodoForm.value)
     });
-    periodoForm.value.nombre = "";
+    destroySelect2(mesSelect, "meses");
+    periodoModalOpen.value = false;
+    periodoForm.value = {
+      mes: new Date().getMonth() + 1,
+      nombre: ""
+    };
     await loadPeriodos();
   } catch (exception) {
     error.value = exception.message || "No se pudo crear el periodo.";
@@ -248,7 +284,11 @@ async function closeActivePeriodo() {
 
 watch(gestiones, initGestionSelect2, { deep: true });
 watch(selectedGestionId, (value) => syncSelect2Value(gestionSelect, value));
-watch(() => periodoForm.value.mes, (value) => syncSelect2Value(mesSelect, value));
+watch(() => periodoForm.value.mes, (value) => {
+  if (periodoModalOpen.value) {
+    syncSelect2Value(mesSelect, value);
+  }
+});
 
 onMounted(loadAll);
 
@@ -266,9 +306,15 @@ onBeforeUnmount(() => {
         <h1>Gestiones y meses</h1>
         <p>Las ventas, activaciones, recompensas y movimientos se registran contra el mes activo.</p>
       </div>
-      <button class="icon-button" type="button" :disabled="loading" @click="loadAll" title="Actualizar">
-        <RefreshCw :size="18" :class="{ spin: loading }" />
-      </button>
+      <div class="header-actions">
+        <button type="button" @click="openCreateGestionModal">
+          <Plus :size="16" />
+          Nueva gestion
+        </button>
+        <button class="icon-button" type="button" :disabled="loading" @click="loadAll" title="Actualizar">
+          <RefreshCw :size="18" :class="{ spin: loading }" />
+        </button>
+      </div>
     </header>
 
     <p v-if="error" class="alert">{{ error }}</p>
@@ -288,85 +334,37 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="forms-grid">
-      <form class="tool-panel" @submit.prevent="createGestion">
-        <div class="panel-title">
-          <h2>{{ editingGestionId ? "Editar gestion" : "Nueva gestion" }}</h2>
-          <button
-            v-if="editingGestionId"
-            class="icon-button small"
-            type="button"
-            :disabled="saving"
-            title="Cancelar edicion"
-            @click="resetGestionForm"
-          >
-            <X :size="16" />
-          </button>
-        </div>
-        <p v-if="editingGestion" class="helper-text">Editando {{ editingGestion.nombre }}.</p>
-        <label>
-          Anio
-          <input v-model.number="gestionForm.anio" type="number" min="2020" max="2100" required />
-        </label>
-        <label>
-          Nombre
-          <input v-model.trim="gestionForm.nombre" type="text" placeholder="Gestion 2026" />
-        </label>
-        <button type="submit" :disabled="saving">
-          <Loader2 v-if="saving" :size="16" class="spin" />
-          <Pencil v-else-if="editingGestionId" :size="16" />
-          <Plus v-else :size="16" />
-          {{ editingGestionId ? "Actualizar gestion" : "Guardar gestion" }}
-        </button>
-      </form>
-
-      <form class="tool-panel" @submit.prevent="createPeriodo">
-        <h2>Nuevo mes/proceso</h2>
-        <label>
-          Gestion
-          <select ref="gestionSelect" v-model="selectedGestionId" required>
-            <option value="" disabled>Selecciona una gestion</option>
-            <option v-for="gestion in gestiones" :key="gestion.id" :value="gestion.id">
-              {{ gestion.nombre }} ({{ gestion.anio }})
-            </option>
-          </select>
-        </label>
-        <label>
-          Mes
-          <select ref="mesSelect" v-model.number="periodoForm.mes" required>
-            <option v-for="mes in mesesDisponibles" :key="mes.value" :value="mes.value">
-              {{ mes.label }}
-            </option>
-          </select>
-        </label>
-        <label>
-          Nombre
-          <input v-model.trim="periodoForm.nombre" type="text" placeholder="Proceso Julio 2026" />
-        </label>
-        <button type="submit" :disabled="saving || !selectedGestionId">
-          <Loader2 v-if="saving" :size="16" class="spin" />
-          <Plus v-else :size="16" />
-          Guardar mes
-        </button>
-      </form>
-    </div>
-
     <section class="periods-section">
       <div class="section-title">
         <div>
           <h2>Meses de {{ selectedGestion?.nombre || "la gestion" }}</h2>
           <p>Solo un mes puede estar activo. Al activar otro, el activo anterior queda cerrado.</p>
         </div>
-        <button
-          v-if="selectedGestion"
-          type="button"
-          class="secondary-button"
-          :disabled="saving"
-          @click="editGestion(selectedGestion)"
-        >
-          <Pencil :size="16" />
-          Editar gestion
-        </button>
+        <div class="section-actions">
+          <label class="filter-field">
+            Gestion
+            <select ref="gestionSelect" v-model="selectedGestionId" required>
+              <option value="" disabled>Selecciona una gestion</option>
+              <option v-for="gestion in gestiones" :key="gestion.id" :value="gestion.id">
+                {{ gestion.nombre }} ({{ gestion.anio }})
+              </option>
+            </select>
+          </label>
+          <button
+            v-if="selectedGestion"
+            type="button"
+            class="secondary-button"
+            :disabled="saving"
+            @click="openEditGestionModal(selectedGestion)"
+          >
+            <Pencil :size="16" />
+            Editar
+          </button>
+          <button type="button" :disabled="saving || !selectedGestionId" @click="openPeriodoModal">
+            <Plus :size="16" />
+            Nuevo mes
+          </button>
+        </div>
       </div>
 
       <div class="period-table">
@@ -401,6 +399,75 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </section>
+
+    <div v-if="gestionModalOpen" class="modal-backdrop" @click.self="closeGestionModal">
+      <form class="modal-card" @submit.prevent="saveGestion">
+        <div class="modal-header">
+          <div>
+            <h2>{{ editingGestionId ? "Editar gestion" : "Nueva gestion" }}</h2>
+            <p>{{ editingGestionId ? `Actualiza los datos de ${editingGestion?.nombre || "la gestion"}.` : "Registra una nueva gestion anual." }}</p>
+          </div>
+          <button class="icon-button small" type="button" :disabled="saving" title="Cerrar" @click="closeGestionModal">
+            <X :size="16" />
+          </button>
+        </div>
+        <label>
+          Anio
+          <input v-model.number="gestionForm.anio" type="number" min="2020" max="2100" required />
+        </label>
+        <label>
+          Nombre
+          <input v-model.trim="gestionForm.nombre" type="text" placeholder="Gestion 2026" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" :disabled="saving" @click="closeGestionModal">
+            Cancelar
+          </button>
+          <button type="submit" :disabled="saving">
+            <Loader2 v-if="saving" :size="16" class="spin" />
+            <Pencil v-else-if="editingGestionId" :size="16" />
+            <Plus v-else :size="16" />
+            {{ editingGestionId ? "Actualizar" : "Guardar" }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div v-if="periodoModalOpen" class="modal-backdrop" @click.self="closePeriodoModal">
+      <form class="modal-card period-modal" @submit.prevent="createPeriodo">
+        <div class="modal-header">
+          <div>
+            <h2>Nuevo mes/proceso</h2>
+            <p>Se agregara a {{ selectedGestion?.nombre || "la gestion seleccionada" }}.</p>
+          </div>
+          <button class="icon-button small" type="button" :disabled="saving" title="Cerrar" @click="closePeriodoModal">
+            <X :size="16" />
+          </button>
+        </div>
+        <label>
+          Mes
+          <select ref="mesSelect" v-model.number="periodoForm.mes" required>
+            <option v-for="mes in mesesDisponibles" :key="mes.value" :value="mes.value">
+              {{ mes.label }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Nombre
+          <input v-model.trim="periodoForm.nombre" type="text" placeholder="Proceso Julio 2026" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" :disabled="saving" @click="closePeriodoModal">
+            Cancelar
+          </button>
+          <button type="submit" :disabled="saving || !selectedGestionId">
+            <Loader2 v-if="saving" :size="16" class="spin" />
+            <Plus v-else :size="16" />
+            Guardar mes
+          </button>
+        </div>
+      </form>
+    </div>
   </section>
 </template>
 
@@ -420,16 +487,26 @@ onBeforeUnmount(() => {
   gap: 1rem;
 }
 
+.header-actions,
+.section-actions,
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .gestion-header h1,
 .tool-panel h2,
-.section-title h2 {
+.section-title h2,
+.modal-header h2 {
   margin: 0;
   color: #172033;
 }
 
 .gestion-header p,
 .section-title p,
-.active-band small {
+.active-band small,
+.modal-header p {
   margin: 0.25rem 0 0;
   color: #64748b;
 }
@@ -523,6 +600,10 @@ label {
   color: #334155;
   font-size: 0.85rem;
   font-weight: 700;
+}
+
+.filter-field {
+  min-width: 260px;
 }
 
 input,
@@ -619,6 +700,40 @@ button:disabled {
   padding: 1rem;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.48);
+  padding: 1rem;
+}
+
+.modal-card {
+  display: grid;
+  gap: 1rem;
+  width: min(520px, 100%);
+  max-height: min(92vh, 720px);
+  overflow: auto;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 1rem;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
 .period-table {
   display: grid;
   gap: 0.45rem;
@@ -699,6 +814,19 @@ button:disabled {
   .section-title {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .header-actions,
+  .section-actions,
+  .modal-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .filter-field {
+    min-width: 0;
+    width: 100%;
   }
 
   .forms-grid {
