@@ -11,6 +11,8 @@ public interface CompraPublicaDao extends JpaRepository<CompraPublica, Long> {
 
     List<CompraPublica> findAllByOrderByFechaCompraDesc();
 
+    List<CompraPublica> findByPeriodoIdOrderByFechaCompraDesc(Long periodoId);
+
     List<CompraPublica> findByDistribuidorIdOrderByFechaCompraDesc(Long distribuidorId);
 
     Optional<CompraPublica> findFirstByClienteDocumentoOrderByFechaCompraDesc(String clienteDocumento);

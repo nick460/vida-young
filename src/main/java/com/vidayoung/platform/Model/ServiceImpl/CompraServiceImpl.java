@@ -165,6 +165,14 @@ public class CompraServiceImpl implements CompraService {
     }
 
     @Override
+    public List<Compra> listarPorPeriodo(Long periodoId) {
+        Long periodo = periodoId == null ? gestionPeriodoService.obtenerPeriodoActivo().getId() : periodoId;
+        return compraDao.findByPeriodoIdOrderByFechaCompraDesc(periodo).stream()
+                .filter(compra -> Auditoria.ESTADO_ACTIVO.equals(compra.getEstado()))
+                .toList();
+    }
+
+    @Override
     public List<BeneficioActivacionCompra> listarBeneficiosPorCompra(Long compraId) {
         return beneficioActivacionCompraDao.findByCompraId(compraId).stream()
                 .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))

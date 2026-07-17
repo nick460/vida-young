@@ -214,6 +214,14 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
     }
 
     @Override
+    public List<CompraPublica> listarComprasPublicasPorPeriodo(Long periodoId) {
+        Long periodo = periodoId == null ? gestionPeriodoService.obtenerPeriodoActivo().getId() : periodoId;
+        return compraPublicaDao.findByPeriodoIdOrderByFechaCompraDesc(periodo).stream()
+                .filter(compra -> Auditoria.ESTADO_ACTIVO.equals(compra.getEstado()))
+                .toList();
+    }
+
+    @Override
     public List<ClientePublicoAdminResponse> listarClientesPublicos(Long distribuidorId, Long tipoClienteId) {
         List<ClientePublico> clientes = distribuidorId == null
                 ? clientePublicoDao.findAllByOrderByFechaRegistroDesc()

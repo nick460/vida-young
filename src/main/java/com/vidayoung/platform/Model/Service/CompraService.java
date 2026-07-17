@@ -14,6 +14,8 @@ public interface CompraService {
 
     List<Compra> listarTodas();
 
+    List<Compra> listarPorPeriodo(Long periodoId);
+
     List<BeneficioActivacionCompra> listarBeneficiosPorCompra(Long compraId);
 
     Compra cambiarEstado(Long compraId, String estadoCompra, String usuarioOperacion);

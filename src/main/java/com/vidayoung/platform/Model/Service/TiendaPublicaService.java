@@ -28,6 +28,8 @@ public interface TiendaPublicaService {
 
     List<CompraPublica> listarComprasPublicas();
 
+    List<CompraPublica> listarComprasPublicasPorPeriodo(Long periodoId);
+
     List<ClientePublicoAdminResponse> listarClientesPublicos(Long distribuidorId, Long tipoClienteId);
 
     CompraPublica cambiarEstado(Long compraId, String estadoCompra, String usuarioOperacion);

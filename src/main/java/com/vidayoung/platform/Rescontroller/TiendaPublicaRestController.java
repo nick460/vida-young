@@ -122,8 +122,8 @@ public class TiendaPublicaRestController {
     }
 
     @GetMapping("/api/compras-publicas")
-    public ResponseEntity<List<CompraPublica>> listarComprasPublicas() {
-        return ResponseEntity.ok(tiendaPublicaService.listarComprasPublicas());
+    public ResponseEntity<List<CompraPublica>> listarComprasPublicas(@RequestParam(required = false) Long periodoId) {
+        return ResponseEntity.ok(tiendaPublicaService.listarComprasPublicasPorPeriodo(periodoId));
     }
 
     @GetMapping("/api/clientes-publicos")

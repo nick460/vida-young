@@ -29,6 +29,8 @@ const personas = ref([]);
 const productos = ref([]);
 const compras = ref([]);
 const comprasPublicas = ref([]);
+const periodosVenta = ref([]);
+const selectedPeriodoId = ref("");
 const loading = ref(false);
 const saving = ref(false);
 const error = ref("");
@@ -38,6 +40,7 @@ const selectedPersonaId = ref("");
 const ventaItems = ref([]);
 const saleModalOpen = ref(false);
 const personaSelect = ref(null);
+const periodoSelect = ref(null);
 const proofModalCompra = ref(null);
 const receiptModalCompra = ref(null);
 const publicReviewModalCompra = ref(null);
@@ -82,6 +85,10 @@ const visibleCompras = computed(() =>
 
 const visibleComprasPublicas = computed(() =>
   comprasPublicas.value.filter((compra) => ["PENDIENTE", "VALIDADA", "ENTREGADA"].includes(compra.estadoCompra))
+);
+
+const selectedPeriodo = computed(() =>
+  periodosVenta.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
 );
 
 const saleTotal = computed(() =>
@@ -152,6 +159,15 @@ function destroyPersonaSelect2() {
   }
 }
 
+function destroyPeriodoSelect2() {
+  if (!periodoSelect.value) return;
+  const element = $(periodoSelect.value);
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.off("change.periodo-ventas");
+    element.select2("destroy");
+  }
+}
+
 async function initPersonaSelect2() {
   if (!saleModalOpen.value) return;
 
@@ -176,6 +192,32 @@ async function initPersonaSelect2() {
 
   element.on("change.ventanilla", () => {
     selectedPersonaId.value = element.val() || "";
+  });
+}
+
+async function initPeriodoSelect2() {
+  await nextTick();
+  if (!periodoSelect.value) return;
+
+  destroyPeriodoSelect2();
+  const element = $(periodoSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona un mes",
+      allowClear: false,
+      dropdownParent: $(".admin-sales-view"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedPeriodoId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.periodo-ventas", async () => {
+    selectedPeriodoId.value = element.val() || "";
+    await loadVentasPeriodo();
   });
 }
 
@@ -516,21 +558,57 @@ async function loadAll() {
   error.value = "";
 
   try {
-    const [personasData, productosData, comprasData, comprasPublicasData] = await Promise.all([
+    const [personasData, productosData] = await Promise.all([
       apiRequest("/api/personas"),
-      apiRequest("/api/productos"),
-      apiRequest("/api/compras"),
-      apiRequest("/api/compras-publicas")
+      apiRequest("/api/productos")
     ]);
     personas.value = personasData;
     productos.value = productosData;
-    compras.value = comprasData;
-    comprasPublicas.value = comprasPublicasData;
+    await loadPeriodoOptions();
+    await loadVentasPeriodo();
+    await initPeriodoSelect2();
   } catch (exception) {
     error.value = exception.message || "No se pudo cargar la informacion de ventanilla.";
   } finally {
     loading.value = false;
   }
+}
+
+async function loadPeriodoOptions() {
+  const [activePeriodo, gestionesData] = await Promise.all([
+    apiRequest("/api/gestiones/periodos/activo"),
+    apiRequest("/api/gestiones")
+  ]);
+
+  const periodosPorGestion = await Promise.all(
+    (Array.isArray(gestionesData) ? gestionesData : []).map(async (gestion) => {
+      const periodos = await apiRequest(`/api/gestiones/${gestion.id}/periodos`);
+      return periodos.map((periodo) => ({ ...periodo, gestion: periodo.gestion || gestion }));
+    })
+  );
+
+  periodosVenta.value = periodosPorGestion
+    .flat()
+    .sort((left, right) => {
+      const leftYear = Number(left.gestion?.anio || 0);
+      const rightYear = Number(right.gestion?.anio || 0);
+      if (leftYear !== rightYear) return rightYear - leftYear;
+      return Number(right.mes || 0) - Number(left.mes || 0);
+    });
+
+  if (!selectedPeriodoId.value) {
+    selectedPeriodoId.value = String(activePeriodo?.id || periodosVenta.value[0]?.id || "");
+  }
+}
+
+async function loadVentasPeriodo() {
+  const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
+  const [comprasData, comprasPublicasData] = await Promise.all([
+    apiRequest(`/api/compras${query}`),
+    apiRequest(`/api/compras-publicas${query}`)
+  ]);
+  compras.value = Array.isArray(comprasData) ? comprasData : [];
+  comprasPublicas.value = Array.isArray(comprasPublicasData) ? comprasPublicasData : [];
 }
 
 async function createCajaSale() {
@@ -627,6 +705,10 @@ watch(personas, () => {
   initPersonaSelect2();
 });
 
+watch(periodosVenta, () => {
+  initPeriodoSelect2();
+});
+
 watch(selectedPersonaId, (value) => {
   if (!personaSelect.value) return;
   const element = $(personaSelect.value);
@@ -635,8 +717,17 @@ watch(selectedPersonaId, (value) => {
   }
 });
 
+watch(selectedPeriodoId, (value) => {
+  if (!periodoSelect.value) return;
+  const element = $(periodoSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
 onBeforeUnmount(() => {
   destroyPersonaSelect2();
+  destroyPeriodoSelect2();
 });
 
 onMounted(loadAll);
@@ -649,9 +740,21 @@ onMounted(loadAll);
         <div>
           <div class="vy-eyebrow">Ventanilla</div>
           <h1>Ventas y validacion de pedidos</h1>
-          <p>Registra compras presenciales, valida pagos pendientes y marca entregas en caja.</p>
+          <p>
+            Registra compras presenciales, valida pagos pendientes y marca entregas en caja.
+            <strong v-if="selectedPeriodo">Mostrando {{ selectedPeriodo.nombre }}.</strong>
+          </p>
         </div>
         <div class="header-actions">
+          <label class="period-filter">
+            <span>Mes</span>
+            <select ref="periodoSelect" v-model="selectedPeriodoId">
+              <option value="" disabled>Selecciona un mes</option>
+              <option v-for="periodo in periodosVenta" :key="periodo.id" :value="periodo.id">
+                {{ periodo.nombre }} - Gestion {{ periodo.gestion?.anio || "" }}
+              </option>
+            </select>
+          </label>
           <button class="vy-btn vy-btn-ghost" type="button" @click="loadAll">
             <RefreshCw :size="15" /> Actualizar
           </button>
@@ -1269,7 +1372,10 @@ onMounted(loadAll);
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
 .page-header h1 { margin-top: 8px; font-size: 30px; font-weight: 900; }
 .page-header p { margin-top: 5px; color: var(--vy-ink-2); font-size: 14px; }
+.page-header p strong { color: var(--vy-orange-deep); font-weight: 900; }
 .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.period-filter { display: grid; gap: 6px; min-width: 260px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.period-filter select { width: 100%; }
 .sales-table-card { padding: 20px; }
 .public-sales-card { margin-top: 18px; }
 .sales-table-wrap { overflow-x: auto; }
@@ -1432,6 +1538,8 @@ onMounted(loadAll);
 @media (max-width: 720px) {
   .workspace { padding: 24px 20px 32px; }
   .page-header { align-items: stretch; flex-direction: column; }
+  .header-actions { align-items: stretch; flex-direction: column; }
+  .period-filter { min-width: 0; width: 100%; }
   .person-list, .sale-footer, .sale-item { grid-template-columns: 1fr; }
   .sale-item b { text-align: left; }
   .sale-item input, .sale-item button { width: 100%; }
