@@ -37,7 +37,7 @@ export function addPublicCartItem(username, product, quantity = 1) {
       publicPrice: Number(product.precioPublico || 0),
       distributorPrice: Number(product.precioDistribuidor || 0),
       discount: Number(product.descuento || 0),
-      img: product.imagenUrl,
+      img: product.imagenPublicaUrl || product.imagenUrl,
       quantity: Number(quantity || 1)
     });
   }

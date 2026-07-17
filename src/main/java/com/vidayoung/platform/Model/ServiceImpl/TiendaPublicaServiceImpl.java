@@ -350,7 +350,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 producto.getNombre(),
                 producto.getDescripcion(),
                 producto.getCategoria(),
-                producto.getImagenUrl(),
+                normalizarTexto(producto.getImagenPublicaUrl()) == null ? producto.getImagenUrl() : producto.getImagenPublicaUrl(),
                 precioDistribuidor,
                 precioPublico,
                 descuentoAplicado,

@@ -75,6 +75,18 @@ public class ProductoRestController {
             @PathVariable Long id,
             @RequestPart("imagen") MultipartFile imagen
     ) throws IOException {
+        return guardarImagenProducto(id, imagen, false);
+    }
+
+    @PostMapping("/{id}/imagen-publica")
+    public ResponseEntity<Producto> subirImagenPublica(
+            @PathVariable Long id,
+            @RequestPart("imagen") MultipartFile imagen
+    ) throws IOException {
+        return guardarImagenProducto(id, imagen, true);
+    }
+
+    private ResponseEntity<Producto> guardarImagenProducto(Long id, MultipartFile imagen, boolean publica) throws IOException {
         if (imagen.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -94,7 +106,11 @@ public class ProductoRestController {
                         Path destino = PRODUCT_UPLOAD_DIR.resolve(fileName).normalize();
                         imagen.transferTo(destino);
 
-                        producto.setImagenUrl("/uploads/productos/" + fileName);
+                        if (publica) {
+                            producto.setImagenPublicaUrl("/uploads/productos/" + fileName);
+                        } else {
+                            producto.setImagenUrl("/uploads/productos/" + fileName);
+                        }
                         return ResponseEntity.ok(productoService.guardar(producto));
                     } catch (IOException exception) {
                         throw new IllegalStateException("No se pudo guardar la imagen del producto", exception);
