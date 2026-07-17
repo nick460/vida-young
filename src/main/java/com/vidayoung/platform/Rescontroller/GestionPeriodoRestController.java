@@ -54,6 +54,14 @@ public class GestionPeriodoRestController {
         return ResponseEntity.ok(gestionPeriodoService.crearPeriodo(gestionId, request.getMes(), request.getNombre()));
     }
 
+    @PutMapping("/periodos/{periodoId}")
+    public ResponseEntity<PeriodoGestion> actualizarPeriodo(
+            @PathVariable Long periodoId,
+            @RequestBody PeriodoRequest request
+    ) {
+        return ResponseEntity.ok(gestionPeriodoService.actualizarPeriodo(periodoId, request.getNombre()));
+    }
+
     @GetMapping("/periodos/activo")
     public ResponseEntity<PeriodoGestion> obtenerPeriodoActivo() {
         return ResponseEntity.ok(gestionPeriodoService.obtenerPeriodoActivo());

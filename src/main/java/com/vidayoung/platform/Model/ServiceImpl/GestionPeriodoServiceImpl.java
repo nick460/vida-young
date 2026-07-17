@@ -103,6 +103,18 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
     }
 
     @Override
+    @Transactional
+    public PeriodoGestion actualizarPeriodo(Long periodoId, String nombre) {
+        PeriodoGestion periodo = periodoGestionDao.findById(periodoId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Periodo no encontrado."));
+        periodo.setNombre(normalizarTexto(nombre) == null
+                ? buildPeriodoLabel(periodo.getMes(), periodo.getGestion().getAnio())
+                : normalizarTexto(nombre));
+        return periodoGestionDao.save(periodo);
+    }
+
+    @Override
     public Optional<PeriodoGestion> buscarPeriodoActivo() {
         return periodoGestionDao.findFirstByEstadoPeriodoOrderByFechaInicioDesc(PeriodoGestion.ESTADO_PERIODO_ACTIVO)
                 .filter(periodo -> Auditoria.ESTADO_ACTIVO.equals(periodo.getEstado()));

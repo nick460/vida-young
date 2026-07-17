@@ -16,6 +16,7 @@ const gestiones = ref([]);
 const periodos = ref([]);
 const selectedGestionId = ref("");
 const editingGestionId = ref(null);
+const editingPeriodoId = ref(null);
 const gestionModalOpen = ref(false);
 const periodoModalOpen = ref(false);
 const gestionSelect = ref(null);
@@ -34,6 +35,9 @@ const selectedGestion = computed(() =>
 );
 const editingGestion = computed(() =>
   gestiones.value.find((gestion) => Number(gestion.id) === Number(editingGestionId.value))
+);
+const editingPeriodo = computed(() =>
+  periodos.value.find((periodo) => Number(periodo.id) === Number(editingPeriodoId.value))
 );
 
 const mesesDisponibles = [
@@ -109,7 +113,7 @@ async function initGestionSelect2() {
 }
 
 async function initMesSelect2() {
-  if (!periodoModalOpen.value) return;
+  if (!periodoModalOpen.value || editingPeriodoId.value) return;
   await nextTick();
   if (!mesSelect.value) return;
 
@@ -217,38 +221,56 @@ function resetGestionForm() {
 
 async function openPeriodoModal() {
   if (!selectedGestionId.value) return;
+  editingPeriodoId.value = null;
+  periodoForm.value = {
+    mes: new Date().getMonth() + 1,
+    nombre: ""
+  };
   periodoModalOpen.value = true;
   await initMesSelect2();
+}
+
+function openEditPeriodoModal(periodo) {
+  destroySelect2(mesSelect, "meses");
+  editingPeriodoId.value = periodo.id;
+  periodoForm.value = {
+    mes: periodo.mes,
+    nombre: periodo.nombre || ""
+  };
+  periodoModalOpen.value = true;
 }
 
 function closePeriodoModal() {
   if (saving.value) return;
   destroySelect2(mesSelect, "meses");
   periodoModalOpen.value = false;
+  editingPeriodoId.value = null;
   periodoForm.value = {
     mes: new Date().getMonth() + 1,
     nombre: ""
   };
 }
 
-async function createPeriodo() {
+async function savePeriodo() {
   if (!selectedGestionId.value || saving.value) return;
   saving.value = true;
   error.value = "";
   try {
-    await apiRequest(`/api/gestiones/${selectedGestionId.value}/periodos`, {
-      method: "POST",
+    const isEditing = Boolean(editingPeriodoId.value);
+    await apiRequest(isEditing ? `/api/gestiones/periodos/${editingPeriodoId.value}` : `/api/gestiones/${selectedGestionId.value}/periodos`, {
+      method: isEditing ? "PUT" : "POST",
       body: JSON.stringify(periodoForm.value)
     });
     destroySelect2(mesSelect, "meses");
     periodoModalOpen.value = false;
+    editingPeriodoId.value = null;
     periodoForm.value = {
       mes: new Date().getMonth() + 1,
       nombre: ""
     };
     await loadPeriodos();
   } catch (exception) {
-    error.value = exception.message || "No se pudo crear el periodo.";
+    error.value = exception.message || "No se pudo guardar el periodo.";
   } finally {
     saving.value = false;
   }
@@ -388,14 +410,25 @@ onBeforeUnmount(() => {
             <CheckCircle2 v-if="periodo.estadoPeriodo === 'ACTIVO'" :size="15" />
             {{ periodo.estadoPeriodo }}
           </span>
-          <button
-            type="button"
-            class="secondary-button compact"
-            :disabled="saving || periodo.estadoPeriodo === 'ACTIVO'"
-            @click="activatePeriodo(periodo)"
-          >
-            Activar
-          </button>
+          <div class="row-actions">
+            <button
+              type="button"
+              class="secondary-button compact"
+              :disabled="saving"
+              @click="openEditPeriodoModal(periodo)"
+            >
+              <Pencil :size="15" />
+              Editar
+            </button>
+            <button
+              type="button"
+              class="secondary-button compact"
+              :disabled="saving || periodo.estadoPeriodo === 'ACTIVO'"
+              @click="activatePeriodo(periodo)"
+            >
+              Activar
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -434,17 +467,21 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="periodoModalOpen" class="modal-backdrop" @click.self="closePeriodoModal">
-      <form class="modal-card period-modal" @submit.prevent="createPeriodo">
+      <form class="modal-card period-modal" @submit.prevent="savePeriodo">
         <div class="modal-header">
           <div>
-            <h2>Nuevo mes/proceso</h2>
-            <p>Se agregara a {{ selectedGestion?.nombre || "la gestion seleccionada" }}.</p>
+            <h2>{{ editingPeriodoId ? "Editar mes/proceso" : "Nuevo mes/proceso" }}</h2>
+            <p>
+              {{ editingPeriodoId
+                ? `Actualiza el nombre de ${editingPeriodo?.nombre || "este mes"}.`
+                : `Se agregara a ${selectedGestion?.nombre || "la gestion seleccionada"}.` }}
+            </p>
           </div>
           <button class="icon-button small" type="button" :disabled="saving" title="Cerrar" @click="closePeriodoModal">
             <X :size="16" />
           </button>
         </div>
-        <label>
+        <label v-if="!editingPeriodoId">
           Mes
           <select ref="mesSelect" v-model.number="periodoForm.mes" required>
             <option v-for="mes in mesesDisponibles" :key="mes.value" :value="mes.value">
@@ -452,6 +489,10 @@ onBeforeUnmount(() => {
             </option>
           </select>
         </label>
+        <div v-else class="readonly-field">
+          <span>Mes</span>
+          <strong>{{ mesesDisponibles.find((mes) => mes.value === periodoForm.mes)?.label || periodoForm.mes }}</strong>
+        </div>
         <label>
           Nombre
           <input v-model.trim="periodoForm.nombre" type="text" placeholder="Proceso Julio 2026" />
@@ -462,8 +503,9 @@ onBeforeUnmount(() => {
           </button>
           <button type="submit" :disabled="saving || !selectedGestionId">
             <Loader2 v-if="saving" :size="16" class="spin" />
+            <Pencil v-else-if="editingPeriodoId" :size="16" />
             <Plus v-else :size="16" />
-            Guardar mes
+            {{ editingPeriodoId ? "Actualizar" : "Guardar mes" }}
           </button>
         </div>
       </form>
@@ -489,7 +531,8 @@ onBeforeUnmount(() => {
 
 .header-actions,
 .section-actions,
-.modal-actions {
+.modal-actions,
+.row-actions {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -592,6 +635,26 @@ button {
   margin: -0.35rem 0 0;
   color: #64748b;
   font-size: 0.84rem;
+}
+
+.readonly-field {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0.75rem;
+}
+
+.readonly-field span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.readonly-field strong {
+  color: #172033;
 }
 
 label {
@@ -742,7 +805,7 @@ button:disabled {
 
 .table-row {
   display: grid;
-  grid-template-columns: 1.2fr 1.5fr 0.8fr 0.7fr;
+  grid-template-columns: 1.2fr 1.5fr 0.8fr 1.2fr;
   align-items: center;
   gap: 0.75rem;
   min-height: 54px;
@@ -756,6 +819,10 @@ button:disabled {
   font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.row-actions {
+  justify-content: flex-end;
 }
 
 .status {
@@ -818,7 +885,8 @@ button:disabled {
 
   .header-actions,
   .section-actions,
-  .modal-actions {
+  .modal-actions,
+  .row-actions {
     align-items: stretch;
     flex-direction: column;
     width: 100%;
