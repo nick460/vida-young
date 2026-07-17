@@ -5,6 +5,7 @@ import com.vidayoung.platform.Model.Dao.MovimientoCarteraEmpresaDao;
 import com.vidayoung.platform.Model.Entity.CarteraEmpresa;
 import com.vidayoung.platform.Model.Entity.MovimientoCarteraEmpresa;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
+import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
@@ -17,6 +18,7 @@ public class CarteraEmpresaServiceImpl implements CarteraEmpresaService {
 
     private final CarteraEmpresaDao carteraEmpresaDao;
     private final MovimientoCarteraEmpresaDao movimientoCarteraEmpresaDao;
+    private final GestionPeriodoService gestionPeriodoService;
 
     @Override
     @Transactional
@@ -82,6 +84,7 @@ public class CarteraEmpresaServiceImpl implements CarteraEmpresaService {
                 .referenciaId(referenciaId)
                 .monto(movimientoMonto)
                 .saldoResultado(saldoResultado)
+                .periodo(gestionPeriodoService.obtenerPeriodoActivo())
                 .build());
     }
 

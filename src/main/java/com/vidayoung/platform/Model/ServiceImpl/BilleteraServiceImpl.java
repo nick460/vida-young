@@ -16,6 +16,7 @@ import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
+import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Plan;
 import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Recompensa;
@@ -23,12 +24,12 @@ import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
+import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -51,6 +52,7 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final RecompensaDao recompensaDao;
     private final ReferidoDao referidoDao;
     private final CarteraEmpresaService carteraEmpresaService;
+    private final GestionPeriodoService gestionPeriodoService;
     private final RetiroBilleteraDao retiroBilleteraDao;
 
     @Override
@@ -121,6 +123,7 @@ public class BilleteraServiceImpl implements BilleteraService {
 
         asegurarBilletera(referido.getPersona());
         Long referenciaId = referido.getId();
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
 
         if (!historialMembresiaDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
                 REFERENCIA_AFILIACION,
@@ -140,6 +143,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .estadoMembresia(Boolean.TRUE.equals(referido.getMembresiaActiva())
                             ? HistorialMembresia.MEMBRESIA_ACTIVA
                             : HistorialMembresia.MEMBRESIA_VENCIDA)
+                    .periodo(periodoActivo)
                     .build());
         }
 
@@ -169,6 +173,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .referenciaId(referenciaId)
                     .monto(qpPlan)
                     .saldoResultado(billetera.getSaldoQp())
+                    .periodo(periodoActivo)
                     .build());
         }
     }
@@ -187,6 +192,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .orElseThrow(() -> new IllegalArgumentException("La persona no esta registrada en la red."));
 
         Billetera billetera = asegurarBilletera(persona);
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
         LocalDateTime fechaInicio = LocalDateTime.now();
         LocalDateTime fechaFin = calcularFechaFinMembresia(fechaInicio);
 
@@ -205,6 +211,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .precioPlan(zeroIfNull(plan.getPrecio()))
                 .qpPlan(zeroIfNull(plan.getQp()))
                 .estadoMembresia(HistorialMembresia.MEMBRESIA_ACTIVA)
+                .periodo(periodoActivo)
                 .build());
 
         carteraEmpresaService.registrarIngreso(
@@ -228,6 +235,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .referenciaId(historial.getId())
                     .monto(qpPlan)
                     .saldoResultado(billetera.getSaldoQp())
+                    .periodo(periodoActivo)
                     .build());
         }
 
@@ -241,6 +249,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
                 .orElseThrow(() -> new IllegalArgumentException("Persona no encontrada."));
         Billetera billetera = asegurarBilletera(persona);
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
         BigDecimal dinero = zeroIfNull(montoDinero);
         BigDecimal productos = zeroIfNull(montoProductos);
         BigDecimal efectivoRecompensasDisponible = efectivoRecompensasDisponible(personaId);
@@ -267,6 +276,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .estadoRetiro(RetiroBilletera.ESTADO_PROCESADO)
                 .fechaRetiro(LocalDateTime.now())
                 .observacion(normalizarTexto(observacion))
+                .periodo(periodoActivo)
                 .build());
 
         if (dinero.compareTo(BigDecimal.ZERO) > 0) {
@@ -283,6 +293,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                         .referenciaId(retiro.getId())
                         .monto(desdeBilletera.negate())
                         .saldoResultado(billetera.getSaldoDinero())
+                        .periodo(periodoActivo)
                         .build());
             }
             retirarEfectivoRecompensas(personaId, desdeRecompensas);
@@ -327,7 +338,8 @@ public class BilleteraServiceImpl implements BilleteraService {
     @Override
     @Transactional
     public int cerrarMesBilleteras() {
-        String periodo = YearMonth.now().toString();
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
+        String periodo = periodoActivo.getGestion().getAnio() + "-" + String.format("%02d", periodoActivo.getMes());
         LocalDateTime fechaCierre = LocalDateTime.now();
         int totalCierres = 0;
 
@@ -357,13 +369,14 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .rangoQpMinimo(rango == null ? null : zeroIfNull(rango.getQpMinimo()))
                     .estadoPlanilla(CierreMensualBilletera.ESTADO_PLANILLA_PENDIENTE)
                     .fechaCierre(fechaCierre)
+                    .periodoGestion(periodoActivo)
                     .build());
 
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_DINERO, saldoDinero);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PV, saldoPv);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_QP, saldoQp);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_CR, saldoCr);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PRODUCTOS, saldoProductos);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_DINERO, saldoDinero, periodoActivo);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PV, saldoPv, periodoActivo);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_QP, saldoQp, periodoActivo);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_CR, saldoCr, periodoActivo);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PRODUCTOS, saldoProductos, periodoActivo);
 
             billetera.setSaldoDinero(BigDecimal.ZERO);
             billetera.setSaldoPv(BigDecimal.ZERO);
@@ -486,6 +499,9 @@ public class BilleteraServiceImpl implements BilleteraService {
         }
 
         Billetera billetera = asegurarBilletera(recompensa.getBeneficiario());
+        PeriodoGestion periodoActivo = recompensa.getPeriodo() == null
+                ? gestionPeriodoService.obtenerPeriodoActivo()
+                : recompensa.getPeriodo();
         billetera.setSaldoProductos(zeroIfNull(billetera.getSaldoProductos()).add(diferencia));
         billetera = billeteraDao.save(billetera);
         movimientoBilleteraDao.save(MovimientoBilletera.builder()
@@ -498,6 +514,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .referenciaId(recompensa.getId())
                 .monto(diferencia)
                 .saldoResultado(billetera.getSaldoProductos())
+                .periodo(periodoActivo)
                 .build());
     }
 
@@ -534,7 +551,8 @@ public class BilleteraServiceImpl implements BilleteraService {
             Billetera billetera,
             CierreMensualBilletera cierre,
             String tipo,
-            BigDecimal saldo
+            BigDecimal saldo,
+            PeriodoGestion periodo
     ) {
         if (saldo.compareTo(BigDecimal.ZERO) <= 0) {
             return;
@@ -548,6 +566,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .referenciaId(cierre.getId())
                 .monto(saldo.negate())
                 .saldoResultado(BigDecimal.ZERO)
+                .periodo(periodo)
                 .build());
     }
 

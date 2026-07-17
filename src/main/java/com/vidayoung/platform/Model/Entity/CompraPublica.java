@@ -68,6 +68,12 @@ public class CompraPublica extends Auditoria {
     @Column(name = "estado_compra", nullable = false, length = 30)
     private String estadoCompra;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodo;
+
     @Column(name = "cliente_nombres", nullable = false, length = 100)
     private String clienteNombres;
 

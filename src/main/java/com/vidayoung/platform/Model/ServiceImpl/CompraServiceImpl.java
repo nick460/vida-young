@@ -23,6 +23,7 @@ import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.CompraService;
+import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -55,6 +56,7 @@ public class CompraServiceImpl implements CompraService {
     private final BeneficioActivacionCompraDao beneficioActivacionCompraDao;
     private final BilleteraService billeteraService;
     private final CarteraEmpresaService carteraEmpresaService;
+    private final GestionPeriodoService gestionPeriodoService;
 
     @Override
     @Transactional(rollbackOn = Exception.class)
@@ -69,6 +71,7 @@ public class CompraServiceImpl implements CompraService {
 
         Compra compra = Compra.builder()
                 .persona(comprador)
+                .periodo(gestionPeriodoService.obtenerPeriodoActivo())
                 .fechaCompra(LocalDateTime.now())
                 .estadoCompra(Compra.ESTADO_COMPRA_PENDIENTE)
                 .metodoPago(normalizarTexto(pago == null ? null : pago.metodoPago()))
@@ -250,6 +253,7 @@ public class CompraServiceImpl implements CompraService {
             billetera = billeteraDao.save(billetera);
             movimientoBilleteraDao.save(MovimientoBilletera.builder()
                     .billetera(billetera)
+                    .periodo(compra.getPeriodo())
                     .tipo(MovimientoBilletera.TIPO_PV)
                     .concepto("PV por compra #" + compra.getId())
                     .referenciaTipo("COMPRA")
@@ -266,6 +270,7 @@ public class CompraServiceImpl implements CompraService {
             billeteraService.actualizarRangoActual(comprador, billetera.getSaldoQp());
             movimientoBilleteraDao.save(MovimientoBilletera.builder()
                     .billetera(billetera)
+                    .periodo(compra.getPeriodo())
                     .tipo(MovimientoBilletera.TIPO_QP)
                     .concepto("QP por compra #" + compra.getId())
                     .referenciaTipo("COMPRA")
@@ -281,6 +286,7 @@ public class CompraServiceImpl implements CompraService {
             billetera = billeteraDao.save(billetera);
             movimientoBilleteraDao.save(MovimientoBilletera.builder()
                     .billetera(billetera)
+                    .periodo(compra.getPeriodo())
                     .tipo(MovimientoBilletera.TIPO_CR)
                     .concepto("CR por compra #" + compra.getId())
                     .referenciaTipo("COMPRA")
@@ -321,6 +327,7 @@ public class CompraServiceImpl implements CompraService {
 
             BeneficioActivacionCompra beneficio = beneficioActivacionCompraDao.save(BeneficioActivacionCompra.builder()
                     .compra(compra)
+                    .periodo(compra.getPeriodo())
                     .beneficiario(beneficiario)
                     .planActivacion(plan)
                     .nivelGenerado(nivel)
@@ -336,6 +343,7 @@ public class CompraServiceImpl implements CompraService {
                 billetera = billeteraDao.save(billetera);
                 movimientoBilleteraDao.save(MovimientoBilletera.builder()
                         .billetera(billetera)
+                        .periodo(compra.getPeriodo())
                         .tipo(MovimientoBilletera.TIPO_DINERO)
                         .concepto("Beneficio activacion compra #" + compra.getId() + " nivel " + nivel)
                         .referenciaTipo("BENEFICIO_ACTIVACION_COMPRA")

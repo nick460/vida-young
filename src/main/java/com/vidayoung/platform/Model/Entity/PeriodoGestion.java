@@ -10,7 +10,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
+import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -20,17 +21,21 @@ import lombok.Setter;
 import lombok.ToString;
 
 @Entity
-@Table(name = "movimientos_cartera_empresa")
+@Table(
+        name = "periodos_gestion",
+        uniqueConstraints = @UniqueConstraint(name = "uk_periodos_gestion_mes", columnNames = {"gestion_id", "mes"})
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
-public class MovimientoCarteraEmpresa extends Auditoria {
+public class PeriodoGestion extends Auditoria {
 
-    public static final String TIPO_INGRESO = "INGRESO";
-    public static final String TIPO_EGRESO = "EGRESO";
+    public static final String ESTADO_PERIODO_PENDIENTE = "PENDIENTE";
+    public static final String ESTADO_PERIODO_ACTIVO = "ACTIVO";
+    public static final String ESTADO_PERIODO_CERRADO = "CERRADO";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -38,32 +43,23 @@ public class MovimientoCarteraEmpresa extends Auditoria {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "cartera_id", nullable = false)
+    @JoinColumn(name = "gestion_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @ToString.Exclude
-    private CarteraEmpresa cartera;
+    private Gestion gestion;
 
-    @Column(nullable = false, length = 20)
-    private String tipo;
+    @Column(nullable = false)
+    private Integer mes;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "periodo_id")
-    @JsonIgnoreProperties({"gestion"})
-    @ToString.Exclude
-    private PeriodoGestion periodo;
+    @Column(nullable = false, length = 120)
+    private String nombre;
 
-    @Column(nullable = false, length = 180)
-    private String concepto;
+    @Column(name = "fecha_inicio", nullable = false)
+    private LocalDate fechaInicio;
 
-    @Column(name = "referencia_tipo", length = 60)
-    private String referenciaTipo;
+    @Column(name = "fecha_fin", nullable = false)
+    private LocalDate fechaFin;
 
-    @Column(name = "referencia_id")
-    private Long referenciaId;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal monto;
-
-    @Column(name = "saldo_resultado", nullable = false, precision = 12, scale = 2)
-    private BigDecimal saldoResultado;
+    @Column(name = "estado_periodo", nullable = false, length = 30)
+    private String estadoPeriodo;
 }

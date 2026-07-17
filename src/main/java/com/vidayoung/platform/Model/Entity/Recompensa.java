@@ -55,6 +55,12 @@ public class Recompensa extends Auditoria {
     @Column(name = "nivel_generado", nullable = false)
     private Integer nivelGenerado;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodo;
+
     @Column(name = "monto_efectivo", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal montoEfectivo = BigDecimal.ZERO;

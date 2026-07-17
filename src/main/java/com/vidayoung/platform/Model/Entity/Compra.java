@@ -76,6 +76,12 @@ public class Compra extends Auditoria {
     @Column(name = "estado_compra", nullable = false, length = 30)
     private String estadoCompra;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodo;
+
     @Column(name = "usuario_validacion", length = 80)
     private String usuarioValidacion;
 

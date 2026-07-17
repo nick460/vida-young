@@ -77,4 +77,10 @@ public class HistorialMembresia extends Auditoria {
 
     @Column(name = "estado_membresia", nullable = false, length = 30)
     private String estadoMembresia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodo;
 }

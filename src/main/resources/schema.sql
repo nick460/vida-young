@@ -101,13 +101,14 @@ VALUES
     ('ventanilla', 'Ventanilla', 'Store', FALSE, 110),
     ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 120),
     ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 130),
-    ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 140),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 150),
-    ('shop', 'Tienda', 'ShoppingBag', FALSE, 160),
-    ('network', 'Mi red', 'Users', FALSE, 170),
-    ('rewards', 'Recompensas', 'Gift', FALSE, 180),
-    ('stats', 'Estadisticas', 'BarChart3', FALSE, 190),
-    ('profile', 'Perfil', 'User', FALSE, 200)
+    ('gestiones', 'Gestiones', 'CalendarClock', FALSE, 140),
+    ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 150),
+    ('wallet', 'Finanzas', 'Wallet', FALSE, 160),
+    ('shop', 'Tienda', 'ShoppingBag', FALSE, 170),
+    ('network', 'Mi red', 'Users', FALSE, 180),
+    ('rewards', 'Recompensas', 'Gift', FALSE, 190),
+    ('stats', 'Estadisticas', 'BarChart3', FALSE, 200),
+    ('profile', 'Perfil', 'User', FALSE, 210)
 ON CONFLICT (menu_id) DO UPDATE
 SET label = EXCLUDED.label,
     icon = EXCLUDED.icon,
@@ -141,6 +142,66 @@ FROM roles r
 JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'shop', 'profile')
 WHERE r.nombre = 'CLIENTE'
 ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS gestiones (
+    id BIGSERIAL PRIMARY KEY,
+    anio INTEGER NOT NULL UNIQUE,
+    nombre VARCHAR(120) NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE TABLE IF NOT EXISTS periodos_gestion (
+    id BIGSERIAL PRIMARY KEY,
+    gestion_id BIGINT NOT NULL REFERENCES gestiones(id),
+    mes INTEGER NOT NULL,
+    nombre VARCHAR(120) NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
+    estado_periodo VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM',
+    CONSTRAINT uk_periodos_gestion_mes UNIQUE (gestion_id, mes)
+);
+
+INSERT INTO gestiones (anio, nombre, fecha_inicio, fecha_fin)
+SELECT EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+       'Gestion ' || EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+       make_date(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER, 1, 1),
+       make_date(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER, 12, 31)
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM gestiones
+    WHERE anio = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+);
+
+INSERT INTO periodos_gestion (gestion_id, mes, nombre, fecha_inicio, fecha_fin, estado_periodo)
+SELECT g.id,
+       EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER,
+       initcap(to_char(CURRENT_DATE, 'TMMonth')) || ' ' || g.anio,
+       date_trunc('month', CURRENT_DATE)::DATE,
+       (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::DATE,
+       CASE
+           WHEN EXISTS (SELECT 1 FROM periodos_gestion WHERE estado_periodo = 'ACTIVO')
+           THEN 'PENDIENTE'
+           ELSE 'ACTIVO'
+       END
+FROM gestiones g
+WHERE g.anio = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+  AND NOT EXISTS (
+      SELECT 1
+      FROM periodos_gestion pg
+      WHERE pg.gestion_id = g.id
+        AND pg.mes = EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+  );
 
 CREATE TABLE IF NOT EXISTS productos (
     id BIGSERIAL PRIMARY KEY,
@@ -263,7 +324,8 @@ ALTER TABLE compras_publicas
     ADD COLUMN IF NOT EXISTS cliente_publico_id BIGINT REFERENCES clientes_publicos(id),
     ADD COLUMN IF NOT EXISTS comprobante_pago_url VARCHAR(255),
     ADD COLUMN IF NOT EXISTS comprobante_pago_nombre VARCHAR(180),
-    ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80);
+    ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
 CREATE TABLE IF NOT EXISTS compras_publicas_detalles (
     id BIGSERIAL PRIMARY KEY,
@@ -525,7 +587,8 @@ ALTER TABLE recompensas
     ADD COLUMN IF NOT EXISTS cobrable BOOLEAN NOT NULL DEFAULT TRUE,
     ADD COLUMN IF NOT EXISTS motivo_no_cobrable VARCHAR(180),
     ADD COLUMN IF NOT EXISTS monto_efectivo_retirado NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS valor_productos_retirado NUMERIC(12, 2) NOT NULL DEFAULT 0;
+    ADD COLUMN IF NOT EXISTS valor_productos_retirado NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
 CREATE TABLE IF NOT EXISTS preinscripciones_referidos (
     id BIGSERIAL PRIMARY KEY,
@@ -602,6 +665,12 @@ CREATE TABLE IF NOT EXISTS retiros_billetera (
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
 
+ALTER TABLE movimientos_billetera
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
+
+ALTER TABLE retiros_billetera
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
+
 CREATE TABLE IF NOT EXISTS carteras_empresa (
     id BIGSERIAL PRIMARY KEY,
     codigo VARCHAR(40) NOT NULL UNIQUE,
@@ -629,6 +698,9 @@ CREATE TABLE IF NOT EXISTS movimientos_cartera_empresa (
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+ALTER TABLE movimientos_cartera_empresa
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
 INSERT INTO carteras_empresa (codigo, nombre, saldo_actual)
 SELECT 'PRINCIPAL', 'Caja principal de la empresa', 0
@@ -680,7 +752,8 @@ ALTER TABLE cierres_mensuales_billetera
     ADD COLUMN IF NOT EXISTS saldo_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS rango_id BIGINT REFERENCES rangos(id),
     ADD COLUMN IF NOT EXISTS rango_nombre VARCHAR(100),
-    ADD COLUMN IF NOT EXISTS rango_qp_minimo NUMERIC(12, 2);
+    ADD COLUMN IF NOT EXISTS rango_qp_minimo NUMERIC(12, 2),
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_historial_membresias_referencia
     ON historial_membresias (referencia_tipo, referencia_id, tipo)
@@ -704,6 +777,7 @@ ALTER TABLE billeteras
     ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
 
 ALTER TABLE historial_membresias
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id),
     ALTER COLUMN estado SET DEFAULT 'ACTIVO',
     ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
     ALTER COLUMN fecha_modificacion SET DEFAULT CURRENT_TIMESTAMP,
@@ -957,7 +1031,8 @@ ALTER TABLE compras
     ADD COLUMN IF NOT EXISTS comprobante_pago_url VARCHAR(255),
     ADD COLUMN IF NOT EXISTS comprobante_pago_nombre VARCHAR(180),
     ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80),
-    ADD COLUMN IF NOT EXISTS total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0;
+    ADD COLUMN IF NOT EXISTS total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
 CREATE TABLE IF NOT EXISTS compras_detalles (
     id BIGSERIAL PRIMARY KEY,
@@ -996,6 +1071,117 @@ CREATE TABLE IF NOT EXISTS beneficios_activacion_compras (
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+ALTER TABLE beneficios_activacion_compras
+    ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE compras
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE compras_publicas
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE historial_membresias
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE recompensas
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE movimientos_billetera
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE retiros_billetera
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE movimientos_cartera_empresa
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE cierres_mensuales_billetera
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE beneficios_activacion_compras
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);
 
 INSERT INTO movimientos_cartera_empresa (cartera_id, tipo, concepto, referencia_tipo, referencia_id, monto, saldo_resultado)
 SELECT c.id, ingreso.tipo, ingreso.concepto, ingreso.referencia_tipo, ingreso.referencia_id, ingreso.monto, 0
@@ -1059,3 +1245,15 @@ SET saldo_actual = COALESCE((
       AND m.estado = 'ACTIVO'
 ), 0)
 WHERE c.codigo = 'PRINCIPAL';
+
+WITH periodo_activo AS (
+    SELECT id
+    FROM periodos_gestion
+    WHERE estado_periodo = 'ACTIVO'
+    ORDER BY fecha_inicio DESC
+    LIMIT 1
+)
+UPDATE movimientos_cartera_empresa
+SET periodo_id = (SELECT id FROM periodo_activo)
+WHERE periodo_id IS NULL
+  AND EXISTS (SELECT 1 FROM periodo_activo);

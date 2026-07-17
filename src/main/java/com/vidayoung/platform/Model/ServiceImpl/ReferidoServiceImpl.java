@@ -13,6 +13,7 @@ import com.vidayoung.platform.Model.Entity.PlanNivel;
 import com.vidayoung.platform.Model.Entity.Recompensa;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Service.BilleteraService;
+import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import com.vidayoung.platform.Model.Service.ReferidoService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
@@ -37,6 +38,7 @@ public class ReferidoServiceImpl implements ReferidoService {
     private final PlanNivelDao planNivelDao;
     private final RecompensaDao recompensaDao;
     private final BilleteraService billeteraService;
+    private final GestionPeriodoService gestionPeriodoService;
     private final UsuarioDao usuarioDao;
 
     @Override
@@ -241,6 +243,7 @@ public class ReferidoServiceImpl implements ReferidoService {
                         .valorProductos(productos)
                         .cobrable(beneficiarioActivo)
                         .motivoNoCobrable(beneficiarioActivo ? null : "No cobrable porque la membresia no esta activa.")
+                        .periodo(gestionPeriodoService.obtenerPeriodoActivo())
                         .build());
                 billeteraService.sincronizarSaldoProductosRecompensa(recompensa.getId());
             }

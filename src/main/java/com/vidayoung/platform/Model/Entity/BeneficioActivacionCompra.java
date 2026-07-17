@@ -55,6 +55,12 @@ public class BeneficioActivacionCompra extends Auditoria {
     @Column(name = "nivel_generado", nullable = false)
     private Integer nivelGenerado;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodo;
+
     @Column(name = "cantidad_productos", nullable = false)
     private Integer cantidadProductos;
 

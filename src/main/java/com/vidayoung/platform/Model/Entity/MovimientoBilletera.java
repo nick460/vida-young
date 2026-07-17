@@ -49,6 +49,12 @@ public class MovimientoBilletera extends Auditoria {
     @Column(nullable = false, length = 20)
     private String tipo;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodo;
+
     @Column(nullable = false, length = 160)
     private String concepto;
 

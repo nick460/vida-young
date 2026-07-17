@@ -57,6 +57,12 @@ public class RetiroBilletera extends Auditoria {
     @Column(name = "fecha_retiro", nullable = false)
     private LocalDateTime fechaRetiro;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodo;
+
     @Column(length = 240)
     private String observacion;
 }

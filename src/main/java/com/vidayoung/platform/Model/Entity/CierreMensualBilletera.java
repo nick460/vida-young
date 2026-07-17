@@ -91,4 +91,10 @@ public class CierreMensualBilletera extends Auditoria {
 
     @Column(name = "fecha_cierre", nullable = false)
     private LocalDateTime fechaCierre;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "periodo_id")
+    @JsonIgnoreProperties({"gestion"})
+    @ToString.Exclude
+    private PeriodoGestion periodoGestion;
 }

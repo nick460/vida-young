@@ -21,6 +21,7 @@ import com.vidayoung.platform.Model.Entity.TipoClientePublico;
 import com.vidayoung.platform.Model.Entity.Usuario;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
+import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import com.vidayoung.platform.Model.Service.ProductoService;
 import com.vidayoung.platform.Model.Service.TiendaPublicaService;
 import jakarta.transaction.Transactional;
@@ -54,6 +55,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
     private final ClientePublicoDao clientePublicoDao;
     private final BilleteraService billeteraService;
     private final CarteraEmpresaService carteraEmpresaService;
+    private final GestionPeriodoService gestionPeriodoService;
     private final BilleteraDao billeteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
 
@@ -134,6 +136,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 .distribuidor(distribuidor)
                 .tipoCliente(tipoCliente)
                 .clientePublico(clientePublico)
+                .periodo(gestionPeriodoService.obtenerPeriodoActivo())
                 .fechaCompra(LocalDateTime.now())
                 .estadoCompra(CompraPublica.ESTADO_PENDIENTE)
                 .clienteNombres(normalizarTexto(request.clienteNombres()))
@@ -480,6 +483,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
         billetera = billeteraDao.save(billetera);
         movimientoBilleteraDao.save(MovimientoBilletera.builder()
                 .billetera(billetera)
+                .periodo(compra.getPeriodo())
                 .tipo(MovimientoBilletera.TIPO_DINERO)
                 .concepto("Ganancia por venta publica #" + compra.getId())
                 .referenciaTipo(REFERENCIA_VENTA_PUBLICA)
