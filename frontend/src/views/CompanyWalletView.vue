@@ -25,6 +25,7 @@ const retiroModalOpen = ref(false);
 const selectedPersonaId = ref("");
 const personaSelect = ref(null);
 const selectedProductoId = ref("");
+const productoSelect = ref(null);
 const selectedWallet = ref(null);
 const walletLoading = ref(false);
 const page = ref(1);
@@ -95,6 +96,15 @@ function destroyPersonaSelect2() {
   }
 }
 
+function destroyProductoSelect2() {
+  if (!productoSelect.value) return;
+  const element = $(productoSelect.value);
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.off("change.caja-producto");
+    element.select2("destroy");
+  }
+}
+
 async function initPeriodoSelect2() {
   await nextTick();
   if (!periodoSelect.value) return;
@@ -146,6 +156,33 @@ async function initPersonaSelect2() {
   element.on("change.caja-persona", async () => {
     selectedPersonaId.value = element.val() || "";
     await loadSelectedWallet();
+  });
+}
+
+async function initProductoSelect2() {
+  if (!retiroModalOpen.value || !selectedWallet.value) return;
+
+  await nextTick();
+  if (!productoSelect.value) return;
+
+  destroyProductoSelect2();
+  const element = $(productoSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona producto",
+      allowClear: true,
+      dropdownParent: $(".retiro-modal"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedProductoId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.caja-producto", () => {
+    selectedProductoId.value = element.val() || "";
   });
 }
 
@@ -236,11 +273,13 @@ async function openRetiroModal() {
     await loadPersonas();
   }
   await initPersonaSelect2();
+  await initProductoSelect2();
 }
 
 function closeRetiroModal() {
   if (processing.value) return;
   destroyPersonaSelect2();
+  destroyProductoSelect2();
   retiroModalOpen.value = false;
   selectedPersonaId.value = "";
   selectedProductoId.value = "";
@@ -267,6 +306,7 @@ function addRetiroProducto() {
     });
   }
   selectedProductoId.value = "";
+  initProductoSelect2();
 }
 
 function removeRetiroProducto(item) {
@@ -356,8 +396,10 @@ watch(periodosCaja, () => {
 watch(retiroModalOpen, (isOpen) => {
   if (isOpen) {
     initPersonaSelect2();
+    initProductoSelect2();
   } else {
     destroyPersonaSelect2();
+    destroyProductoSelect2();
   }
 });
 
@@ -365,9 +407,25 @@ watch(personas, () => {
   initPersonaSelect2();
 });
 
+watch(productos, () => {
+  initProductoSelect2();
+});
+
+watch(selectedWallet, () => {
+  initProductoSelect2();
+});
+
 watch(selectedPersonaId, (value) => {
   if (!personaSelect.value) return;
   const element = $(personaSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
+watch(selectedProductoId, (value) => {
+  if (!productoSelect.value) return;
+  const element = $(productoSelect.value);
   if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
     element.val(value || null).trigger("change.select2");
   }
@@ -388,6 +446,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   destroyPersonaSelect2();
+  destroyProductoSelect2();
   destroyPeriodoSelect2();
 });
 </script>
@@ -590,7 +649,7 @@ onBeforeUnmount(() => {
               <section class="product-withdrawal">
                 <label class="field">
                   <span>Producto a entregar</span>
-                  <select v-model="selectedProductoId">
+                  <select ref="productoSelect" v-model="selectedProductoId">
                     <option value="">Selecciona producto</option>
                     <option v-for="producto in productos" :key="producto.id" :value="producto.id">
                       {{ producto.nombre }} - Bs. {{ money(producto.precio) }}
