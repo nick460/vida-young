@@ -33,6 +33,14 @@ public class GestionPeriodoRestController {
         return ResponseEntity.ok(gestionPeriodoService.crearGestion(request.getAnio(), request.getNombre()));
     }
 
+    @PutMapping("/{gestionId}")
+    public ResponseEntity<Gestion> actualizarGestion(
+            @PathVariable Long gestionId,
+            @RequestBody GestionRequest request
+    ) {
+        return ResponseEntity.ok(gestionPeriodoService.actualizarGestion(gestionId, request.getAnio(), request.getNombre()));
+    }
+
     @GetMapping("/{gestionId}/periodos")
     public ResponseEntity<List<PeriodoGestion>> listarPeriodos(@PathVariable Long gestionId) {
         return ResponseEntity.ok(gestionPeriodoService.listarPeriodos(gestionId));

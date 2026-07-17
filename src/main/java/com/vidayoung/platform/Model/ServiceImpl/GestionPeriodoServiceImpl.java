@@ -13,6 +13,7 @@ import java.time.format.TextStyle;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,42 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
                         .fechaInicio(LocalDate.of(year, 1, 1))
                         .fechaFin(LocalDate.of(year, 12, 31))
                         .build()));
+    }
+
+    @Override
+    @Transactional
+    public Gestion actualizarGestion(Long gestionId, Integer anio, String nombre) {
+        Gestion gestion = gestionDao.findById(gestionId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Gestion no encontrada."));
+
+        int oldYear = gestion.getAnio();
+        int year = anio == null ? gestion.getAnio() : anio;
+        gestionDao.findByAnio(year)
+                .filter(existing -> !Objects.equals(existing.getId(), gestion.getId()))
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException("Ya existe una gestion para el anio indicado.");
+                });
+
+        gestion.setAnio(year);
+        gestion.setNombre(normalizarTexto(nombre) == null ? "Gestion " + year : normalizarTexto(nombre));
+        gestion.setFechaInicio(LocalDate.of(year, 1, 1));
+        gestion.setFechaFin(LocalDate.of(year, 12, 31));
+        Gestion actualizada = gestionDao.save(gestion);
+
+        periodoGestionDao.findByGestionIdOrderByMes(actualizada.getId()).stream()
+                .filter(periodo -> Auditoria.ESTADO_ACTIVO.equals(periodo.getEstado()))
+                .forEach(periodo -> {
+                    LocalDate inicio = LocalDate.of(year, periodo.getMes(), 1);
+                    if (Objects.equals(periodo.getNombre(), buildPeriodoLabel(periodo.getMes(), oldYear))) {
+                        periodo.setNombre(buildPeriodoLabel(periodo.getMes(), year));
+                    }
+                    periodo.setFechaInicio(inicio);
+                    periodo.setFechaFin(inicio.withDayOfMonth(inicio.lengthOfMonth()));
+                    periodoGestionDao.save(periodo);
+                });
+
+        return actualizada;
     }
 
     @Override
@@ -127,8 +164,7 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
 
     private PeriodoGestion buildPeriodo(Gestion gestion, Integer mes, String nombre, String estadoPeriodo) {
         LocalDate inicio = LocalDate.of(gestion.getAnio(), mes, 1);
-        String monthName = Month.of(mes).getDisplayName(TextStyle.FULL, new Locale("es", "BO"));
-        String label = normalizarTexto(nombre) == null ? capitalize(monthName) + " " + gestion.getAnio() : normalizarTexto(nombre);
+        String label = normalizarTexto(nombre) == null ? buildPeriodoLabel(mes, gestion.getAnio()) : normalizarTexto(nombre);
         return PeriodoGestion.builder()
                 .gestion(gestion)
                 .mes(mes)
@@ -137,6 +173,11 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
                 .fechaFin(inicio.withDayOfMonth(inicio.lengthOfMonth()))
                 .estadoPeriodo(estadoPeriodo)
                 .build();
+    }
+
+    private String buildPeriodoLabel(Integer mes, Integer anio) {
+        String monthName = Month.of(mes).getDisplayName(TextStyle.FULL, new Locale("es", "BO"));
+        return capitalize(monthName) + " " + anio;
     }
 
     private String normalizarTexto(String value) {

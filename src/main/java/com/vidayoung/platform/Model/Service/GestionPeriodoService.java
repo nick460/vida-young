@@ -13,6 +13,8 @@ public interface GestionPeriodoService {
 
     Gestion crearGestion(Integer anio, String nombre);
 
+    Gestion actualizarGestion(Long gestionId, Integer anio, String nombre);
+
     PeriodoGestion crearPeriodo(Long gestionId, Integer mes, String nombre);
 
     Optional<PeriodoGestion> buscarPeriodoActivo();

@@ -1,7 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { CalendarClock, CheckCircle2, Loader2, Lock, Plus, RefreshCw } from "lucide-vue-next";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import $ from "jquery";
+import select2 from "select2";
+import "select2/dist/css/select2.css";
+import { CalendarClock, CheckCircle2, Loader2, Lock, Pencil, Plus, RefreshCw, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
+
+select2($);
 
 const loading = ref(false);
 const saving = ref(false);
@@ -10,6 +15,9 @@ const activePeriod = ref(null);
 const gestiones = ref([]);
 const periodos = ref([]);
 const selectedGestionId = ref("");
+const editingGestionId = ref(null);
+const gestionSelect = ref(null);
+const mesSelect = ref(null);
 const gestionForm = ref({
   anio: new Date().getFullYear(),
   nombre: ""
@@ -21,6 +29,9 @@ const periodoForm = ref({
 
 const selectedGestion = computed(() =>
   gestiones.value.find((gestion) => Number(gestion.id) === Number(selectedGestionId.value))
+);
+const editingGestion = computed(() =>
+  gestiones.value.find((gestion) => Number(gestion.id) === Number(editingGestionId.value))
 );
 
 const mesesDisponibles = [
@@ -52,6 +63,79 @@ function periodLabel(periodo) {
   return `${periodo.nombre} - Gestion ${periodo.gestion?.anio || ""}`;
 }
 
+function destroySelect2(selectRef, namespace) {
+  if (!selectRef.value) return;
+  const element = $(selectRef.value);
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.off(`change.${namespace}`);
+    element.select2("destroy");
+  }
+}
+
+function syncSelect2Value(selectRef, value) {
+  if (!selectRef.value) return;
+  const element = $(selectRef.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== String(value || "")) {
+    element.val(value || null).trigger("change.select2");
+  }
+}
+
+async function initGestionSelect2() {
+  await nextTick();
+  if (!gestionSelect.value) return;
+
+  destroySelect2(gestionSelect, "gestiones");
+  const element = $(gestionSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona una gestion",
+      allowClear: false,
+      dropdownParent: $(".gestion-page"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedGestionId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.gestiones", async () => {
+    selectedGestionId.value = element.val() || "";
+    await loadPeriodos();
+  });
+}
+
+async function initMesSelect2() {
+  await nextTick();
+  if (!mesSelect.value) return;
+
+  destroySelect2(mesSelect, "meses");
+  const element = $(mesSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona un mes",
+      allowClear: false,
+      dropdownParent: $(".gestion-page"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(String(periodoForm.value.mes || ""))
+    .trigger("change.select2");
+
+  element.on("change.meses", () => {
+    periodoForm.value.mes = Number(element.val() || new Date().getMonth() + 1);
+  });
+}
+
+async function initSelect2Controls() {
+  await initGestionSelect2();
+  await initMesSelect2();
+}
+
 async function loadAll() {
   loading.value = true;
   error.value = "";
@@ -66,6 +150,7 @@ async function loadAll() {
       selectedGestionId.value = String(activeData?.gestion?.id || gestiones.value[0]?.id || "");
     }
     await loadPeriodos();
+    await initSelect2Controls();
   } catch (exception) {
     error.value = exception.message || "No se pudieron cargar las gestiones.";
   } finally {
@@ -84,18 +169,35 @@ async function createGestion() {
   saving.value = true;
   error.value = "";
   try {
-    const gestion = await apiRequest("/api/gestiones", {
-      method: "POST",
+    const isEditing = Boolean(editingGestionId.value);
+    const gestion = await apiRequest(isEditing ? `/api/gestiones/${editingGestionId.value}` : "/api/gestiones", {
+      method: isEditing ? "PUT" : "POST",
       body: JSON.stringify(gestionForm.value)
     });
     selectedGestionId.value = String(gestion.id);
-    gestionForm.value.nombre = "";
+    resetGestionForm();
     await loadAll();
   } catch (exception) {
-    error.value = exception.message || "No se pudo crear la gestion.";
+    error.value = exception.message || "No se pudo guardar la gestion.";
   } finally {
     saving.value = false;
   }
+}
+
+function editGestion(gestion) {
+  editingGestionId.value = gestion.id;
+  gestionForm.value = {
+    anio: gestion.anio,
+    nombre: gestion.nombre || ""
+  };
+}
+
+function resetGestionForm() {
+  editingGestionId.value = null;
+  gestionForm.value = {
+    anio: new Date().getFullYear(),
+    nombre: ""
+  };
 }
 
 async function createPeriodo() {
@@ -144,7 +246,16 @@ async function closeActivePeriodo() {
   }
 }
 
+watch(gestiones, initGestionSelect2, { deep: true });
+watch(selectedGestionId, (value) => syncSelect2Value(gestionSelect, value));
+watch(() => periodoForm.value.mes, (value) => syncSelect2Value(mesSelect, value));
+
 onMounted(loadAll);
+
+onBeforeUnmount(() => {
+  destroySelect2(gestionSelect, "gestiones");
+  destroySelect2(mesSelect, "meses");
+});
 </script>
 
 <template>
@@ -179,9 +290,22 @@ onMounted(loadAll);
 
     <div class="forms-grid">
       <form class="tool-panel" @submit.prevent="createGestion">
-        <h2>Nueva gestion</h2>
+        <div class="panel-title">
+          <h2>{{ editingGestionId ? "Editar gestion" : "Nueva gestion" }}</h2>
+          <button
+            v-if="editingGestionId"
+            class="icon-button small"
+            type="button"
+            :disabled="saving"
+            title="Cancelar edicion"
+            @click="resetGestionForm"
+          >
+            <X :size="16" />
+          </button>
+        </div>
+        <p v-if="editingGestion" class="helper-text">Editando {{ editingGestion.nombre }}.</p>
         <label>
-          Año
+          Anio
           <input v-model.number="gestionForm.anio" type="number" min="2020" max="2100" required />
         </label>
         <label>
@@ -190,8 +314,9 @@ onMounted(loadAll);
         </label>
         <button type="submit" :disabled="saving">
           <Loader2 v-if="saving" :size="16" class="spin" />
+          <Pencil v-else-if="editingGestionId" :size="16" />
           <Plus v-else :size="16" />
-          Guardar gestion
+          {{ editingGestionId ? "Actualizar gestion" : "Guardar gestion" }}
         </button>
       </form>
 
@@ -199,7 +324,7 @@ onMounted(loadAll);
         <h2>Nuevo mes/proceso</h2>
         <label>
           Gestion
-          <select v-model="selectedGestionId" required @change="loadPeriodos">
+          <select ref="gestionSelect" v-model="selectedGestionId" required>
             <option value="" disabled>Selecciona una gestion</option>
             <option v-for="gestion in gestiones" :key="gestion.id" :value="gestion.id">
               {{ gestion.nombre }} ({{ gestion.anio }})
@@ -208,7 +333,7 @@ onMounted(loadAll);
         </label>
         <label>
           Mes
-          <select v-model.number="periodoForm.mes" required>
+          <select ref="mesSelect" v-model.number="periodoForm.mes" required>
             <option v-for="mes in mesesDisponibles" :key="mes.value" :value="mes.value">
               {{ mes.label }}
             </option>
@@ -232,6 +357,16 @@ onMounted(loadAll);
           <h2>Meses de {{ selectedGestion?.nombre || "la gestion" }}</h2>
           <p>Solo un mes puede estar activo. Al activar otro, el activo anterior queda cerrado.</p>
         </div>
+        <button
+          v-if="selectedGestion"
+          type="button"
+          class="secondary-button"
+          :disabled="saving"
+          @click="editGestion(selectedGestion)"
+        >
+          <Pencil :size="16" />
+          Editar gestion
+        </button>
       </div>
 
       <div class="period-table">
@@ -323,6 +458,11 @@ button {
   color: #172033;
 }
 
+.icon-button.small {
+  width: 32px;
+  height: 32px;
+}
+
 .active-band,
 .tool-panel,
 .periods-section {
@@ -364,6 +504,19 @@ button {
   padding: 1rem;
 }
 
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.helper-text {
+  margin: -0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
 label {
   display: grid;
   gap: 0.35rem;
@@ -380,6 +533,58 @@ select {
   padding: 0.65rem 0.75rem;
   color: #172033;
   font: inherit;
+}
+
+:deep(.select2-container--default .select2-selection--single) {
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.select2-container--default .select2-selection--single .select2-selection__rendered) {
+  padding-left: 0.75rem;
+  padding-right: 2rem;
+  color: #172033;
+  font-size: 0.95rem;
+  line-height: 42px;
+}
+
+:deep(.select2-container--default .select2-selection--single .select2-selection__arrow) {
+  height: 42px;
+  right: 0.45rem;
+}
+
+:deep(.select2-container--default.select2-container--open .select2-selection--single) {
+  border-color: #0f766e;
+}
+
+:deep(.select2-dropdown) {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.select2-search--dropdown) {
+  padding: 0.5rem;
+}
+
+:deep(.select2-container--default .select2-search--dropdown .select2-search__field) {
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: 0;
+  padding: 0 0.65rem;
+}
+
+:deep(.select2-results__option) {
+  padding: 0.55rem 0.75rem;
+}
+
+:deep(.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable) {
+  background: #0f766e;
+  color: #ffffff;
 }
 
 button:not(.icon-button) {
