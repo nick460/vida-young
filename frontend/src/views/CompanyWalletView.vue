@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
     </main>
 
     <Teleport to="body">
-      <div v-if="retiroModalOpen" class="retiro-backdrop" @click.self="closeRetiroModal">
+      <div v-if="retiroModalOpen" class="retiro-backdrop">
         <article class="retiro-modal">
           <header>
             <div>

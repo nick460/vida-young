@@ -103,12 +103,13 @@ VALUES
     ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 130),
     ('gestiones', 'Gestiones', 'CalendarClock', FALSE, 140),
     ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 150),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 160),
-    ('shop', 'Tienda', 'ShoppingBag', FALSE, 170),
-    ('network', 'Mi red', 'Users', FALSE, 180),
-    ('rewards', 'Recompensas', 'Gift', FALSE, 190),
-    ('stats', 'Estadisticas', 'BarChart3', FALSE, 200),
-    ('profile', 'Perfil', 'User', FALSE, 210)
+    ('retiros-billeteras', 'Retiros billeteras', 'ArrowDownToLine', FALSE, 160),
+    ('wallet', 'Finanzas', 'Wallet', FALSE, 170),
+    ('shop', 'Tienda', 'ShoppingBag', FALSE, 180),
+    ('network', 'Mi red', 'Users', FALSE, 190),
+    ('rewards', 'Recompensas', 'Gift', FALSE, 200),
+    ('stats', 'Estadisticas', 'BarChart3', FALSE, 210),
+    ('profile', 'Perfil', 'User', FALSE, 220)
 ON CONFLICT (menu_id) DO UPDATE
 SET label = EXCLUDED.label,
     icon = EXCLUDED.icon,

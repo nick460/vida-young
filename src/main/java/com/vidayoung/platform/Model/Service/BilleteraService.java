@@ -17,6 +17,8 @@ public interface BilleteraService {
 
     Optional<Billetera> buscarPorPersonaId(Long personaId);
 
+    List<Billetera> listarBilleterasConSaldos();
+
     List<MovimientoBilletera> listarMovimientos(Long personaId);
 
     List<HistorialMembresia> listarHistorialMembresias(Long personaId);

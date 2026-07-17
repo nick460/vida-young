@@ -1,16 +1,22 @@
 package com.vidayoung.platform.Rescontroller;
 
 import com.vidayoung.platform.Model.Dao.PersonaDao;
+import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Auditoria;
+import com.vidayoung.platform.Model.Entity.PeriodoGestion;
+import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import com.vidayoung.platform.Model.Service.BilleteraService;
+import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -21,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -30,7 +37,46 @@ public class BilleteraRestController {
 
     private final BilleteraService billeteraService;
     private final PersonaDao personaDao;
+    private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
     private final RecompensaDao recompensaDao;
+    private final GestionPeriodoService gestionPeriodoService;
+
+    @GetMapping("/saldos")
+    public ResponseEntity<List<BilleteraSaldoResponse>> listarSaldos(@RequestParam(required = false) Long periodoId) {
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
+        Long periodoConsultaId = periodoId == null ? periodoActivo.getId() : periodoId;
+        boolean periodoActivoSeleccionado = periodoConsultaId != null && periodoConsultaId.equals(periodoActivo.getId());
+
+        if (periodoActivoSeleccionado) {
+            Map<Long, Billetera> billeterasConSaldo = new LinkedHashMap<>();
+            billeteraService.listarBilleterasConSaldos().forEach(billetera ->
+                    billeterasConSaldo.put(billetera.getPersona().getId(), billetera)
+            );
+            recompensaDao.findAll().stream()
+                    .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                    .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                    .filter(recompensa -> recompensa.getBeneficiario() != null && recompensa.getBeneficiario().getId() != null)
+                    .filter(recompensa -> efectivoDisponible(recompensa.getBeneficiario().getId()).compareTo(BigDecimal.ZERO) > 0
+                            || productosRecompensasDisponible(recompensa.getBeneficiario().getId()).compareTo(BigDecimal.ZERO) > 0)
+                    .forEach(recompensa -> billeterasConSaldo.computeIfAbsent(
+                            recompensa.getBeneficiario().getId(),
+                            id -> billeteraService.asegurarBilletera(recompensa.getBeneficiario())
+                    ));
+
+            return ResponseEntity.ok(billeterasConSaldo.values().stream()
+                    .map(billetera -> BilleteraSaldoResponse.desdeBilletera(
+                            billetera,
+                            efectivoRecompensasDisponible(billetera.getPersona().getId()),
+                            zeroIfNull(billetera.getSaldoProductos()),
+                            true
+                    ))
+                    .toList());
+        }
+
+        return ResponseEntity.ok(cierreMensualBilleteraDao.findConSaldosByPeriodoGestionId(periodoConsultaId).stream()
+                .map(cierre -> BilleteraSaldoResponse.desdeCierre(cierre, false))
+                .toList());
+    }
 
     @GetMapping("/persona/{personaId}")
     public ResponseEntity<BilleteraResumenResponse> resumenPorPersona(@PathVariable Long personaId) {
@@ -116,6 +162,92 @@ public class BilleteraRestController {
     }
 
     @Getter
+    @RequiredArgsConstructor
+    public static class BilleteraSaldoResponse {
+
+        private final Long personaId;
+
+        private final String nombres;
+
+        private final String apellidos;
+
+        private final String documento;
+
+        private final Long billeteraId;
+
+        private final Long cierreId;
+
+        private final BigDecimal saldoDinero;
+
+        private final BigDecimal saldoPv;
+
+        private final BigDecimal saldoQp;
+
+        private final BigDecimal saldoCr;
+
+        private final BigDecimal saldoProductos;
+
+        private final BigDecimal efectivoRecompensasDisponible;
+
+        private final BigDecimal productosRecompensasDisponible;
+
+        private final boolean periodoActivo;
+
+        private final String origen;
+
+        public static BilleteraSaldoResponse desdeBilletera(
+                Billetera billetera,
+                BigDecimal efectivoRecompensasDisponible,
+                BigDecimal productosRecompensasDisponible,
+                boolean periodoActivo
+        ) {
+            Persona persona = billetera.getPersona();
+            return new BilleteraSaldoResponse(
+                    persona.getId(),
+                    persona.getNombres(),
+                    persona.getApellidos(),
+                    persona.getDocumento(),
+                    billetera.getId(),
+                    null,
+                    zeroIfNullStatic(billetera.getSaldoDinero()),
+                    zeroIfNullStatic(billetera.getSaldoPv()),
+                    zeroIfNullStatic(billetera.getSaldoQp()),
+                    zeroIfNullStatic(billetera.getSaldoCr()),
+                    zeroIfNullStatic(billetera.getSaldoProductos()),
+                    zeroIfNullStatic(efectivoRecompensasDisponible),
+                    zeroIfNullStatic(productosRecompensasDisponible),
+                    periodoActivo,
+                    "BILLETERA_ACTUAL"
+            );
+        }
+
+        public static BilleteraSaldoResponse desdeCierre(CierreMensualBilletera cierre, boolean periodoActivo) {
+            Persona persona = cierre.getPersona();
+            return new BilleteraSaldoResponse(
+                    persona.getId(),
+                    persona.getNombres(),
+                    persona.getApellidos(),
+                    persona.getDocumento(),
+                    null,
+                    cierre.getId(),
+                    zeroIfNullStatic(cierre.getSaldoDinero()),
+                    zeroIfNullStatic(cierre.getSaldoPv()),
+                    zeroIfNullStatic(cierre.getSaldoQp()),
+                    zeroIfNullStatic(cierre.getSaldoCr()),
+                    zeroIfNullStatic(cierre.getSaldoProductos()),
+                    BigDecimal.ZERO,
+                    zeroIfNullStatic(cierre.getSaldoProductos()),
+                    periodoActivo,
+                    "CIERRE_MENSUAL"
+            );
+        }
+
+        private static BigDecimal zeroIfNullStatic(BigDecimal value) {
+            return value == null ? BigDecimal.ZERO : value;
+        }
+    }
+
+    @Getter
     @Setter
     public static class ActivacionRequest {
 
@@ -145,6 +277,10 @@ public class BilleteraRestController {
     }
 
     private BigDecimal efectivoRecompensasDisponible(Long personaId) {
+        return efectivoDisponible(personaId);
+    }
+
+    private BigDecimal efectivoDisponible(Long personaId) {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))

@@ -81,6 +81,11 @@ public class BilleteraServiceImpl implements BilleteraService {
     }
 
     @Override
+    public List<Billetera> listarBilleterasConSaldos() {
+        return billeteraDao.findAllConSaldos();
+    }
+
+    @Override
     public List<MovimientoBilletera> listarMovimientos(Long personaId) {
         return movimientoBilleteraDao.findByBilleteraPersonaIdOrderByFechaRegistroDesc(personaId);
     }
