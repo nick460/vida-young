@@ -12,6 +12,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -65,4 +67,10 @@ public class RetiroBilletera extends Auditoria {
 
     @Column(length = 240)
     private String observacion;
+
+    @jakarta.persistence.OneToMany(mappedBy = "retiro", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties({"retiro"})
+    @ToString.Exclude
+    @Builder.Default
+    private List<RetiroBilleteraDetalle> detalles = new ArrayList<>();
 }

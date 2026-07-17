@@ -6,10 +6,12 @@ import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanDao;
+import com.vidayoung.platform.Model.Dao.ProductoDao;
 import com.vidayoung.platform.Model.Dao.RangoDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDao;
+import com.vidayoung.platform.Model.Dao.RetiroBilleteraDetalleDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
@@ -18,10 +20,12 @@ import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Plan;
+import com.vidayoung.platform.Model.Entity.Producto;
 import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Recompensa;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
+import com.vidayoung.platform.Model.Entity.RetiroBilleteraDetalle;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
@@ -48,12 +52,14 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final HistorialMembresiaDao historialMembresiaDao;
     private final PersonaDao personaDao;
     private final PlanDao planDao;
+    private final ProductoDao productoDao;
     private final RangoDao rangoDao;
     private final RecompensaDao recompensaDao;
     private final ReferidoDao referidoDao;
     private final CarteraEmpresaService carteraEmpresaService;
     private final GestionPeriodoService gestionPeriodoService;
     private final RetiroBilleteraDao retiroBilleteraDao;
+    private final RetiroBilleteraDetalleDao retiroBilleteraDetalleDao;
 
     @Override
     @Transactional
@@ -244,14 +250,25 @@ public class BilleteraServiceImpl implements BilleteraService {
 
     @Override
     @Transactional
-    public RetiroBilletera registrarRetiro(Long personaId, BigDecimal montoDinero, BigDecimal montoProductos, String observacion) {
+    public RetiroBilletera registrarRetiro(
+            Long personaId,
+            BigDecimal montoDinero,
+            BigDecimal montoProductos,
+            List<ProductoRetiroRequest> productosRetiro,
+            String observacion
+    ) {
         Persona persona = personaDao.findById(personaId)
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
                 .orElseThrow(() -> new IllegalArgumentException("Persona no encontrada."));
         Billetera billetera = asegurarBilletera(persona);
         PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
         BigDecimal dinero = zeroIfNull(montoDinero);
-        BigDecimal productos = zeroIfNull(montoProductos);
+        List<RetiroProductoCalculado> productosCalculados = calcularProductosRetiro(productosRetiro);
+        BigDecimal productos = productosCalculados.isEmpty()
+                ? zeroIfNull(montoProductos)
+                : productosCalculados.stream()
+                        .map(RetiroProductoCalculado::subtotal)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal efectivoRecompensasDisponible = efectivoRecompensasDisponible(personaId);
         BigDecimal productosRecompensasDisponible = zeroIfNull(billetera.getSaldoProductos());
         BigDecimal efectivoTotalDisponible = zeroIfNull(billetera.getSaldoDinero()).add(efectivoRecompensasDisponible);
@@ -278,6 +295,17 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .observacion(normalizarTexto(observacion))
                 .periodo(periodoActivo)
                 .build());
+
+        for (RetiroProductoCalculado item : productosCalculados) {
+            RetiroBilleteraDetalle detalle = retiroBilleteraDetalleDao.save(RetiroBilleteraDetalle.builder()
+                    .retiro(retiro)
+                    .producto(item.producto())
+                    .cantidad(item.cantidad())
+                    .precioProveedor(item.precioProveedor())
+                    .subtotal(item.subtotal())
+                    .build());
+            retiro.getDetalles().add(detalle);
+        }
 
         if (dinero.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal desdeBilletera = dinero.min(zeroIfNull(billetera.getSaldoDinero()));
@@ -310,6 +338,36 @@ public class BilleteraServiceImpl implements BilleteraService {
         }
 
         return retiro;
+    }
+
+    private List<RetiroProductoCalculado> calcularProductosRetiro(List<ProductoRetiroRequest> productosRetiro) {
+        if (productosRetiro == null || productosRetiro.isEmpty()) {
+            return List.of();
+        }
+
+        return productosRetiro.stream()
+                .filter(item -> item != null && item.productoId() != null)
+                .map(item -> {
+                    int cantidad = item.cantidad() == null ? 0 : item.cantidad();
+                    if (cantidad < 1) {
+                        throw new IllegalArgumentException("La cantidad de productos a retirar debe ser mayor a cero.");
+                    }
+                    Producto producto = productoDao.findById(item.productoId())
+                            .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                            .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado para retiro."));
+                    BigDecimal precioProveedor = zeroIfNull(producto.getPrecio());
+                    BigDecimal subtotal = precioProveedor.multiply(BigDecimal.valueOf(cantidad));
+                    return new RetiroProductoCalculado(producto, cantidad, precioProveedor, subtotal);
+                })
+                .toList();
+    }
+
+    private record RetiroProductoCalculado(
+            Producto producto,
+            Integer cantidad,
+            BigDecimal precioProveedor,
+            BigDecimal subtotal
+    ) {
     }
 
     @Override

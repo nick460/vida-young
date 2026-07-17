@@ -78,6 +78,9 @@ public class BilleteraRestController {
                 personaId,
                 request.getMontoDinero(),
                 request.getMontoProductos(),
+                (request.getProductos() == null ? List.<ProductoRetiroRequest>of() : request.getProductos()).stream()
+                        .map(item -> new BilleteraService.ProductoRetiroRequest(item.getProductoId(), item.getCantidad()))
+                        .toList(),
                 request.getObservacion()
         ));
     }
@@ -127,7 +130,18 @@ public class BilleteraRestController {
 
         private BigDecimal montoProductos;
 
+        private List<ProductoRetiroRequest> productos = List.of();
+
         private String observacion;
+    }
+
+    @Getter
+    @Setter
+    public static class ProductoRetiroRequest {
+
+        private Long productoId;
+
+        private Integer cantidad;
     }
 
     private BigDecimal efectivoRecompensasDisponible(Long personaId) {

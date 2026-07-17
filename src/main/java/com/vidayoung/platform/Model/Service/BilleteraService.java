@@ -29,11 +29,14 @@ public interface BilleteraService {
 
     HistorialMembresia registrarActivacion(Long personaId, Long planId);
 
-    RetiroBilletera registrarRetiro(Long personaId, BigDecimal montoDinero, BigDecimal montoProductos, String observacion);
+    RetiroBilletera registrarRetiro(Long personaId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);
 
     void sincronizarSaldoProductosRecompensa(Long recompensaId);
 
     int vencerHistorialMembresiasExpiradas();
 
     int cerrarMesBilleteras();
+
+    record ProductoRetiroRequest(Long productoId, Integer cantidad) {
+    }
 }

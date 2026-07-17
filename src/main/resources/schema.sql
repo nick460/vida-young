@@ -673,6 +673,20 @@ ALTER TABLE movimientos_billetera
 ALTER TABLE retiros_billetera
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
+CREATE TABLE IF NOT EXISTS retiros_billetera_detalles (
+    id BIGSERIAL PRIMARY KEY,
+    retiro_id BIGINT NOT NULL REFERENCES retiros_billetera(id),
+    producto_id BIGINT NOT NULL REFERENCES productos(id),
+    cantidad INTEGER NOT NULL,
+    precio_proveedor NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
 CREATE TABLE IF NOT EXISTS carteras_empresa (
     id BIGSERIAL PRIMARY KEY,
     codigo VARCHAR(40) NOT NULL UNIQUE,
