@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class PreinscripcionReferidoServiceImpl implements PreinscripcionReferidoService {
 
-    private static final String DEFAULT_REFERIDO_ROLE = "EMBAJADOR";
+    private static final String DEFAULT_REFERIDO_ROLE = "DISTRIBUIDOR";
 
     private final PreinscripcionReferidoDao preinscripcionReferidoDao;
     private final PersonaDao personaDao;
@@ -218,10 +218,7 @@ public class PreinscripcionReferidoServiceImpl implements PreinscripcionReferido
 
         HashSet<Rol> roles = new HashSet<>(usuario.getRoles() == null ? List.of() : usuario.getRoles());
         roles.add(rolDao.findByNombre(DEFAULT_REFERIDO_ROLE)
-                .orElseGet(() -> Rol.builder()
-                        .nombre(DEFAULT_REFERIDO_ROLE)
-                        .descripcion("Rol de embajador")
-                        .build()));
+                .orElseThrow(() -> new IllegalArgumentException("El rol DISTRIBUIDOR no existe.")));
         usuario.setRoles(roles);
 
         usuarioDao.save(usuario);
