@@ -65,6 +65,12 @@ public class PreinscripcionReferidoRestController {
         ));
     }
 
+    @GetMapping("/api/public/preinscripciones-referidos/usuarios/{username}/disponible")
+    public ResponseEntity<UsernameDisponibleResponse> usuarioDisponible(@PathVariable String username) {
+        boolean disponible = usuarioDao.findByUsername(username.trim().toLowerCase()).isEmpty();
+        return ResponseEntity.ok(new UsernameDisponibleResponse(disponible));
+    }
+
     @GetMapping("/api/preinscripciones-referidos")
     public ResponseEntity<List<PreinscripcionReferido>> listar(@RequestParam(required = false) String estado) {
         return ResponseEntity.ok(preinscripcionReferidoService.listar(estado));
@@ -121,6 +127,9 @@ public class PreinscripcionReferidoRestController {
     }
 
     public record PatrocinadorResponse(Long id, String nombreCompleto, String documento, String fotoPerfil) {
+    }
+
+    public record UsernameDisponibleResponse(boolean disponible) {
     }
 
     @Getter

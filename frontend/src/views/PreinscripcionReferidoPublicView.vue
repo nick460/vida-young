@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { CheckCircle2, Eye, EyeOff, Mail, Phone, Send, ShieldCheck, UserPlus } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
@@ -14,6 +14,9 @@ const planes = ref([]);
 const selectedPlanId = ref("");
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
+const checkingUsername = ref(false);
+const usernameAvailable = ref(null);
+let usernameCheckTimeout = null;
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const patrocinadorId = computed(() => Number(route.params.patrocinadorId || 0));
@@ -116,6 +119,8 @@ const validationErrors = computed(() => {
     errors.username = "El nombre de usuario es obligatorio.";
   } else if (!/^[a-zA-Z0-9._-]{4,50}$/.test(trimmed.username)) {
     errors.username = "Usa 4 a 50 caracteres: letras, numeros, punto, guion o guion bajo.";
+  } else if (usernameAvailable.value === false) {
+    errors.username = "Este nombre de usuario no esta disponible.";
   }
 
   if (!form.password) {
@@ -162,6 +167,26 @@ function sortedLevels(plan) {
 
 async function loadPlanes() {
   planes.value = await apiRequest("/api/planes/public");
+}
+
+async function checkUsernameAvailability(value) {
+  const normalizedUsername = value.trim().toLowerCase();
+
+  if (!/^[a-zA-Z0-9._-]{4,50}$/.test(normalizedUsername)) {
+    usernameAvailable.value = null;
+    return;
+  }
+
+  checkingUsername.value = true;
+
+  try {
+    const response = await apiRequest(`/api/public/preinscripciones-referidos/usuarios/${encodeURIComponent(normalizedUsername)}/disponible`);
+    usernameAvailable.value = Boolean(response.disponible);
+  } catch {
+    usernameAvailable.value = null;
+  } finally {
+    checkingUsername.value = false;
+  }
 }
 
 async function loadPatrocinador() {
@@ -236,11 +261,20 @@ async function submitForm() {
 }
 
 onMounted(loadInitialData);
+
+watch(
+  () => form.username,
+  (value) => {
+    usernameAvailable.value = null;
+    clearTimeout(usernameCheckTimeout);
+    usernameCheckTimeout = setTimeout(() => checkUsernameAvailability(value), 450);
+  }
+);
 </script>
 
 <template>
   <main class="public-referral-page">
-    <section class="referral-shell" :class="{ 'plans-step': !saved && !selectedPlan }">
+    <section class="referral-shell" :class="{ 'single-step': saved || (!selectedPlan && !saved) }">
       <article v-if="selectedPlan && !saved" class="intro-panel">
         <span class="eyebrow"><UserPlus :size="16" /> Preinscripcion Vidayoung</span>
         <div class="sponsor-hero">
@@ -401,6 +435,8 @@ onMounted(loadInitialData);
             @input="markTouched('username')"
           />
           <small v-if="fieldError('username')" class="field-error">{{ fieldError("username") }}</small>
+          <small v-else-if="checkingUsername" class="field-hint">Verificando disponibilidad...</small>
+          <small v-else-if="usernameAvailable === true" class="field-success">Nombre de usuario disponible.</small>
         </label>
         <label>
           Contrasena
@@ -491,7 +527,7 @@ onMounted(loadInitialData);
   align-items: stretch;
 }
 
-.referral-shell.plans-step {
+.referral-shell.single-step {
   width: min(1180px, 100%);
   grid-template-columns: 1fr;
 }
@@ -891,6 +927,21 @@ onMounted(loadInitialData);
   font-weight: 800;
 }
 
+.field-hint,
+.field-success {
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.field-hint {
+  color: var(--vy-ink-3);
+}
+
+.field-success {
+  color: #2f7d32;
+}
+
 .submit-button {
   width: 100%;
   min-height: 48px;
@@ -938,6 +989,9 @@ onMounted(loadInitialData);
 }
 
 .success-panel {
+  width: min(760px, 100%);
+  min-height: 250px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
