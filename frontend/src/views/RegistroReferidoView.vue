@@ -1,9 +1,14 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import $ from "jquery";
+import select2 from "select2";
+import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { CheckCircle2, RefreshCw, UserCheck, XCircle } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
+
+select2($);
 
 const loading = ref(false);
 const saving = ref(false);
@@ -13,6 +18,8 @@ const personas = ref([]);
 const planes = ref([]);
 const referidos = ref([]);
 const selectedId = ref("");
+const patrocinadorSelect = ref(null);
+const planSelect = ref(null);
 
 const selected = computed(() => preinscripciones.value.find((item) => item.id === Number(selectedId.value)) || null);
 const pendingCount = computed(() => preinscripciones.value.filter((item) => item.estadoPreinscripcion === "PENDIENTE").length);
@@ -68,6 +75,9 @@ async function loadAll() {
       selectPreinscripcion(preinscripciones.value[0]);
     } else if (selected.value) {
       selectPreinscripcion(selected.value);
+    } else {
+      destroySelect2(patrocinadorSelect);
+      destroySelect2(planSelect);
     }
   } catch (exception) {
     error.value = exception.message || "No se pudieron cargar las preinscripciones.";
@@ -88,6 +98,60 @@ function selectPreinscripcion(item) {
     email: item.email || "",
     usernameSolicitado: item.usernameSolicitado || ""
   });
+  initializeSelect2Controls();
+}
+
+function destroySelect2(selectRef) {
+  if (!selectRef.value) return;
+
+  const element = $(selectRef.value);
+  element.off("change.registro-referido");
+
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.select2("destroy");
+  }
+}
+
+function syncSelect2Value(selectRef, value) {
+  if (!selectRef.value) return;
+
+  const element = $(selectRef.value);
+
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.val(value ? String(value) : "").trigger("change.select2");
+  }
+}
+
+async function initializeSelect2Controls() {
+  await nextTick();
+
+  if (!selected.value) return;
+
+  destroySelect2(patrocinadorSelect);
+  destroySelect2(planSelect);
+
+  $(patrocinadorSelect.value)
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona patrocinador",
+      dropdownParent: $(".registro-referido-page")
+    })
+    .on("change.registro-referido", (event) => {
+      form.patrocinadorId = event.target.value || "";
+    });
+
+  $(planSelect.value)
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona plan",
+      dropdownParent: $(".registro-referido-page")
+    })
+    .on("change.registro-referido", (event) => {
+      form.planId = event.target.value || "";
+    });
+
+  syncSelect2Value(patrocinadorSelect, form.patrocinadorId);
+  syncSelect2Value(planSelect, form.planId);
 }
 
 function planById(planId) {
@@ -285,6 +349,11 @@ async function rejectSelected() {
 }
 
 onMounted(loadAll);
+
+onBeforeUnmount(() => {
+  destroySelect2(patrocinadorSelect);
+  destroySelect2(planSelect);
+});
 </script>
 
 <template>
@@ -363,7 +432,7 @@ onMounted(loadAll);
           </label>
           <label class="full-field">
             Persona que refiere
-            <select v-model="form.patrocinadorId" required>
+            <select ref="patrocinadorSelect" v-model="form.patrocinadorId" required>
               <option value="">Selecciona patrocinador</option>
               <option v-for="persona in personas" :key="persona.id" :value="persona.id">
                 {{ fullName(persona) }} - {{ persona.documento }}
@@ -372,7 +441,7 @@ onMounted(loadAll);
           </label>
           <label class="full-field">
             Plan de ingreso
-            <select v-model="form.planId" required>
+            <select ref="planSelect" v-model="form.planId" required>
               <option value="">Selecciona plan</option>
               <option v-for="plan in planes" :key="plan.id" :value="plan.id">
                 {{ plan.nombre }} - QP {{ Number(plan.qp || 0).toFixed(2) }}
@@ -546,6 +615,68 @@ onMounted(loadAll);
   background: #fff;
   color: var(--vy-ink);
   font: inherit;
+}
+
+:deep(.select2-container--default .select2-selection--single) {
+  min-height: 44px;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.select2-container--default .select2-selection--single .select2-selection__rendered) {
+  padding-left: 12px;
+  padding-right: 36px;
+  color: var(--vy-ink);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 44px;
+}
+
+:deep(.select2-container--default .select2-selection--single .select2-selection__placeholder) {
+  color: var(--vy-ink-3);
+}
+
+:deep(.select2-container--default .select2-selection--single .select2-selection__arrow) {
+  height: 44px;
+  right: 8px;
+}
+
+:deep(.select2-container--default.select2-container--open .select2-selection--single) {
+  border-color: var(--vy-orange);
+  box-shadow: 0 0 0 3px rgba(242, 135, 5, 0.12);
+}
+
+:deep(.select2-dropdown) {
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  overflow: hidden;
+  color: var(--vy-ink);
+}
+
+:deep(.select2-search--dropdown) {
+  padding: 8px;
+}
+
+:deep(.select2-container--default .select2-search--dropdown .select2-search__field) {
+  min-height: 36px;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  outline: 0;
+  padding: 0 10px;
+}
+
+:deep(.select2-results__option) {
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+:deep(.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable) {
+  background: var(--vy-orange);
+  color: #fff;
 }
 
 .validation-form footer {
