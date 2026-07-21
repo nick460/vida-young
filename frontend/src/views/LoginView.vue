@@ -113,7 +113,6 @@ onBeforeUnmount(() => {
           <img :src="logoMark" alt="Vidayoung" class="hero-logo-mark" />
           <span class="hero-brand-name">Vidayoung</span>
         </div>
-        <span class="hero-badge">Novedades</span>
       </div>
 
       <div class="hero-content">
@@ -354,7 +353,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   min-height: 0;
   padding: clamp(28px, 4.8vh, 56px);
   color: #fff;
@@ -427,19 +426,10 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-.hero-badge {
-  background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(10px);
-  padding: 6px 14px;
-  border-radius: 99px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .hero-content {
+  margin-top: auto;
   max-width: 560px;
+  padding-bottom: 24px;
 }
 
 .hero-content h2 {
@@ -460,6 +450,7 @@ onBeforeUnmount(() => {
 .hero-progress {
   display: flex;
   gap: 8px;
+  margin-top: 18px;
 }
 
 .hero-progress button {
@@ -522,11 +513,6 @@ onBeforeUnmount(() => {
 
   .hero-brand-name {
     font-size: 18px;
-  }
-
-  .hero-badge {
-    padding: 5px 10px;
-    font-size: 11px;
   }
 
   .hero-content h2 {
