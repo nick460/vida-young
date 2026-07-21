@@ -518,6 +518,10 @@ onBeforeUnmount(() => {
     font-size: 18px;
   }
 
+  .login-hero .hero-brand {
+    display: none;
+  }
+
   .hero-content h2 {
     font-size: 28px;
     line-height: 1.08;
