@@ -154,8 +154,8 @@ onMounted(loadInitialData);
 
 <template>
   <main class="public-referral-page">
-    <section class="referral-shell">
-      <article class="intro-panel">
+    <section class="referral-shell" :class="{ 'plans-step': !saved && !selectedPlan }">
+      <article v-if="selectedPlan && !saved" class="intro-panel">
         <span class="eyebrow"><UserPlus :size="16" /> Preinscripcion Vidayoung</span>
         <div class="sponsor-hero">
           <div class="sponsor-photo-wrap">
@@ -186,7 +186,7 @@ onMounted(loadInitialData);
       <section v-if="!saved && !selectedPlan" class="plans-panel">
         <header>
           <h2>Elige tu plan</h2>
-          <p>Selecciona el plan con el que quieres ingresar a la red.</p>
+          <p>Selecciona el plan con el que quieres ingresar a la red. Despues completaras tus datos de registro.</p>
         </header>
 
         <p v-if="error" class="error-box">{{ error }}</p>
@@ -231,7 +231,7 @@ onMounted(loadInitialData);
         <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
       </section>
 
-      <form v-else-if="!saved" class="referral-form" @submit.prevent="submitForm">
+      <form v-else-if="!saved && selectedPlan" class="referral-form" @submit.prevent="submitForm">
         <button type="button" class="change-plan-button" @click="selectedPlanId = ''">
           Cambiar plan
         </button>
@@ -310,6 +310,11 @@ onMounted(loadInitialData);
   grid-template-columns: minmax(0, 1.12fr) minmax(320px, 430px);
   gap: 22px;
   align-items: stretch;
+}
+
+.referral-shell.plans-step {
+  width: min(1180px, 100%);
+  grid-template-columns: 1fr;
 }
 
 .intro-panel,
@@ -505,7 +510,9 @@ onMounted(loadInitialData);
 
 .plans-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
+  align-items: stretch;
 }
 
 .plan-card {
@@ -514,6 +521,7 @@ onMounted(loadInitialData);
   padding: 14px;
   background: #fff;
   display: grid;
+  grid-template-rows: auto auto auto auto 1fr auto;
   gap: 12px;
   box-shadow: 0 12px 24px rgba(31, 26, 20, 0.07);
 }
