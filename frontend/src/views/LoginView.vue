@@ -95,6 +95,13 @@ onBeforeUnmount(() => {
     <aside class="login-hero">
       <img
         v-if="activeDesktopImage || activeMobileImage"
+        class="hero-photo-bg"
+        :src="mediaUrl(activeDesktopImage || activeMobileImage)"
+        :alt="activeSlide.titulo"
+        aria-hidden="true"
+      />
+      <img
+        v-if="activeDesktopImage || activeMobileImage"
         class="hero-photo"
         :src="mediaUrl(activeDesktopImage || activeMobileImage)"
         :alt="activeSlide.titulo"
@@ -359,13 +366,23 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
+.hero-photo-bg,
 .hero-photo {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.hero-photo-bg {
+  object-fit: cover;
+  filter: blur(18px) brightness(0.58) saturate(1.08);
+  transform: scale(1.08);
+}
+
+.hero-photo {
   object-fit: contain;
-  background: #120d08;
+  padding: clamp(18px, 3.4vw, 46px);
 }
 
 .hero-photo-mobile {
@@ -380,11 +397,12 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 20% 80%, rgba(31, 26, 20, 0.2), transparent 50%);
 }
 
+.hero-photo-bg + .hero-photo + .hero-background,
 .hero-photo + .hero-background,
 .hero-photo ~ .hero-background {
   background:
-    linear-gradient(180deg, rgba(31, 26, 20, 0.32) 0%, rgba(31, 26, 20, 0.1) 38%, rgba(31, 26, 20, 0.7) 100%),
-    linear-gradient(90deg, rgba(31, 26, 20, 0.58) 0%, rgba(31, 26, 20, 0.12) 100%);
+    linear-gradient(180deg, rgba(31, 26, 20, 0.2) 0%, rgba(31, 26, 20, 0.08) 42%, rgba(31, 26, 20, 0.74) 100%),
+    linear-gradient(90deg, rgba(31, 26, 20, 0.52) 0%, rgba(31, 26, 20, 0.08) 46%, rgba(31, 26, 20, 0.46) 100%);
 }
 
 .hero-dots {
@@ -493,6 +511,10 @@ onBeforeUnmount(() => {
   }
 
   .hero-photo {
+    display: none;
+  }
+
+  .hero-photo-bg {
     display: none;
   }
 
