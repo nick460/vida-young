@@ -66,6 +66,85 @@ const form = reactive({
   confirmPassword: ""
 });
 
+const touched = reactive({
+  nombres: false,
+  apellidos: false,
+  documento: false,
+  telefono: false,
+  email: false,
+  username: false,
+  password: false,
+  confirmPassword: false
+});
+
+const validationErrors = computed(() => {
+  const errors = {};
+  const trimmed = {
+    nombres: form.nombres.trim(),
+    apellidos: form.apellidos.trim(),
+    documento: form.documento.trim(),
+    telefono: form.telefono.trim(),
+    email: form.email.trim(),
+    username: form.username.trim()
+  };
+
+  if (!trimmed.documento) {
+    errors.documento = "El CI es obligatorio.";
+  }
+
+  if (!trimmed.nombres) {
+    errors.nombres = "Los nombres son obligatorios.";
+  }
+
+  if (!trimmed.apellidos) {
+    errors.apellidos = "Los apellidos son obligatorios.";
+  }
+
+  if (!trimmed.telefono) {
+    errors.telefono = "El numero de celular es obligatorio.";
+  } else if (trimmed.telefono.length < 6) {
+    errors.telefono = "Ingresa un numero de celular valido.";
+  }
+
+  if (trimmed.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed.email)) {
+    errors.email = "Ingresa un email valido.";
+  }
+
+  if (!trimmed.username) {
+    errors.username = "El nombre de usuario es obligatorio.";
+  } else if (!/^[a-zA-Z0-9._-]{4,50}$/.test(trimmed.username)) {
+    errors.username = "Usa 4 a 50 caracteres: letras, numeros, punto, guion o guion bajo.";
+  }
+
+  if (!form.password) {
+    errors.password = "La contrasena es obligatoria.";
+  } else if (form.password.length < 6) {
+    errors.password = "La contrasena debe tener al menos 6 caracteres.";
+  }
+
+  if (!form.confirmPassword) {
+    errors.confirmPassword = "Confirma tu contrasena.";
+  } else if (form.confirmPassword !== form.password) {
+    errors.confirmPassword = "La confirmacion de contrasena no coincide.";
+  }
+
+  return errors;
+});
+
+const isFormValid = computed(() => Object.keys(validationErrors.value).length === 0);
+
+function markTouched(field) {
+  touched[field] = true;
+}
+
+function markAllTouched() {
+  Object.keys(touched).forEach(markTouched);
+}
+
+function fieldError(field) {
+  return touched[field] ? validationErrors.value[field] : "";
+}
+
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", {
     minimumFractionDigits: 2,
@@ -125,10 +204,15 @@ function assetUrl(path) {
 }
 
 async function submitForm() {
+  markAllTouched();
   saving.value = true;
   error.value = "";
 
   try {
+    if (!isFormValid.value) {
+      throw new Error("Revisa los campos marcados antes de enviar.");
+    }
+
     if (form.password !== form.confirmPassword) {
       throw new Error("La confirmacion de contrasena no coincide.");
     }
@@ -220,7 +304,7 @@ onMounted(loadInitialData);
         <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
       </section>
 
-      <form v-else-if="!saved && selectedPlan" class="referral-form" @submit.prevent="submitForm">
+      <form v-else-if="!saved && selectedPlan" class="referral-form" novalidate @submit.prevent="submitForm">
         <button type="button" class="change-plan-button" @click="selectedPlanId = ''">
           Cambiar plan
         </button>
@@ -234,38 +318,120 @@ onMounted(loadInitialData);
 
         <label>
           CI
-          <input v-model.trim="form.documento" type="text" required maxlength="30" autocomplete="off" />
+          <input
+            v-model.trim="form.documento"
+            type="text"
+            required
+            maxlength="30"
+            autocomplete="off"
+            :class="{ invalid: fieldError('documento') }"
+            @blur="markTouched('documento')"
+            @input="markTouched('documento')"
+          />
+          <small v-if="fieldError('documento')" class="field-error">{{ fieldError("documento") }}</small>
         </label>
         <label>
           Nombres
-          <input v-model.trim="form.nombres" type="text" required maxlength="100" autocomplete="given-name" />
+          <input
+            v-model.trim="form.nombres"
+            type="text"
+            required
+            maxlength="100"
+            autocomplete="given-name"
+            :class="{ invalid: fieldError('nombres') }"
+            @blur="markTouched('nombres')"
+            @input="markTouched('nombres')"
+          />
+          <small v-if="fieldError('nombres')" class="field-error">{{ fieldError("nombres") }}</small>
         </label>
         <label>
           Apellidos
-          <input v-model.trim="form.apellidos" type="text" required maxlength="100" autocomplete="family-name" />
+          <input
+            v-model.trim="form.apellidos"
+            type="text"
+            required
+            maxlength="100"
+            autocomplete="family-name"
+            :class="{ invalid: fieldError('apellidos') }"
+            @blur="markTouched('apellidos')"
+            @input="markTouched('apellidos')"
+          />
+          <small v-if="fieldError('apellidos')" class="field-error">{{ fieldError("apellidos") }}</small>
         </label>
         <label>
           Numero de celular
-          <input v-model.trim="form.telefono" type="tel" required maxlength="30" autocomplete="tel" />
+          <input
+            v-model.trim="form.telefono"
+            type="tel"
+            required
+            maxlength="30"
+            autocomplete="tel"
+            :class="{ invalid: fieldError('telefono') }"
+            @blur="markTouched('telefono')"
+            @input="markTouched('telefono')"
+          />
+          <small v-if="fieldError('telefono')" class="field-error">{{ fieldError("telefono") }}</small>
         </label>
         <label>
           Email opcional
-          <input v-model.trim="form.email" type="email" maxlength="120" autocomplete="email" />
+          <input
+            v-model.trim="form.email"
+            type="email"
+            maxlength="120"
+            autocomplete="email"
+            :class="{ invalid: fieldError('email') }"
+            @blur="markTouched('email')"
+            @input="markTouched('email')"
+          />
+          <small v-if="fieldError('email')" class="field-error">{{ fieldError("email") }}</small>
         </label>
         <label>
           Nombre de usuario
-          <input v-model.trim="form.username" type="text" required minlength="4" maxlength="50" autocomplete="username" />
+          <input
+            v-model.trim="form.username"
+            type="text"
+            required
+            minlength="4"
+            maxlength="50"
+            autocomplete="username"
+            :class="{ invalid: fieldError('username') }"
+            @blur="markTouched('username')"
+            @input="markTouched('username')"
+          />
+          <small v-if="fieldError('username')" class="field-error">{{ fieldError("username") }}</small>
         </label>
         <label>
           Contrasena
-          <input v-model="form.password" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
+          <input
+            v-model="form.password"
+            type="password"
+            required
+            minlength="6"
+            maxlength="80"
+            autocomplete="new-password"
+            :class="{ invalid: fieldError('password') }"
+            @blur="markTouched('password')"
+            @input="markTouched('password')"
+          />
+          <small v-if="fieldError('password')" class="field-error">{{ fieldError("password") }}</small>
         </label>
         <label>
           Confirmar contrasena
-          <input v-model="form.confirmPassword" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
+          <input
+            v-model="form.confirmPassword"
+            type="password"
+            required
+            minlength="6"
+            maxlength="80"
+            autocomplete="new-password"
+            :class="{ invalid: fieldError('confirmPassword') }"
+            @blur="markTouched('confirmPassword')"
+            @input="markTouched('confirmPassword')"
+          />
+          <small v-if="fieldError('confirmPassword')" class="field-error">{{ fieldError("confirmPassword") }}</small>
         </label>
 
-        <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador">
+        <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador || !isFormValid">
           <Send :size="17" />
           {{ saving ? "Enviando..." : "Enviar preinscripcion" }}
         </button>
@@ -558,7 +724,11 @@ onMounted(loadInitialData);
 .level-list {
   display: grid;
   gap: 6px;
+  width: 100%;
   max-height: 150px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
   overflow: auto;
 }
 
@@ -653,6 +823,19 @@ onMounted(loadInitialData);
   background: #fff;
   color: var(--vy-ink);
   font: inherit;
+}
+
+.referral-form input.invalid {
+  border-color: rgba(196, 69, 42, 0.74);
+  background: rgba(196, 69, 42, 0.04);
+  box-shadow: 0 0 0 3px rgba(196, 69, 42, 0.08);
+}
+
+.field-error {
+  color: var(--vy-danger);
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 800;
 }
 
 .submit-button {
