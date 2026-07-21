@@ -8,7 +8,6 @@ import { apiRequest } from "../services/api.js";
 const loading = ref(false);
 const saving = ref(false);
 const uploading = ref(false);
-const error = ref("");
 const items = ref([]);
 const selectedId = ref("");
 const imageFile = ref(null);
@@ -51,7 +50,6 @@ function resetForm(item = null) {
 
 async function loadItems() {
   loading.value = true;
-  error.value = "";
 
   try {
     items.value = await apiRequest("/api/login-carousel");
@@ -66,7 +64,13 @@ async function loadItems() {
       resetForm();
     }
   } catch (exception) {
-    error.value = exception.message || "No se pudieron cargar las novedades.";
+    await Swal.fire({
+      title: "No se pudieron cargar las novedades",
+      text: exception.message || "Intenta actualizar nuevamente.",
+      icon: "error",
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#F28705"
+    });
   } finally {
     loading.value = false;
   }
@@ -113,7 +117,6 @@ async function uploadImageIfNeeded(fileRef, currentUrl) {
 
 async function saveItem() {
   saving.value = true;
-  error.value = "";
 
   try {
     const imageUrl = await uploadImageIfNeeded(imageFile, form.imagenUrl);
@@ -140,7 +143,13 @@ async function saveItem() {
       confirmButtonColor: "#F28705"
     });
   } catch (exception) {
-    error.value = exception.message || "No se pudo guardar la novedad.";
+    await Swal.fire({
+      title: "No se pudo guardar",
+      text: exception.message || "Revisa los datos de la novedad.",
+      icon: "error",
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#F28705"
+    });
   } finally {
     saving.value = false;
   }
@@ -187,8 +196,6 @@ onMounted(loadItems);
         </button>
       </div>
     </section>
-
-    <p v-if="error" class="error-box">{{ error }}</p>
 
     <section class="layout-grid">
       <aside class="panel item-list">
@@ -269,7 +276,7 @@ onMounted(loadItems);
           <button v-if="form.id" type="button" class="danger-button" @click="deleteItem">
             <Trash2 :size="15" /> Eliminar
           </button>
-          <button type="submit" class="vy-btn vy-btn-primary" :disabled="saving || uploading">
+          <button type="submit" class="save-button" :disabled="saving || uploading">
             <Save :size="15" /> {{ saving || uploading ? "Guardando..." : "Guardar" }}
           </button>
         </footer>
@@ -481,7 +488,6 @@ onMounted(loadItems);
   font-weight: 900;
 }
 
-.error-box,
 .empty-state {
   padding: 12px 14px;
   border-radius: 8px;
@@ -489,14 +495,30 @@ onMounted(loadItems);
   font-weight: 800;
 }
 
-.error-box {
-  color: var(--vy-danger);
-  background: rgba(196, 69, 42, 0.1);
-}
-
 .empty-state {
   color: var(--vy-ink-3);
   background: var(--vy-surface-2);
+}
+
+.save-button {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--vy-orange), var(--vy-orange-deep));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(242, 135, 5, 0.22);
+}
+
+.save-button:disabled {
+  opacity: 0.68;
+  cursor: wait;
+  box-shadow: none;
 }
 
 @media (max-width: 900px) {
