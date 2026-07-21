@@ -1,6 +1,7 @@
 package com.vidayoung.platform.Model.Entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -59,6 +60,13 @@ public class PreinscripcionReferido extends Auditoria {
 
     @Column(length = 120)
     private String email;
+
+    @Column(name = "username_solicitado", nullable = false, length = 50)
+    private String usernameSolicitado;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Column(name = "password_solicitado", nullable = false, length = 255)
+    private String passwordSolicitado;
 
     @Column(name = "estado_preinscripcion", nullable = false, length = 30)
     @Builder.Default

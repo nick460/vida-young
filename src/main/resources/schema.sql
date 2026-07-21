@@ -601,6 +601,8 @@ CREATE TABLE IF NOT EXISTS preinscripciones_referidos (
     documento VARCHAR(30) NOT NULL,
     telefono VARCHAR(30) NOT NULL,
     email VARCHAR(120),
+    username_solicitado VARCHAR(50) NOT NULL DEFAULT '',
+    password_solicitado VARCHAR(255) NOT NULL DEFAULT '',
     estado_preinscripcion VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
     plan_id BIGINT REFERENCES planes(id),
     persona_id BIGINT REFERENCES personas(id),
@@ -615,11 +617,18 @@ CREATE TABLE IF NOT EXISTS preinscripciones_referidos (
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
 
+ALTER TABLE preinscripciones_referidos
+    ADD COLUMN IF NOT EXISTS username_solicitado VARCHAR(50) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS password_solicitado VARCHAR(255) NOT NULL DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS idx_preinscripciones_referidos_estado
     ON preinscripciones_referidos (estado_preinscripcion);
 
 CREATE INDEX IF NOT EXISTS idx_preinscripciones_referidos_documento
     ON preinscripciones_referidos (documento);
+
+CREATE INDEX IF NOT EXISTS idx_preinscripciones_referidos_username
+    ON preinscripciones_referidos (username_solicitado);
 
 CREATE TABLE IF NOT EXISTS billeteras (
     id BIGSERIAL PRIMARY KEY,

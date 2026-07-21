@@ -53,11 +53,15 @@ public class PreinscripcionReferidoRestController {
     public ResponseEntity<PreinscripcionReferido> crearPublica(@RequestBody PreinscripcionPublicaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(preinscripcionReferidoService.crear(
                 request.getPatrocinadorId(),
+                request.getPlanId(),
                 request.getNombres(),
                 request.getApellidos(),
                 request.getDocumento(),
                 request.getTelefono(),
-                request.getEmail()
+                request.getEmail(),
+                request.getUsername(),
+                request.getPassword(),
+                request.getConfirmPassword()
         ));
     }
 
@@ -123,11 +127,15 @@ public class PreinscripcionReferidoRestController {
     @Setter
     public static class PreinscripcionPublicaRequest {
         private Long patrocinadorId;
+        private Long planId;
         private String nombres;
         private String apellidos;
         private String documento;
         private String telefono;
         private String email;
+        private String username;
+        private String password;
+        private String confirmPassword;
     }
 
     @Getter

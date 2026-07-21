@@ -24,7 +24,8 @@ const form = reactive({
   apellidos: "",
   documento: "",
   telefono: "",
-  email: ""
+  email: "",
+  usernameSolicitado: ""
 });
 
 function fullName(persona) {
@@ -84,7 +85,8 @@ function selectPreinscripcion(item) {
     apellidos: item.apellidos || "",
     documento: item.documento || "",
     telefono: item.telefono || "",
-    email: item.email || ""
+    email: item.email || "",
+    usernameSolicitado: item.usernameSolicitado || ""
   });
 }
 
@@ -187,6 +189,7 @@ function confirmationHtml() {
       <div style="padding:12px;border-radius:8px;background:#fff7e7;border:1px solid #f3d6a4;margin-bottom:10px">
         <b>Ingreso a registrar</b>
         <div style="margin-top:6px;color:#4d4337">${escapeHtml(form.nombres)} ${escapeHtml(form.apellidos)} entrara con el plan <b>${escapeHtml(plan?.nombre || "Plan")}</b>.</div>
+        <div style="margin-top:6px;color:#4d4337">Usuario solicitado: <b>${escapeHtml(form.usernameSolicitado)}</b>.</div>
         <div style="margin-top:6px;color:#4d4337">Caja empresa recibira <b>Bs. ${money(precioPlan)}</b> por el costo del plan.</div>
       </div>
       <div style="padding:12px;border-radius:8px;background:#f7f3ea;border:1px solid #eadfcd;margin-bottom:10px">
@@ -353,6 +356,10 @@ onMounted(loadAll);
           <label class="full-field">
             Email
             <input v-model.trim="form.email" type="email" maxlength="120" />
+          </label>
+          <label class="full-field">
+            Usuario solicitado
+            <input v-model.trim="form.usernameSolicitado" disabled />
           </label>
           <label class="full-field">
             Persona que refiere

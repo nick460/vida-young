@@ -10,6 +10,8 @@ const saving = ref(false);
 const error = ref("");
 const saved = ref(false);
 const patrocinador = ref(null);
+const planes = ref([]);
+const selectedPlanId = ref("");
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const patrocinadorId = computed(() => Number(route.params.patrocinadorId || 0));
@@ -49,18 +51,39 @@ const sponsorPhoto = computed(() => {
   return `${API_URL}${normalizedPhoto}`;
 });
 
+const selectedPlan = computed(() => planes.value.find((plan) => plan.id === Number(selectedPlanId.value)) || null);
+
+const sortedPlanes = computed(() => [...planes.value].sort((left, right) => Number(left.precio || 0) - Number(right.precio || 0)));
+
 const form = reactive({
   nombres: "",
   apellidos: "",
   documento: "",
   telefono: "",
-  email: ""
+  email: "",
+  username: "",
+  password: "",
+  confirmPassword: ""
 });
 
-async function loadPatrocinador() {
-  loading.value = true;
-  error.value = "";
+function money(value) {
+  return Number(value || 0).toLocaleString("es-BO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
 
+function sortedLevels(plan) {
+  return [...(plan?.niveles || [])]
+    .filter((nivel) => nivel.estado !== "ELIMINADO")
+    .sort((left, right) => Number(left.numeroNivel || 0) - Number(right.numeroNivel || 0));
+}
+
+async function loadPlanes() {
+  planes.value = await apiRequest("/api/planes/public");
+}
+
+async function loadPatrocinador() {
   try {
     const endpoint = username.value
       ? `/api/public/preinscripciones-referidos/patrocinadores/usuario/${encodeURIComponent(username.value)}`
@@ -68,9 +91,37 @@ async function loadPatrocinador() {
     patrocinador.value = await apiRequest(endpoint);
   } catch (exception) {
     error.value = "El enlace de referido no es valido o la persona que refiere no existe.";
+  }
+}
+
+async function loadInitialData() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    await Promise.all([loadPatrocinador(), loadPlanes()]);
+  } catch (exception) {
+    error.value = exception.message || "No se pudo cargar la informacion del enlace.";
   } finally {
     loading.value = false;
   }
+}
+
+function selectPlan(plan) {
+  selectedPlanId.value = String(plan.id);
+}
+
+function assetUrl(path) {
+  if (!path) {
+    return "";
+  }
+
+  if (path.startsWith("http") || path.startsWith("blob:")) {
+    return path;
+  }
+
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_URL}${normalizedPath}`;
 }
 
 async function submitForm() {
@@ -78,10 +129,15 @@ async function submitForm() {
   error.value = "";
 
   try {
+    if (form.password !== form.confirmPassword) {
+      throw new Error("La confirmacion de contrasena no coincide.");
+    }
+
     await apiRequest("/api/public/preinscripciones-referidos", {
       method: "POST",
       body: JSON.stringify({
         patrocinadorId: patrocinador.value?.id || patrocinadorId.value,
+        planId: selectedPlan.value?.id,
         ...form
       })
     });
@@ -93,7 +149,7 @@ async function submitForm() {
   }
 }
 
-onMounted(loadPatrocinador);
+onMounted(loadInitialData);
 </script>
 
 <template>
@@ -127,7 +183,62 @@ onMounted(loadPatrocinador);
         </div>
       </article>
 
-      <form v-if="!saved" class="referral-form" @submit.prevent="submitForm">
+      <section v-if="!saved && !selectedPlan" class="plans-panel">
+        <header>
+          <h2>Elige tu plan</h2>
+          <p>Selecciona el plan con el que quieres ingresar a la red.</p>
+        </header>
+
+        <p v-if="error" class="error-box">{{ error }}</p>
+        <p v-if="loading" class="loading-box">Cargando planes...</p>
+
+        <div class="plans-grid">
+          <article v-for="plan in sortedPlanes" :key="plan.id" class="plan-card">
+            <img v-if="plan.imagenUrl" class="plan-image" :src="assetUrl(plan.imagenUrl)" :alt="plan.nombre" />
+            <div>
+              <span class="plan-chip">{{ plan.nivelesAlcance }} niveles</span>
+              <h3>{{ plan.nombre }}</h3>
+              <p>{{ plan.descripcion || "Plan de ingreso Vidayoung" }}</p>
+            </div>
+
+            <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
+
+            <dl class="plan-metrics">
+              <div>
+                <dt>QP</dt>
+                <dd>{{ money(plan.qp) }}</dd>
+              </div>
+              <div>
+                <dt>Bono directo</dt>
+                <dd>Bs. {{ money(plan.bonificacionDirecta) }}</dd>
+              </div>
+            </dl>
+
+            <ul class="level-list">
+              <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
+                <span>Nivel {{ nivel.numeroNivel }}</span>
+                <strong>Bs. {{ money(nivel.porcentajeComision) }}</strong>
+              </li>
+            </ul>
+
+            <button type="button" class="select-plan-button" :disabled="loading || !patrocinador" @click="selectPlan(plan)">
+              <CheckCircle2 :size="16" />
+              Seleccionar
+            </button>
+          </article>
+        </div>
+
+        <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
+      </section>
+
+      <form v-else-if="!saved" class="referral-form" @submit.prevent="submitForm">
+        <button type="button" class="change-plan-button" @click="selectedPlanId = ''">
+          Cambiar plan
+        </button>
+        <div class="selected-plan-box">
+          <span>Plan seleccionado</span>
+          <strong>{{ selectedPlan.nombre }} - Bs. {{ money(selectedPlan.precio) }}</strong>
+        </div>
         <h2>Datos personales</h2>
         <p v-if="error" class="error-box">{{ error }}</p>
         <p v-if="loading" class="loading-box">Validando enlace...</p>
@@ -151,6 +262,18 @@ onMounted(loadPatrocinador);
         <label>
           Email opcional
           <input v-model.trim="form.email" type="email" maxlength="120" autocomplete="email" />
+        </label>
+        <label>
+          Nombre de usuario
+          <input v-model.trim="form.username" type="text" required minlength="4" maxlength="50" autocomplete="username" />
+        </label>
+        <label>
+          Contrasena
+          <input v-model="form.password" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
+        </label>
+        <label>
+          Confirmar contrasena
+          <input v-model="form.confirmPassword" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
         </label>
 
         <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador">
@@ -191,6 +314,7 @@ onMounted(loadPatrocinador);
 
 .intro-panel,
 .referral-form,
+.plans-panel,
 .success-panel {
   border: 1px solid var(--vy-line);
   border-radius: 8px;
@@ -358,15 +482,185 @@ onMounted(loadPatrocinador);
 }
 
 .referral-form,
+.plans-panel,
 .success-panel {
   padding: 24px;
 }
 
 .referral-form h2,
+.plans-panel h2,
 .success-panel h2 {
   font-size: 22px;
   font-weight: 900;
   margin-bottom: 16px;
+}
+
+.plans-panel header p {
+  margin-top: -8px;
+  margin-bottom: 16px;
+  color: var(--vy-ink-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.plans-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-card {
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 12px 24px rgba(31, 26, 20, 0.07);
+}
+
+.plan-image {
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--vy-surface-2);
+}
+
+.plan-chip {
+  width: fit-content;
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(242, 135, 5, 0.12);
+  color: var(--vy-orange-deep);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.plan-card h3 {
+  margin-top: 8px;
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.plan-card p {
+  margin-top: 6px;
+  color: var(--vy-ink-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.plan-price {
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--vy-ink);
+}
+
+.plan-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.plan-metrics div {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--vy-surface-2);
+}
+
+.plan-metrics dt {
+  color: var(--vy-ink-3);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.plan-metrics dd {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.level-list {
+  display: grid;
+  gap: 6px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.level-list li {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid rgba(242, 135, 5, 0.18);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--vy-ink-2);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.level-list strong {
+  color: var(--vy-orange-deep);
+  white-space: nowrap;
+}
+
+.select-plan-button,
+.change-plan-button {
+  min-height: 44px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.select-plan-button {
+  width: 100%;
+  background: var(--vy-ink);
+  color: #fff;
+}
+
+.change-plan-button {
+  width: fit-content;
+  margin-bottom: 12px;
+  padding: 0 13px;
+  border: 1px solid rgba(242, 135, 5, 0.32);
+  background: #fff;
+  color: var(--vy-orange-deep);
+}
+
+.selected-plan-box {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid rgba(242, 135, 5, 0.28);
+  border-radius: 8px;
+  background: rgba(242, 135, 5, 0.08);
+}
+
+.selected-plan-box span,
+.selected-plan-box strong {
+  display: block;
+}
+
+.selected-plan-box span {
+  color: var(--vy-orange-deep);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.selected-plan-box strong {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 900;
 }
 
 .referral-form label {
@@ -412,7 +706,8 @@ onMounted(loadPatrocinador);
 }
 
 .error-box,
-.loading-box {
+.loading-box,
+.empty-box {
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 12px;
@@ -427,6 +722,11 @@ onMounted(loadPatrocinador);
 
 .loading-box {
   color: var(--vy-ink-2);
+  background: var(--vy-surface-2);
+}
+
+.empty-box {
+  color: var(--vy-ink-3);
   background: var(--vy-surface-2);
 }
 
@@ -470,6 +770,7 @@ onMounted(loadPatrocinador);
   }
 
   .referral-form,
+  .plans-panel,
   .success-panel {
     padding: 22px;
   }
@@ -482,6 +783,7 @@ onMounted(loadPatrocinador);
 
   .intro-panel,
   .referral-form,
+  .plans-panel,
   .success-panel {
     border-radius: 8px;
     box-shadow: 0 14px 30px rgba(31, 26, 20, 0.08);
@@ -536,11 +838,13 @@ onMounted(loadPatrocinador);
   }
 
   .referral-form,
+  .plans-panel,
   .success-panel {
     padding: 18px;
   }
 
   .referral-form h2,
+  .plans-panel h2,
   .success-panel h2 {
     font-size: 20px;
     margin-bottom: 14px;
@@ -558,6 +862,10 @@ onMounted(loadPatrocinador);
   .submit-button {
     min-height: 50px;
     font-size: 14px;
+  }
+
+  .plan-metrics {
+    grid-template-columns: 1fr;
   }
 }
 

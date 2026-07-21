@@ -7,7 +7,7 @@ public interface PreinscripcionReferidoService {
 
     List<PreinscripcionReferido> listar(String estadoPreinscripcion);
 
-    PreinscripcionReferido crear(Long patrocinadorId, String nombres, String apellidos, String documento, String telefono, String email);
+    PreinscripcionReferido crear(Long patrocinadorId, Long planId, String nombres, String apellidos, String documento, String telefono, String email, String username, String password, String confirmPassword);
 
     PreinscripcionReferido validar(Long id, Long patrocinadorId, Long planId, String nombres, String apellidos, String documento, String telefono, String email, String usuarioValidacion);
 

@@ -12,4 +12,6 @@ public interface PreinscripcionReferidoDao extends JpaRepository<PreinscripcionR
     List<PreinscripcionReferido> findByEstadoPreinscripcionOrderByFechaRegistroDesc(String estadoPreinscripcion);
 
     Optional<PreinscripcionReferido> findByDocumentoAndEstadoPreinscripcion(String documento, String estadoPreinscripcion);
+
+    Optional<PreinscripcionReferido> findByUsernameSolicitadoAndEstadoPreinscripcion(String usernameSolicitado, String estadoPreinscripcion);
 }

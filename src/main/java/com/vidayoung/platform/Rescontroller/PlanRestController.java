@@ -45,6 +45,11 @@ public class PlanRestController {
         return ResponseEntity.ok(planService.listar());
     }
 
+    @GetMapping("/public")
+    public ResponseEntity<List<Plan>> listarPublicos() {
+        return ResponseEntity.ok(planService.listar());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Plan> buscarPorId(@PathVariable Long id) {
         return planService.buscarPorId(id)
