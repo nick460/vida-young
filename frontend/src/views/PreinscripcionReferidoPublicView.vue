@@ -203,17 +203,6 @@ onMounted(loadInitialData);
 
             <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
 
-            <dl class="plan-metrics">
-              <div>
-                <dt>QP</dt>
-                <dd>{{ money(plan.qp) }}</dd>
-              </div>
-              <div>
-                <dt>Bono directo</dt>
-                <dd>Bs. {{ money(plan.bonificacionDirecta) }}</dd>
-              </div>
-            </dl>
-
             <ul class="level-list">
               <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
                 <span>Nivel {{ nivel.numeroNivel }}</span>
@@ -521,14 +510,14 @@ onMounted(loadInitialData);
   padding: 14px;
   background: #fff;
   display: grid;
-  grid-template-rows: auto auto auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
   gap: 12px;
   box-shadow: 0 12px 24px rgba(31, 26, 20, 0.07);
 }
 
 .plan-image {
   width: 100%;
-  aspect-ratio: 16 / 7;
+  aspect-ratio: 1 / 1;
   border-radius: 8px;
   object-fit: cover;
   background: var(--vy-surface-2);
@@ -564,32 +553,6 @@ onMounted(loadInitialData);
   line-height: 1;
   font-weight: 900;
   color: var(--vy-ink);
-}
-
-.plan-metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.plan-metrics div {
-  min-width: 0;
-  padding: 10px;
-  border-radius: 8px;
-  background: var(--vy-surface-2);
-}
-
-.plan-metrics dt {
-  color: var(--vy-ink-3);
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.plan-metrics dd {
-  margin-top: 4px;
-  font-size: 14px;
-  font-weight: 900;
 }
 
 .level-list {
@@ -872,9 +835,6 @@ onMounted(loadInitialData);
     font-size: 14px;
   }
 
-  .plan-metrics {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 360px) {
