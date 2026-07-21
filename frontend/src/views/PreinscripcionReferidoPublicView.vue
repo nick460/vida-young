@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
-import { CheckCircle2, Mail, Phone, Send, ShieldCheck, UserPlus } from "lucide-vue-next";
+import { CheckCircle2, Eye, EyeOff, Mail, Phone, Send, ShieldCheck, UserPlus } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 
 const route = useRoute();
@@ -12,6 +12,8 @@ const saved = ref(false);
 const patrocinador = ref(null);
 const planes = ref([]);
 const selectedPlanId = ref("");
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const patrocinadorId = computed(() => Number(route.params.patrocinadorId || 0));
@@ -402,32 +404,54 @@ onMounted(loadInitialData);
         </label>
         <label>
           Contrasena
-          <input
-            v-model="form.password"
-            type="password"
-            required
-            minlength="6"
-            maxlength="80"
-            autocomplete="new-password"
-            :class="{ invalid: fieldError('password') }"
-            @blur="markTouched('password')"
-            @input="markTouched('password')"
-          />
+          <span class="password-field">
+            <input
+              v-model="form.password"
+              :type="showPassword ? 'text' : 'password'"
+              required
+              minlength="6"
+              maxlength="80"
+              autocomplete="new-password"
+              :class="{ invalid: fieldError('password') }"
+              @blur="markTouched('password')"
+              @input="markTouched('password')"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
+              @click="showPassword = !showPassword"
+            >
+              <EyeOff v-if="showPassword" :size="18" />
+              <Eye v-else :size="18" />
+            </button>
+          </span>
           <small v-if="fieldError('password')" class="field-error">{{ fieldError("password") }}</small>
         </label>
         <label>
           Confirmar contrasena
-          <input
-            v-model="form.confirmPassword"
-            type="password"
-            required
-            minlength="6"
-            maxlength="80"
-            autocomplete="new-password"
-            :class="{ invalid: fieldError('confirmPassword') }"
-            @blur="markTouched('confirmPassword')"
-            @input="markTouched('confirmPassword')"
-          />
+          <span class="password-field">
+            <input
+              v-model="form.confirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              required
+              minlength="6"
+              maxlength="80"
+              autocomplete="new-password"
+              :class="{ invalid: fieldError('confirmPassword') }"
+              @blur="markTouched('confirmPassword')"
+              @input="markTouched('confirmPassword')"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              :aria-label="showConfirmPassword ? 'Ocultar confirmacion' : 'Mostrar confirmacion'"
+              @click="showConfirmPassword = !showConfirmPassword"
+            >
+              <EyeOff v-if="showConfirmPassword" :size="18" />
+              <Eye v-else :size="18" />
+            </button>
+          </span>
           <small v-if="fieldError('confirmPassword')" class="field-error">{{ fieldError("confirmPassword") }}</small>
         </label>
 
@@ -823,6 +847,35 @@ onMounted(loadInitialData);
   background: #fff;
   color: var(--vy-ink);
   font: inherit;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 46px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vy-ink-3);
+  background: transparent;
+}
+
+.password-toggle:hover {
+  background: var(--vy-surface-2);
+  color: var(--vy-ink);
 }
 
 .referral-form input.invalid {
