@@ -1,8 +1,9 @@
 <script setup>
-import { ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { VyIcon, VyMark } from "../components/ui.js";
+import { VyIcon } from "../components/ui.js";
 import { useAuthStore } from "../stores/authStore.js";
+import { apiRequest } from "../services/api.js";
 import logoFull from "../assets/logoFull.png";
 import logoMark from "../assets/logoMark.png";
 
@@ -15,6 +16,58 @@ const password = ref("");
 const remember = ref(true);
 const loading = ref(false);
 const error = ref("");
+const slides = ref([]);
+const activeSlideIndex = ref(0);
+const carouselTimer = ref(null);
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+const defaultSlides = [
+  {
+    id: "default-1",
+    titulo: "Generando bienestar para una nueva generacion.",
+    descripcion: "Conoce novedades, productos y oportunidades para construir tu proyecto Vidayoung.",
+    imagenUrl: "",
+    imagenMobileUrl: ""
+  }
+];
+
+const carouselSlides = computed(() => slides.value.length ? slides.value : defaultSlides);
+const activeSlide = computed(() => carouselSlides.value[activeSlideIndex.value] || carouselSlides.value[0]);
+
+function mediaUrl(path) {
+  if (!path) return "";
+  if (path.startsWith("http") || path.startsWith("blob:")) return path;
+  return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+const activeDesktopImage = computed(() => activeSlide.value?.imagenUrl || "");
+const activeMobileImage = computed(() => activeSlide.value?.imagenMobileUrl || activeSlide.value?.imagenUrl || "");
+
+function goToSlide(index) {
+  activeSlideIndex.value = index;
+}
+
+function startCarousel() {
+  window.clearInterval(carouselTimer.value);
+
+  if (carouselSlides.value.length < 2) {
+    return;
+  }
+
+  carouselTimer.value = window.setInterval(() => {
+    activeSlideIndex.value = (activeSlideIndex.value + 1) % carouselSlides.value.length;
+  }, 6000);
+}
+
+async function loadCarousel() {
+  try {
+    slides.value = await apiRequest("/api/public/login-carousel");
+    activeSlideIndex.value = 0;
+    startCarousel();
+  } catch {
+    slides.value = [];
+  }
+}
 
 async function submitLogin() {
   error.value = "";
@@ -24,15 +77,62 @@ async function submitLogin() {
     await authStore.login(username.value, password.value);
     await router.push(route.query.redirect?.toString() || { name: "dashboard" });
   } catch (exception) {
-    error.value = "Usuario o contraseña incorrectos";
+    error.value = "Usuario o contrasena incorrectos";
   } finally {
     loading.value = false;
   }
 }
+
+onMounted(loadCarousel);
+
+onBeforeUnmount(() => {
+  window.clearInterval(carouselTimer.value);
+});
 </script>
 
 <template>
   <main class="vy login-view">
+    <aside class="login-hero">
+      <img
+        v-if="activeDesktopImage || activeMobileImage"
+        class="hero-photo"
+        :src="mediaUrl(activeDesktopImage || activeMobileImage)"
+        :alt="activeSlide.titulo"
+      />
+      <img
+        v-if="activeMobileImage"
+        class="hero-photo-mobile"
+        :src="mediaUrl(activeMobileImage)"
+        :alt="activeSlide.titulo"
+      />
+      <div class="hero-background"></div>
+      <div class="vy-dotgrid hero-dots"></div>
+
+      <div class="hero-top">
+        <div class="hero-brand">
+          <img :src="logoMark" alt="Vidayoung" class="hero-logo-mark" />
+          <span class="hero-brand-name">Vidayoung</span>
+        </div>
+        <span class="hero-badge">Novedades</span>
+      </div>
+
+      <div class="hero-content">
+        <h2>{{ activeSlide?.titulo }}</h2>
+        <p>{{ activeSlide?.descripcion }}</p>
+      </div>
+
+      <div class="hero-progress" aria-label="Carrusel de novedades">
+        <button
+          v-for="(slide, index) in carouselSlides"
+          :key="slide.id || index"
+          type="button"
+          :class="{ active: index === activeSlideIndex }"
+          :aria-label="`Ver novedad ${index + 1}`"
+          @click="goToSlide(index)"
+        ></button>
+      </div>
+    </aside>
+
     <section class="login-panel">
       <div class="login-brand">
         <img :src="logoFull" alt="Vidayoung" class="login-logo-full" />
@@ -40,14 +140,14 @@ async function submitLogin() {
 
       <div class="login-card">
         <div class="vy-eyebrow login-eyebrow">Bienvenida de regreso</div>
-        <h1>Tu bienestar<br />te está esperando.</h1>
+        <h1>Tu bienestar<br />te esta esperando.</h1>
         <p>
-          Ingresa con tu correo o tu código de embajador para acceder a tu panel.
+          Ingresa con tu correo o tu codigo de embajador para acceder a tu panel.
         </p>
 
         <form class="login-form" @submit.prevent="submitLogin">
           <label class="field">
-            <span>Correo o código embajador</span>
+            <span>Correo o codigo embajador</span>
             <input
               v-model.trim="username"
               type="text"
@@ -59,14 +159,14 @@ async function submitLogin() {
 
           <label class="field">
             <span class="field-row">
-              <span>Contraseña</span>
-              <button type="button">¿Olvidaste tu contraseña?</button>
+              <span>Contrasena</span>
+              <button type="button">Olvidaste tu contrasena?</button>
             </span>
             <input
               v-model="password"
               type="password"
               autocomplete="current-password"
-              placeholder="••••••••••"
+              placeholder="**********"
               required
             />
           </label>
@@ -75,67 +175,22 @@ async function submitLogin() {
 
           <label class="remember-row">
             <input v-model="remember" type="checkbox" />
-            <span>Mantener sesión iniciada en este dispositivo</span>
+            <span>Mantener sesion iniciada en este dispositivo</span>
           </label>
 
           <button class="vy-btn vy-btn-primary login-submit" type="submit" :disabled="loading">
             <span>{{ loading ? "Ingresando..." : "Entrar a mi panel" }}</span>
             <VyIcon name="arrowR" :size="14" />
           </button>
-
         </form>
-
       </div>
 
       <footer class="login-footer">
-        <a>Términos</a>
+        <a>Terminos</a>
         <a>Privacidad</a>
-        <a>© 2026 Vidayoung</a>
+        <a>(c) 2026 Vidayoung</a>
       </footer>
     </section>
-
-    <aside class="login-hero">
-      <div class="hero-background"></div>
-      <div class="vy-dotgrid hero-dots"></div>
-
-      <div class="hero-top">
-        <div class="hero-brand">
-          <img :src="logoMark" alt="Vidayoung" class="hero-logo-mark" />
-          <span class="hero-brand-name">Vidayoung</span>
-        </div>
-        <span class="hero-badge">Plataforma 2.6</span>
-      </div>
-
-      <div class="hero-content">
-        <h2>Generando bienestar para una nueva generación.</h2>
-        <p>
-          Más de 12.000 embajadores latinoamericanos construyen un proyecto de vida
-          con productos premium de cuidado personal y un plan de compensación
-          transparente.
-        </p>
-
-        <article class="testimonial">
-          <p>
-            "En 14 meses pasé de iniciadora a Líder Diamante. Vidayoung me dio una
-            comunidad real, comisiones puntuales y productos que mis clientas aman.
-            Cambió mi vida financiera."
-          </p>
-          <div class="testimonial-user">
-            <div>VN</div>
-            <span>
-              <strong>Valeria Núñez</strong>
-              <small>Líder Diamante · Medellín</small>
-            </span>
-          </div>
-        </article>
-      </div>
-
-      <div class="hero-progress" aria-hidden="true">
-        <span class="active"></span>
-        <span></span>
-        <span></span>
-      </div>
-    </aside>
   </main>
 </template>
 
@@ -145,7 +200,7 @@ async function submitLogin() {
   height: 100vh;
   height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) minmax(520px, 1.05fr);
+  grid-template-columns: minmax(520px, 1.05fr) minmax(420px, 1fr);
   background: var(--vy-bg);
   overflow: hidden;
 }
@@ -225,16 +280,13 @@ async function submitLogin() {
 
 .field-row button {
   color: var(--vy-orange-deep);
+  font-size: 11.5px;
   font-weight: 700;
+  text-transform: none;
   border: 0;
   background: none;
   cursor: pointer;
   font-family: inherit;
-}
-
-.field-row button {
-  font-size: 11.5px;
-  text-transform: none;
 }
 
 .field input {
@@ -311,12 +363,31 @@ async function submitLogin() {
   color: #fff;
 }
 
+.hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-photo-mobile {
+  display: none;
+}
+
 .hero-background {
   position: absolute;
   inset: 0;
   background:
     radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.25), transparent 50%),
     radial-gradient(circle at 20% 80%, rgba(31, 26, 20, 0.2), transparent 50%);
+}
+
+.hero-photo + .hero-background,
+.hero-photo ~ .hero-background {
+  background:
+    linear-gradient(180deg, rgba(31, 26, 20, 0.32) 0%, rgba(31, 26, 20, 0.1) 38%, rgba(31, 26, 20, 0.7) 100%),
+    linear-gradient(90deg, rgba(31, 26, 20, 0.58) 0%, rgba(31, 26, 20, 0.12) 100%);
 }
 
 .hero-dots {
@@ -354,7 +425,7 @@ async function submitLogin() {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: #fff;
 }
 
@@ -370,11 +441,11 @@ async function submitLogin() {
 }
 
 .hero-content {
-  max-width: 520px;
+  max-width: 560px;
 }
 
 .hero-content h2 {
-  font-size: clamp(34px, 6vh, 48px);
+  font-size: clamp(34px, 6vh, 52px);
   font-weight: 800;
   letter-spacing: 0;
   line-height: 1.05;
@@ -388,64 +459,19 @@ async function submitLogin() {
   opacity: 0.92;
 }
 
-.testimonial {
-  margin-top: clamp(18px, 3.4vh, 36px);
-  padding: clamp(14px, 2.2vh, 20px);
-  background: rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(12px);
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.testimonial > p {
-  font-size: 13.5px;
-  line-height: 1.5;
-  font-style: italic;
-}
-
-.testimonial-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.testimonial-user > div {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-}
-
-.testimonial-user span {
-  display: flex;
-  flex-direction: column;
-}
-
-.testimonial-user strong {
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.testimonial-user small {
-  font-size: 11px;
-  opacity: 0.8;
-}
-
 .hero-progress {
   display: flex;
   gap: 8px;
 }
 
-.hero-progress span {
+.hero-progress button {
   width: 8px;
   height: 4px;
+  border: 0;
   border-radius: 99px;
   background: rgba(255, 255, 255, 0.4);
+  padding: 0;
+  cursor: pointer;
 }
 
 .hero-progress .active {
@@ -463,18 +489,80 @@ async function submitLogin() {
   }
 
   .login-hero {
-    display: none;
+    min-height: 260px;
+    padding: 20px;
   }
 
   .login-panel {
     padding: 32px 20px;
-    min-height: 100vh;
-    min-height: 100dvh;
+    min-height: auto;
     overflow: visible;
   }
 
   .login-card {
-    margin: 40px auto;
+    margin: 34px auto;
+  }
+
+  .hero-photo {
+    display: none;
+  }
+
+  .hero-photo-mobile {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+
+  .hero-photo-mobile + .hero-background,
+  .hero-photo + .hero-photo-mobile + .hero-background {
+    background:
+      linear-gradient(180deg, rgba(31, 26, 20, 0.28) 0%, rgba(31, 26, 20, 0.18) 48%, rgba(31, 26, 20, 0.72) 100%);
+  }
+
+  .hero-brand-name {
+    font-size: 18px;
+  }
+
+  .hero-badge {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .hero-content h2 {
+    font-size: 28px;
+    line-height: 1.08;
+  }
+
+  .hero-content > p {
+    max-width: 560px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 560px) {
+  .login-hero {
+    min-height: 220px;
+    padding: 16px;
+  }
+
+  .hero-logo-mark {
+    height: 30px;
+  }
+
+  .hero-content h2 {
+    font-size: 24px;
+  }
+
+  .hero-content > p {
+    font-size: 12.5px;
+  }
+
+  .hero-progress {
+    gap: 7px;
   }
 }
 </style>

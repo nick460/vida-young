@@ -5,6 +5,7 @@ import App from "./App.vue";
 import "./styles/brand.css";
 import DashboardView from "./views/DashboardView.vue";
 import LoginView from "./views/LoginView.vue";
+import LoginCarouselConfigView from "./views/LoginCarouselConfigView.vue";
 import NetworkView from "./views/NetworkView.vue";
 import PersonasView from "./views/PersonasView.vue";
 import ProfileView from "./views/ProfileView.vue";
@@ -57,6 +58,7 @@ const routes = [
   { path: "/login", name: "login", component: LoginView, meta: { public: true } },
   { path: "/dashboard", name: "dashboard", component: DashboardView, meta: { sidebar: true, roles: ["*"] } },
   { path: "/roles-menus", name: "roles-menus", component: RolesMenusView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/novedades-login", name: "login-carousel-config", component: LoginCarouselConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/personas", name: "personas", component: PersonasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/rangos", name: "rangos", component: RangosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes", name: "planes", component: PlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },

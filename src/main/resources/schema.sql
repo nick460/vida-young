@@ -91,25 +91,26 @@ VALUES
     ('dashboard', 'Dashboard', 'Home', FALSE, 10),
     ('roles-menus', 'Roles y menus', 'Shield', FALSE, 20),
     ('pagina-principal-config', 'Pagina principal', 'PanelTop', FALSE, 30),
-    ('landing-productos-config', 'Configuracion landings', 'PanelsTopLeft', FALSE, 40),
-    ('personas', 'Personas', 'User', FALSE, 50),
-    ('rangos', 'Rangos', 'Trophy', FALSE, 60),
-    ('planes', 'Planes', 'BadgePercent', FALSE, 70),
-    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 80),
-    ('referidos', 'Referidos', 'Network', FALSE, 90),
-    ('inventario', 'Inventario', 'PackageSearch', FALSE, 100),
-    ('ventanilla', 'Ventanilla', 'Store', FALSE, 110),
-    ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 120),
-    ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 130),
-    ('gestiones', 'Gestiones', 'CalendarClock', FALSE, 140),
-    ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 150),
-    ('retiros-billeteras', 'Retiros billeteras', 'ArrowDownToLine', FALSE, 160),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 170),
-    ('shop', 'Tienda', 'ShoppingBag', FALSE, 180),
-    ('network', 'Mi red', 'Users', FALSE, 190),
-    ('rewards', 'Recompensas', 'Gift', FALSE, 200),
-    ('stats', 'Estadisticas', 'BarChart3', FALSE, 210),
-    ('profile', 'Perfil', 'User', FALSE, 220)
+    ('login-carousel-config', 'Novedades', 'Images', FALSE, 40),
+    ('landing-productos-config', 'Configuracion landings', 'PanelsTopLeft', FALSE, 50),
+    ('personas', 'Personas', 'User', FALSE, 60),
+    ('rangos', 'Rangos', 'Trophy', FALSE, 70),
+    ('planes', 'Planes', 'BadgePercent', FALSE, 80),
+    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 90),
+    ('referidos', 'Referidos', 'Network', FALSE, 100),
+    ('inventario', 'Inventario', 'PackageSearch', FALSE, 110),
+    ('ventanilla', 'Ventanilla', 'Store', FALSE, 120),
+    ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 130),
+    ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 140),
+    ('gestiones', 'Gestiones', 'CalendarClock', FALSE, 150),
+    ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 160),
+    ('retiros-billeteras', 'Retiros billeteras', 'ArrowDownToLine', FALSE, 170),
+    ('wallet', 'Finanzas', 'Wallet', FALSE, 180),
+    ('shop', 'Tienda', 'ShoppingBag', FALSE, 190),
+    ('network', 'Mi red', 'Users', FALSE, 200),
+    ('rewards', 'Recompensas', 'Gift', FALSE, 210),
+    ('stats', 'Estadisticas', 'BarChart3', FALSE, 220),
+    ('profile', 'Perfil', 'User', FALSE, 230)
 ON CONFLICT (menu_id) DO UPDATE
 SET label = EXCLUDED.label,
     icon = EXCLUDED.icon,
@@ -156,6 +157,37 @@ CREATE TABLE IF NOT EXISTS gestiones (
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+CREATE TABLE IF NOT EXISTS login_carousel_items (
+    id BIGSERIAL PRIMARY KEY,
+    titulo VARCHAR(140) NOT NULL,
+    descripcion VARCHAR(500) NOT NULL,
+    imagen_url VARCHAR(255) NOT NULL,
+    imagen_mobile_url VARCHAR(255),
+    orden INTEGER NOT NULL DEFAULT 0,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+ALTER TABLE login_carousel_items
+    ADD COLUMN IF NOT EXISTS titulo VARCHAR(140) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS descripcion VARCHAR(500) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS imagen_url VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS imagen_mobile_url VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS orden INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    ADD COLUMN IF NOT EXISTS fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    ADD COLUMN IF NOT EXISTS usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM';
+
+CREATE INDEX IF NOT EXISTS idx_login_carousel_items_activo_orden
+    ON login_carousel_items (activo, orden);
 
 CREATE TABLE IF NOT EXISTS periodos_gestion (
     id BIGSERIAL PRIMARY KEY,
