@@ -123,7 +123,7 @@ async function saveItem() {
       body: JSON.stringify({
         titulo: form.titulo,
         descripcion: form.descripcion,
-        imagenUrl,
+        imagenUrl: imageUrl,
         imagenMobileUrl: imageMobileUrl || null,
         orden: Number(form.orden || 0),
         activo: form.activo
