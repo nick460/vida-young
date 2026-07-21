@@ -141,13 +141,10 @@ onBeforeUnmount(() => {
       <div class="login-card">
         <div class="vy-eyebrow login-eyebrow">Bienvenida de regreso</div>
         <h1>Tu bienestar<br />te esta esperando.</h1>
-        <p>
-          Ingresa con tu correo o tu codigo de embajador para acceder a tu panel.
-        </p>
 
         <form class="login-form" @submit.prevent="submitLogin">
           <label class="field">
-            <span>Correo o codigo embajador</span>
+            <span>Usuario</span>
             <input
               v-model.trim="username"
               type="text"
@@ -368,7 +365,8 @@ onBeforeUnmount(() => {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #120d08;
 }
 
 .hero-photo-mobile {
