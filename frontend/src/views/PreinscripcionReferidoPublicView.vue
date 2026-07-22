@@ -296,8 +296,8 @@ watch(
 
 <template>
   <main class="public-referral-page">
-    <section class="referral-shell" :class="{ 'single-step': saved }">
-      <article v-if="!saved" class="intro-panel">
+    <section class="referral-shell" :class="{ 'single-step': saved || currentStep === 'plan' }">
+      <article v-if="!saved && currentStep === 'datos'" class="intro-panel">
         <span class="eyebrow"><UserPlus :size="16" /> Preinscripcion Vidayoung</span>
         <div class="sponsor-hero">
           <div class="sponsor-photo-wrap">
@@ -733,9 +733,18 @@ watch(
 
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
   align-items: stretch;
+}
+
+.plan-step-panel {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.plan-step-panel .plans-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
 .plan-card {
