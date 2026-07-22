@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { Gift, PackageCheck, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
+import { ArrowDownToLine, Gift, PackageCheck, Plus, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 
 const loading = ref(false);
@@ -12,6 +12,7 @@ const recompensas = ref([]);
 const productos = ref([]);
 const searchTerm = ref("");
 const selected = ref(null);
+const selectedProductoId = ref("");
 const form = ref({ montoDinero: 0, productos: [], observacion: "" });
 
 const filteredRecompensas = computed(() => {
@@ -34,6 +35,23 @@ const totals = computed(() =>
 
 const retiroProductosTotal = computed(() =>
   form.value.productos.reduce((sum, item) => sum + Number(item.precio || 0) * Number(item.cantidad || 0), 0)
+);
+const selectedProducto = computed(() =>
+  productos.value.find((producto) => Number(producto.id) === Number(selectedProductoId.value)) || null
+);
+const efectivoSeleccionadoDisponible = computed(() => efectivoDisponible(selected.value));
+const productosSeleccionadoDisponible = computed(() => productosDisponible(selected.value));
+const retiroExcedeEfectivo = computed(() => Number(form.value.montoDinero || 0) > efectivoSeleccionadoDisponible.value);
+const retiroExcedeProductos = computed(() => retiroProductosTotal.value > productosSeleccionadoDisponible.value);
+const retiroTieneMonto = computed(() => Number(form.value.montoDinero || 0) > 0 || retiroProductosTotal.value > 0);
+const retiroTieneMontosValidos = computed(() => Number(form.value.montoDinero || 0) >= 0 && retiroProductosTotal.value >= 0);
+const canRegistrarRetiro = computed(() =>
+  Boolean(selected.value)
+    && retiroTieneMonto.value
+    && retiroTieneMontosValidos.value
+    && !retiroExcedeEfectivo.value
+    && !retiroExcedeProductos.value
+    && !processing.value
 );
 
 function money(value) {
@@ -80,13 +98,23 @@ function openModal(recompensa) {
 function closeModal() {
   if (processing.value) return;
   selected.value = null;
+  selectedProductoId.value = "";
   form.value = { montoDinero: 0, productos: [], observacion: "" };
 }
 
-function addProducto(producto) {
+function addProducto() {
+  const producto = selectedProducto.value;
+  if (!producto) return;
+  const siguienteTotal = retiroProductosTotal.value + Number(producto.precio || 0);
+  if (siguienteTotal > productosSeleccionadoDisponible.value) {
+    error.value = "El producto seleccionado supera el credito disponible de la recompensa.";
+    return;
+  }
+  error.value = "";
   const existente = form.value.productos.find((item) => Number(item.productoId) === Number(producto.id));
   if (existente) {
     existente.cantidad += 1;
+    selectedProductoId.value = "";
     return;
   }
   form.value.productos.push({
@@ -96,6 +124,7 @@ function addProducto(producto) {
     precio: Number(producto.precio || 0),
     cantidad: 1
   });
+  selectedProductoId.value = "";
 }
 
 function removeProducto(item) {
@@ -108,6 +137,10 @@ function updateCantidad(item, value) {
 
 async function registrarRetiro() {
   if (!selected.value || processing.value) return;
+  if (!canRegistrarRetiro.value) {
+    error.value = "Revisa los montos: no pueden superar el efectivo o credito disponible.";
+    return;
+  }
   processing.value = true;
   error.value = "";
   try {
@@ -238,36 +271,64 @@ onMounted(loadAll);
           </header>
 
           <section class="retiro-body">
+            <div class="modal-context">
+              <div>
+                <small>Beneficiario</small>
+                <strong>{{ fullName(selected.beneficiario) }}</strong>
+              </div>
+              <div>
+                <small>Nuevo referido</small>
+                <strong>{{ fullName(selected.referido?.persona) }}</strong>
+              </div>
+              <div>
+                <small>Plan</small>
+                <strong>{{ selected.planIngreso?.nombre || "Plan" }}</strong>
+              </div>
+            </div>
+
             <div class="wallet-values">
               <div>
                 <small>Efectivo disponible</small>
-                <strong>Bs. {{ money(efectivoDisponible(selected)) }}</strong>
+                <strong>Bs. {{ money(efectivoSeleccionadoDisponible) }}</strong>
               </div>
               <div>
                 <small>Credito producto</small>
-                <strong>Bs. {{ money(productosDisponible(selected)) }}</strong>
+                <strong>Bs. {{ money(productosSeleccionadoDisponible) }}</strong>
               </div>
             </div>
 
             <div class="withdraw-grid">
-              <label class="field">
+              <label class="field" :class="{ invalid: retiroExcedeEfectivo }">
                 <span>Retirar efectivo</span>
                 <input v-model.number="form.montoDinero" type="number" min="0" step="0.01" />
+                <small v-if="retiroExcedeEfectivo">Supera el efectivo disponible.</small>
               </label>
-              <div class="field">
+              <div class="field" :class="{ invalid: retiroExcedeProductos }">
                 <span>Total productos</span>
                 <div class="readonly-total">Bs. {{ money(retiroProductosTotal) }}</div>
+                <small v-if="retiroExcedeProductos">Supera el credito disponible.</small>
               </div>
             </div>
 
-            <section class="product-picker">
-              <button v-for="producto in productos.slice(0, 12)" :key="producto.id" type="button" @click="addProducto(producto)">
-                <span>
-                  <strong>{{ producto.nombre }}</strong>
-                  <small>{{ producto.sku || "Sin SKU" }}</small>
-                </span>
-                <b>Bs. {{ money(producto.precio) }}</b>
-              </button>
+            <section class="product-select-panel">
+              <label class="field">
+                <span>Producto a entregar</span>
+                <div class="select-action">
+                  <select v-model="selectedProductoId">
+                    <option value="">Selecciona producto</option>
+                    <option v-for="producto in productos" :key="producto.id" :value="producto.id">
+                      {{ producto.nombre }} - {{ producto.sku || "Sin SKU" }} - Bs. {{ money(producto.precio) }}
+                    </option>
+                  </select>
+                  <button type="button" :disabled="!selectedProducto" @click="addProducto">
+                    <Plus :size="16" /> Agregar
+                  </button>
+                </div>
+              </label>
+              <div class="credit-meter" :class="{ danger: retiroExcedeProductos }">
+                <span>Credito usado</span>
+                <strong>Bs. {{ money(retiroProductosTotal) }} / Bs. {{ money(productosSeleccionadoDisponible) }}</strong>
+              </div>
             </section>
 
             <div v-if="form.productos.length" class="withdraw-products-list">
@@ -290,8 +351,9 @@ onMounted(loadAll);
 
           <footer>
             <button class="vy-btn vy-btn-ghost" type="button" :disabled="processing" @click="closeModal">Cancelar</button>
-            <button class="vy-btn vy-btn-primary" type="button" :disabled="processing" @click="registrarRetiro">
-              {{ processing ? "Procesando..." : "Registrar retiro" }}
+            <button class="withdraw-submit" type="button" :disabled="!canRegistrarRetiro" @click="registrarRetiro">
+              <ArrowDownToLine :size="18" />
+              {{ processing ? "Procesando..." : "Procesar retiro" }}
             </button>
           </footer>
         </article>
@@ -331,21 +393,36 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 .retiro-modal h2 { margin-top: 4px; font-size: 22px; font-weight: 900; }
 .retiro-modal header button { width: 38px; height: 38px; border-radius: 8px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; }
 .retiro-body { padding: 16px 2px; overflow: auto; }
+.modal-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.modal-context > div { padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; }
+.modal-context small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.modal-context strong { display: block; margin-top: 4px; font-size: 14px; font-weight: 900; }
 .wallet-values, .withdraw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .wallet-values > div, .readonly-total { padding: 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface-2); }
 .wallet-values small, .field span { display: block; color: var(--vy-ink-3); font-size: 12px; font-weight: 900; text-transform: uppercase; }
 .wallet-values strong { display: block; margin-top: 5px; font-size: 22px; font-weight: 900; }
-.field input, .field textarea { width: 100%; margin-top: 7px; padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; color: var(--vy-ink); font-weight: 800; }
-.product-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 12px 0; }
-.product-picker button { padding: 10px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; display: flex; justify-content: space-between; gap: 10px; text-align: left; }
-.product-picker small { display: block; margin-top: 3px; color: var(--vy-ink-3); }
+.field input, .field textarea, .field select { width: 100%; margin-top: 7px; padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; color: var(--vy-ink); font-weight: 800; }
+.field.invalid input, .field.invalid .readonly-total { border-color: #c4452a; background: #fff4ef; }
+.field > small { display: block; margin-top: 6px; color: #c4452a; font-size: 12px; font-weight: 900; }
+.product-select-panel { display: grid; grid-template-columns: 1fr 210px; gap: 12px; align-items: end; margin: 12px 0 14px; padding: 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface-2); }
+.select-action { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.select-action button { height: 42px; padding: 0 14px; border-radius: 8px; background: var(--vy-ink); color: #fff; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 900; }
+.select-action button:disabled { cursor: not-allowed; opacity: 0.45; }
+.credit-meter { padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; }
+.credit-meter span { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.credit-meter strong { display: block; margin-top: 5px; color: var(--vy-ink); font-size: 14px; font-weight: 900; }
+.credit-meter.danger { border-color: #c4452a; background: #fff4ef; }
+.credit-meter.danger strong { color: #c4452a; }
 .withdraw-products-list { display: grid; gap: 8px; margin-bottom: 14px; }
 .withdraw-products-list article { display: grid; grid-template-columns: 1fr 76px 110px auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--vy-line); border-radius: 8px; }
 .withdraw-products-list input { width: 76px; padding: 8px; border: 1px solid var(--vy-line); border-radius: 8px; }
 .retiro-modal footer { justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--vy-line-2); }
+.withdraw-submit { min-height: 42px; padding: 0 18px; border-radius: 8px; background: #1f1a14; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 950; box-shadow: 0 12px 28px rgba(31, 26, 20, 0.18); }
+.withdraw-submit:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
+.withdraw-submit:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
 @media (max-width: 760px) {
-  .summary-grid, .wallet-values, .withdraw-grid { grid-template-columns: 1fr; }
+  .summary-grid, .modal-context, .wallet-values, .withdraw-grid, .product-select-panel, .select-action { grid-template-columns: 1fr; }
   .page-header, .section-header, .retiro-modal > header, .retiro-modal > footer { align-items: stretch; flex-direction: column; }
-  .search-box, .retiro-modal footer .vy-btn { width: 100%; }
+  .search-box, .retiro-modal footer .vy-btn, .withdraw-submit { width: 100%; }
 }
 </style>
