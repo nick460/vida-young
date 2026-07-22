@@ -498,6 +498,10 @@ watch(
   grid-template-columns: 1fr;
 }
 
+.referral-shell.single-step .plans-panel {
+  max-width: 100%;
+}
+
 .intro-panel,
 .referral-form,
 .plans-panel,
@@ -745,6 +749,11 @@ watch(
 
 .plan-step-panel .plans-grid {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.plan-step-panel .plan-card {
+  min-width: 0;
 }
 
 .plan-card {
@@ -880,6 +889,12 @@ watch(
   border: 1px solid rgba(242, 135, 5, 0.26);
   border-radius: 8px;
   background: rgba(242, 135, 5, 0.07);
+}
+
+.plan-step-panel .form-summary-box,
+.plan-step-panel .final-summary-box {
+  display: grid;
+  gap: 8px;
 }
 
 .form-summary-box header {
@@ -1105,6 +1120,10 @@ watch(
     gap: 14px;
   }
 
+  .referral-shell.single-step {
+    width: 100%;
+  }
+
   .intro-panel {
     padding: 24px;
   }
@@ -1119,6 +1138,15 @@ watch(
   .plans-panel,
   .success-panel {
     padding: 22px;
+  }
+
+  .plan-step-panel .plans-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  .form-summary-box header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
@@ -1196,6 +1224,16 @@ watch(
     margin-bottom: 14px;
   }
 
+  .step-indicator {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .step-indicator span {
+    justify-content: flex-start;
+    padding: 0 12px;
+  }
+
   .referral-form label {
     margin-bottom: 10px;
   }
@@ -1210,6 +1248,41 @@ watch(
     font-size: 14px;
   }
 
+  .plan-step-panel .plans-grid,
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-card {
+    padding: 12px;
+  }
+
+  .plan-image {
+    aspect-ratio: 16 / 11;
+  }
+
+  .plan-card h3 {
+    font-size: 18px;
+  }
+
+  .plan-price {
+    font-size: 24px;
+  }
+
+  .level-list {
+    max-height: 124px;
+  }
+
+  .form-summary-box header button {
+    width: 100%;
+  }
+
+  .final-summary-box strong,
+  .selected-plan-box strong,
+  .form-summary-box strong {
+    overflow-wrap: anywhere;
+  }
+
 }
 
 @media (max-width: 360px) {
@@ -1220,6 +1293,20 @@ watch(
 
   .intro-panel h1 {
     font-size: 29px;
+  }
+
+  .plans-panel,
+  .referral-form {
+    padding: 14px;
+  }
+
+  .plan-image {
+    aspect-ratio: 4 / 3;
+  }
+
+  .select-plan-button,
+  .submit-button {
+    font-size: 13px;
   }
 }
 </style>
