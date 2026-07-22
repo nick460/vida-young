@@ -20,6 +20,8 @@ const selected = ref(null);
 const selectedProductoId = ref("");
 const productoSelect = ref(null);
 const form = ref({ montoDinero: 0, productos: [], observacion: "" });
+let previousBodyOverflow = "";
+let previousHtmlOverflow = "";
 
 const filteredRecompensas = computed(() => {
   const term = searchTerm.value.trim().toLowerCase();
@@ -135,6 +137,7 @@ async function openModal(recompensa) {
   selected.value = recompensa;
   form.value = { montoDinero: efectivoDisponible(recompensa), productos: [], observacion: "" };
   selectedProductoId.value = "";
+  lockPageScroll();
   await initProductoSelect2();
 }
 
@@ -144,6 +147,19 @@ function closeModal() {
   selected.value = null;
   selectedProductoId.value = "";
   form.value = { montoDinero: 0, productos: [], observacion: "" };
+  unlockPageScroll();
+}
+
+function lockPageScroll() {
+  previousBodyOverflow = document.body.style.overflow;
+  previousHtmlOverflow = document.documentElement.style.overflow;
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = "hidden";
+}
+
+function unlockPageScroll() {
+  document.body.style.overflow = previousBodyOverflow;
+  document.documentElement.style.overflow = previousHtmlOverflow;
 }
 
 function addProducto() {
@@ -233,6 +249,7 @@ onMounted(loadAll);
 
 onBeforeUnmount(() => {
   destroyProductoSelect2();
+  unlockPageScroll();
 });
 </script>
 
