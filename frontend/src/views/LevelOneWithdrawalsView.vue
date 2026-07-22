@@ -19,6 +19,8 @@ const searchTerm = ref("");
 const selected = ref(null);
 const selectedProductoId = ref("");
 const productoSelect = ref(null);
+const page = ref(1);
+const pageSize = ref(10);
 const form = ref({ montoDinero: 0, productos: [], observacion: "" });
 let previousBodyOverflow = "";
 let previousHtmlOverflow = "";
@@ -29,6 +31,12 @@ const filteredRecompensas = computed(() => {
   return recompensas.value.filter((item) =>
     `${fullName(item.beneficiario)} ${fullName(item.referido?.persona)} ${item.planIngreso?.nombre || ""}`.toLowerCase().includes(term)
   );
+});
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRecompensas.value.length / Number(pageSize.value || 10))));
+const paginatedRecompensas = computed(() => {
+  const size = Number(pageSize.value || 10);
+  const start = (page.value - 1) * size;
+  return filteredRecompensas.value.slice(start, start + size);
 });
 
 const totals = computed(() =>
@@ -197,6 +205,14 @@ function updateCantidad(item, value) {
   item.cantidad = Math.max(1, Number(value || 1));
 }
 
+function previousPage() {
+  page.value = Math.max(1, page.value - 1);
+}
+
+function nextPage() {
+  page.value = Math.min(totalPages.value, page.value + 1);
+}
+
 async function registrarRetiro() {
   if (!selected.value || processing.value) return;
   if (!canRegistrarRetiro.value) {
@@ -243,6 +259,18 @@ watch(selectedProductoId, (value) => {
 
 watch(productos, () => {
   initProductoSelect2();
+});
+
+watch(searchTerm, () => {
+  page.value = 1;
+});
+
+watch(pageSize, () => {
+  page.value = 1;
+});
+
+watch(filteredRecompensas, () => {
+  page.value = Math.min(page.value, totalPages.value);
 });
 
 onMounted(loadAll);
@@ -311,7 +339,7 @@ onBeforeUnmount(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="recompensa in filteredRecompensas" :key="recompensa.id">
+              <tr v-for="recompensa in paginatedRecompensas" :key="recompensa.id">
                 <td>
                   <strong>{{ fullName(recompensa.beneficiario) }}</strong>
                   <small>{{ recompensa.beneficiario?.documento || "Sin documento" }}</small>
@@ -332,6 +360,21 @@ onBeforeUnmount(() => {
             </tbody>
           </table>
         </div>
+
+        <footer v-if="filteredRecompensas.length" class="pagination-bar">
+          <div>
+            <span>Pagina {{ page }} de {{ totalPages }}</span>
+            <select v-model.number="pageSize">
+              <option :value="10">10 por pagina</option>
+              <option :value="25">25 por pagina</option>
+              <option :value="50">50 por pagina</option>
+            </select>
+          </div>
+          <div class="pagination-actions">
+            <button type="button" :disabled="page === 1" @click="previousPage">Anterior</button>
+            <button type="button" :disabled="page === totalPages" @click="nextPage">Siguiente</button>
+          </div>
+        </footer>
       </section>
     </main>
 
@@ -468,6 +511,12 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 .actions-cell { text-align: right; }
 .row-withdraw-button { min-height: 36px; padding: 0 12px; border: 1px solid rgba(31, 26, 20, 0.12); border-radius: 8px; background: #1f1a14; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 950; white-space: nowrap; box-shadow: 0 8px 18px rgba(31, 26, 20, 0.16); }
 .row-withdraw-button:hover { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
+.pagination-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--vy-line-2); color: var(--vy-ink-3); font-size: 13px; font-weight: 800; }
+.pagination-bar > div { display: inline-flex; align-items: center; gap: 10px; }
+.pagination-bar select { min-height: 36px; padding: 0 10px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; color: var(--vy-ink); font-weight: 800; }
+.pagination-actions button { min-height: 36px; padding: 0 13px; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface-2); color: var(--vy-ink); font-weight: 900; }
+.pagination-actions button:hover:not(:disabled) { background: #fff7e8; border-color: rgba(242, 135, 5, 0.38); }
+.pagination-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
 .error-box, .loading-box { margin-bottom: 14px; padding: 13px 15px; border-radius: 8px; font-size: 13px; font-weight: 800; }
 .error-box { color: #8a2c1c; background: #fff1ec; border: 1px solid #ffd0c2; }
 .loading-box { color: var(--vy-ink-2); background: var(--vy-surface-2); }
@@ -518,5 +567,8 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
   .summary-grid, .modal-context, .wallet-values, .withdraw-grid, .product-select-panel, .select-action { grid-template-columns: 1fr; }
   .page-header, .section-header, .retiro-modal > header, .retiro-modal > footer { align-items: stretch; flex-direction: column; }
   .search-box, .retiro-modal footer .vy-btn, .withdraw-submit { width: 100%; }
+  .pagination-bar, .pagination-bar > div, .pagination-actions, .pagination-actions button { width: 100%; }
+  .pagination-bar { align-items: stretch; flex-direction: column; }
+  .pagination-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
 </style>
