@@ -139,6 +139,7 @@ const validationErrors = computed(() => {
 });
 
 const isFormValid = computed(() => Object.keys(validationErrors.value).length === 0);
+const canSubmit = computed(() => isFormValid.value && Boolean(selectedPlan.value));
 
 function markTouched(field) {
   touched[field] = true;
@@ -240,6 +241,10 @@ async function submitForm() {
       throw new Error("Revisa los campos marcados antes de enviar.");
     }
 
+    if (!selectedPlan.value) {
+      throw new Error("Selecciona el plan con el que quieres ingresar.");
+    }
+
     if (form.password !== form.confirmPassword) {
       throw new Error("La confirmacion de contrasena no coincide.");
     }
@@ -274,8 +279,8 @@ watch(
 
 <template>
   <main class="public-referral-page">
-    <section class="referral-shell" :class="{ 'single-step': saved || (!selectedPlan && !saved) }">
-      <article v-if="selectedPlan && !saved" class="intro-panel">
+    <section class="referral-shell" :class="{ 'single-step': saved }">
+      <article v-if="!saved" class="intro-panel">
         <span class="eyebrow"><UserPlus :size="16" /> Preinscripcion Vidayoung</span>
         <div class="sponsor-hero">
           <div class="sponsor-photo-wrap">
@@ -303,51 +308,7 @@ watch(
         </div>
       </article>
 
-      <section v-if="!saved && !selectedPlan" class="plans-panel">
-        <header>
-          <h2>Elige tu plan</h2>
-          <p>Selecciona el plan con el que quieres ingresar a la red. Despues completaras tus datos de registro.</p>
-        </header>
-
-        <p v-if="error" class="error-box">{{ error }}</p>
-        <p v-if="loading" class="loading-box">Cargando planes...</p>
-
-        <div class="plans-grid">
-          <article v-for="plan in sortedPlanes" :key="plan.id" class="plan-card">
-            <img v-if="plan.imagenUrl" class="plan-image" :src="assetUrl(plan.imagenUrl)" :alt="plan.nombre" />
-            <div>
-              <span class="plan-chip">{{ plan.nivelesAlcance }} niveles</span>
-              <h3>{{ plan.nombre }}</h3>
-              <p>{{ plan.descripcion || "Plan de ingreso Vidayoung" }}</p>
-            </div>
-
-            <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
-
-            <ul class="level-list">
-              <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
-                <span>Nivel {{ nivel.numeroNivel }}</span>
-                <strong>Bs. {{ money(nivel.porcentajeComision) }}</strong>
-              </li>
-            </ul>
-
-            <button type="button" class="select-plan-button" :disabled="loading || !patrocinador" @click="selectPlan(plan)">
-              <CheckCircle2 :size="16" />
-              Seleccionar
-            </button>
-          </article>
-        </div>
-
-        <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
-      </section>
-
-      <form v-else-if="!saved && selectedPlan" class="referral-form" novalidate @submit.prevent="submitForm">
-        <button type="button" class="change-plan-button" @click="selectedPlanId = ''">
-          Cambiar plan
-        </button>
-        <div class="selected-plan-box">
-          <span>Plan seleccionado</span>
-          <strong>{{ selectedPlan.nombre }} - Bs. {{ money(selectedPlan.precio) }}</strong>
-        </div>
+      <form v-if="!saved" class="referral-form" novalidate @submit.prevent="submitForm">
         <h2>Datos personales</h2>
         <p v-if="error" class="error-box">{{ error }}</p>
         <p v-if="loading" class="loading-box">Validando enlace...</p>
@@ -491,7 +452,53 @@ watch(
           <small v-if="fieldError('confirmPassword')" class="field-error">{{ fieldError("confirmPassword") }}</small>
         </label>
 
-        <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador || !isFormValid">
+        <section class="plan-selection-section">
+          <header>
+            <h2>Selecciona tu plan</h2>
+            <p>Despues de llenar tus datos, elige el plan con el que quieres ingresar a la red.</p>
+          </header>
+
+          <div v-if="selectedPlan" class="selected-plan-box">
+            <span>Plan seleccionado</span>
+            <strong>{{ selectedPlan.nombre }} - Bs. {{ money(selectedPlan.precio) }}</strong>
+          </div>
+
+          <p v-if="loading" class="loading-box">Cargando planes...</p>
+
+          <div class="plans-grid">
+            <article
+              v-for="plan in sortedPlanes"
+              :key="plan.id"
+              class="plan-card"
+              :class="{ selected: selectedPlan?.id === plan.id }"
+            >
+              <img v-if="plan.imagenUrl" class="plan-image" :src="assetUrl(plan.imagenUrl)" :alt="plan.nombre" />
+              <div>
+                <span class="plan-chip">{{ plan.nivelesAlcance }} niveles</span>
+                <h3>{{ plan.nombre }}</h3>
+                <p>{{ plan.descripcion || "Plan de ingreso Vidayoung" }}</p>
+              </div>
+
+              <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
+
+              <ul class="level-list">
+                <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
+                  <span>Nivel {{ nivel.numeroNivel }}</span>
+                  <strong>Bs. {{ money(nivel.porcentajeComision) }}</strong>
+                </li>
+              </ul>
+
+              <button type="button" class="select-plan-button" :disabled="loading || !patrocinador" @click="selectPlan(plan)">
+                <CheckCircle2 :size="16" />
+                {{ selectedPlan?.id === plan.id ? "Seleccionado" : "Seleccionar" }}
+              </button>
+            </article>
+          </div>
+
+          <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
+        </section>
+
+        <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador || !canSubmit">
           <Send :size="17" />
           {{ saving ? "Enviando..." : "Enviar preinscripcion" }}
         </button>
@@ -723,9 +730,27 @@ watch(
   line-height: 1.45;
 }
 
+.plan-selection-section {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--vy-line-2);
+}
+
+.plan-selection-section header h2 {
+  margin-bottom: 6px;
+}
+
+.plan-selection-section header p {
+  margin-bottom: 14px;
+  color: var(--vy-ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 800;
+}
+
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   align-items: stretch;
 }
@@ -739,6 +764,12 @@ watch(
   grid-template-rows: auto auto auto 1fr auto;
   gap: 12px;
   box-shadow: 0 12px 24px rgba(31, 26, 20, 0.07);
+}
+
+.plan-card.selected {
+  border-color: rgba(242, 135, 5, 0.78);
+  background: #fff8e9;
+  box-shadow: 0 14px 30px rgba(242, 135, 5, 0.16);
 }
 
 .plan-image {
@@ -827,6 +858,10 @@ watch(
   width: 100%;
   background: var(--vy-ink);
   color: #fff;
+}
+
+.plan-card.selected .select-plan-button {
+  background: linear-gradient(135deg, var(--vy-orange), var(--vy-orange-deep));
 }
 
 .change-plan-button {
