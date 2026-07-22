@@ -325,232 +325,143 @@ watch(
         </div>
       </article>
 
-      <form v-if="!saved" class="referral-form" novalidate @submit.prevent="submitForm">
+      <form v-if="!saved && currentStep === 'datos'" class="referral-form" novalidate @submit.prevent="continueToPlans">
         <div class="step-indicator">
           <span :class="{ active: currentStep === 'datos' }">1. Datos</span>
           <span :class="{ active: currentStep === 'plan' }">2. Plan y resumen</span>
         </div>
 
-        <h2>{{ currentStep === "datos" ? "Datos personales" : "Selecciona tu plan" }}</h2>
+        <h2>Datos personales</h2>
         <p v-if="error" class="error-box">{{ error }}</p>
         <p v-if="loading" class="loading-box">Validando enlace...</p>
 
-        <template v-if="currentStep === 'datos'">
-          <label>
-            CI
-            <input
-              v-model.trim="form.documento"
-              type="text"
-              required
-              maxlength="30"
-              autocomplete="off"
-              :class="{ invalid: fieldError('documento') }"
-              @blur="markTouched('documento')"
-              @input="markTouched('documento')"
-            />
-            <small v-if="fieldError('documento')" class="field-error">{{ fieldError("documento") }}</small>
-          </label>
-          <label>
-            Nombres
-            <input
-              v-model.trim="form.nombres"
-              type="text"
-              required
-              maxlength="100"
-              autocomplete="given-name"
-              :class="{ invalid: fieldError('nombres') }"
-              @blur="markTouched('nombres')"
-              @input="markTouched('nombres')"
-            />
-            <small v-if="fieldError('nombres')" class="field-error">{{ fieldError("nombres") }}</small>
-          </label>
-          <label>
-            Apellidos
-            <input
-              v-model.trim="form.apellidos"
-              type="text"
-              required
-              maxlength="100"
-              autocomplete="family-name"
-              :class="{ invalid: fieldError('apellidos') }"
-              @blur="markTouched('apellidos')"
-              @input="markTouched('apellidos')"
-            />
-            <small v-if="fieldError('apellidos')" class="field-error">{{ fieldError("apellidos") }}</small>
-          </label>
-          <label>
-            Numero de celular
-            <input
-              v-model.trim="form.telefono"
-              type="tel"
-              required
-              maxlength="30"
-              autocomplete="tel"
-              :class="{ invalid: fieldError('telefono') }"
-              @blur="markTouched('telefono')"
-              @input="markTouched('telefono')"
-            />
-            <small v-if="fieldError('telefono')" class="field-error">{{ fieldError("telefono") }}</small>
-          </label>
-          <label>
-            Email opcional
-            <input
-              v-model.trim="form.email"
-              type="email"
-              maxlength="120"
-              autocomplete="email"
-              :class="{ invalid: fieldError('email') }"
-              @blur="markTouched('email')"
-              @input="markTouched('email')"
-            />
-            <small v-if="fieldError('email')" class="field-error">{{ fieldError("email") }}</small>
-          </label>
-          <label>
-            Nombre de usuario
-            <input
-              v-model.trim="form.username"
-              type="text"
-              required
-              minlength="4"
-              maxlength="50"
-              autocomplete="username"
-              :class="{ invalid: fieldError('username') }"
-              @blur="markTouched('username')"
-              @input="markTouched('username')"
-            />
-            <small v-if="fieldError('username')" class="field-error">{{ fieldError("username") }}</small>
-            <small v-else-if="checkingUsername" class="field-hint">Verificando disponibilidad...</small>
-            <small v-else-if="usernameAvailable === true" class="field-success">Nombre de usuario disponible.</small>
-          </label>
-          <label>
-            Contrasena
-            <span class="password-field">
-              <input
-                v-model="form.password"
-                :type="showPassword ? 'text' : 'password'"
-                required
-                minlength="6"
-                maxlength="80"
-                autocomplete="new-password"
-                :class="{ invalid: fieldError('password') }"
-                @blur="markTouched('password')"
-                @input="markTouched('password')"
-              />
-              <button
-                type="button"
-                class="password-toggle"
-                :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
-                @click="showPassword = !showPassword"
-              >
-                <EyeOff v-if="showPassword" :size="18" />
-                <Eye v-else :size="18" />
-              </button>
-            </span>
-            <small v-if="fieldError('password')" class="field-error">{{ fieldError("password") }}</small>
-          </label>
-          <label>
-            Confirmar contrasena
-            <span class="password-field">
-              <input
-                v-model="form.confirmPassword"
-                :type="showConfirmPassword ? 'text' : 'password'"
-                required
-                minlength="6"
-                maxlength="80"
-                autocomplete="new-password"
-                :class="{ invalid: fieldError('confirmPassword') }"
-                @blur="markTouched('confirmPassword')"
-                @input="markTouched('confirmPassword')"
-              />
-              <button
-                type="button"
-                class="password-toggle"
-                :aria-label="showConfirmPassword ? 'Ocultar confirmacion' : 'Mostrar confirmacion'"
-                @click="showConfirmPassword = !showConfirmPassword"
-              >
-                <EyeOff v-if="showConfirmPassword" :size="18" />
-                <Eye v-else :size="18" />
-              </button>
-            </span>
-            <small v-if="fieldError('confirmPassword')" class="field-error">{{ fieldError("confirmPassword") }}</small>
-          </label>
+        <label>
+          CI
+          <input v-model.trim="form.documento" type="text" required maxlength="30" autocomplete="off" :class="{ invalid: fieldError('documento') }" @blur="markTouched('documento')" @input="markTouched('documento')" />
+          <small v-if="fieldError('documento')" class="field-error">{{ fieldError("documento") }}</small>
+        </label>
+        <label>
+          Nombres
+          <input v-model.trim="form.nombres" type="text" required maxlength="100" autocomplete="given-name" :class="{ invalid: fieldError('nombres') }" @blur="markTouched('nombres')" @input="markTouched('nombres')" />
+          <small v-if="fieldError('nombres')" class="field-error">{{ fieldError("nombres") }}</small>
+        </label>
+        <label>
+          Apellidos
+          <input v-model.trim="form.apellidos" type="text" required maxlength="100" autocomplete="family-name" :class="{ invalid: fieldError('apellidos') }" @blur="markTouched('apellidos')" @input="markTouched('apellidos')" />
+          <small v-if="fieldError('apellidos')" class="field-error">{{ fieldError("apellidos") }}</small>
+        </label>
+        <label>
+          Numero de celular
+          <input v-model.trim="form.telefono" type="tel" required maxlength="30" autocomplete="tel" :class="{ invalid: fieldError('telefono') }" @blur="markTouched('telefono')" @input="markTouched('telefono')" />
+          <small v-if="fieldError('telefono')" class="field-error">{{ fieldError("telefono") }}</small>
+        </label>
+        <label>
+          Email opcional
+          <input v-model.trim="form.email" type="email" maxlength="120" autocomplete="email" :class="{ invalid: fieldError('email') }" @blur="markTouched('email')" @input="markTouched('email')" />
+          <small v-if="fieldError('email')" class="field-error">{{ fieldError("email") }}</small>
+        </label>
+        <label>
+          Nombre de usuario
+          <input v-model.trim="form.username" type="text" required minlength="4" maxlength="50" autocomplete="username" :class="{ invalid: fieldError('username') }" @blur="markTouched('username')" @input="markTouched('username')" />
+          <small v-if="fieldError('username')" class="field-error">{{ fieldError("username") }}</small>
+          <small v-else-if="checkingUsername" class="field-hint">Verificando disponibilidad...</small>
+          <small v-else-if="usernameAvailable === true" class="field-success">Nombre de usuario disponible.</small>
+        </label>
+        <label>
+          Contrasena
+          <span class="password-field">
+            <input v-model="form.password" :type="showPassword ? 'text' : 'password'" required minlength="6" maxlength="80" autocomplete="new-password" :class="{ invalid: fieldError('password') }" @blur="markTouched('password')" @input="markTouched('password')" />
+            <button type="button" class="password-toggle" :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'" @click="showPassword = !showPassword">
+              <EyeOff v-if="showPassword" :size="18" />
+              <Eye v-else :size="18" />
+            </button>
+          </span>
+          <small v-if="fieldError('password')" class="field-error">{{ fieldError("password") }}</small>
+        </label>
+        <label>
+          Confirmar contrasena
+          <span class="password-field">
+            <input v-model="form.confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" required minlength="6" maxlength="80" autocomplete="new-password" :class="{ invalid: fieldError('confirmPassword') }" @blur="markTouched('confirmPassword')" @input="markTouched('confirmPassword')" />
+            <button type="button" class="password-toggle" :aria-label="showConfirmPassword ? 'Ocultar confirmacion' : 'Mostrar confirmacion'" @click="showConfirmPassword = !showConfirmPassword">
+              <EyeOff v-if="showConfirmPassword" :size="18" />
+              <Eye v-else :size="18" />
+            </button>
+          </span>
+          <small v-if="fieldError('confirmPassword')" class="field-error">{{ fieldError("confirmPassword") }}</small>
+        </label>
 
-          <button type="button" class="submit-button" :disabled="loading || !patrocinador" @click="continueToPlans">
-            Continuar a seleccion de plan
-          </button>
-        </template>
-
-        <template v-else>
-          <section class="form-summary-box">
-            <header>
-              <span>Resumen de datos</span>
-              <button type="button" @click="backToData">Editar datos</button>
-            </header>
-            <div>
-              <strong>{{ form.nombres }} {{ form.apellidos }}</strong>
-              <small>CI {{ form.documento }} - {{ form.telefono }}</small>
-              <small>Usuario solicitado: {{ form.username }}</small>
-            </div>
-          </section>
-
-          <section class="plan-selection-section">
-            <header>
-              <h2>Selecciona tu plan</h2>
-              <p>Elige el plan con el que quieres ingresar a la red.</p>
-            </header>
-
-            <div v-if="selectedPlan" class="selected-plan-box">
-              <span>Plan seleccionado</span>
-              <strong>{{ selectedPlan.nombre }} - Bs. {{ money(selectedPlan.precio) }}</strong>
-            </div>
-
-            <p v-if="loading" class="loading-box">Cargando planes...</p>
-
-            <div class="plans-grid">
-              <article
-                v-for="plan in sortedPlanes"
-                :key="plan.id"
-                class="plan-card"
-                :class="{ selected: selectedPlan?.id === plan.id }"
-              >
-                <img v-if="plan.imagenUrl" class="plan-image" :src="assetUrl(plan.imagenUrl)" :alt="plan.nombre" />
-                <div>
-                  <span class="plan-chip">{{ plan.nivelesAlcance }} niveles</span>
-                  <h3>{{ plan.nombre }}</h3>
-                  <p>{{ plan.descripcion || "Plan de ingreso Vidayoung" }}</p>
-                </div>
-
-                <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
-
-                <ul class="level-list">
-                  <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
-                    <span>Nivel {{ nivel.numeroNivel }}</span>
-                    <strong>Bs. {{ money(nivel.porcentajeComision) }}</strong>
-                  </li>
-                </ul>
-
-                <button type="button" class="select-plan-button" :disabled="loading || !patrocinador" @click="selectPlan(plan)">
-                  <CheckCircle2 :size="16" />
-                  {{ selectedPlan?.id === plan.id ? "Seleccionado" : "Seleccionar" }}
-                </button>
-              </article>
-            </div>
-
-            <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
-          </section>
-
-          <section class="final-summary-box">
-            <span>Resumen final</span>
-            <strong>{{ selectedPlan ? `${selectedPlan.nombre} - Bs. ${money(selectedPlan.precio)}` : "Selecciona un plan para continuar" }}</strong>
-            <small>Tu solicitud quedara vinculada a {{ sponsorName }}.</small>
-          </section>
-
-          <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador || !canSubmit">
-            <Send :size="17" />
-            {{ saving ? "Enviando..." : "Enviar preinscripcion" }}
-          </button>
-        </template>
+        <button type="submit" class="submit-button" :disabled="loading || !patrocinador">
+          Continuar a seleccion de plan
+        </button>
       </form>
+
+      <section v-else-if="!saved && currentStep === 'plan'" class="plans-panel plan-step-panel">
+        <div class="step-indicator">
+          <span :class="{ active: currentStep === 'datos' }">1. Datos</span>
+          <span :class="{ active: currentStep === 'plan' }">2. Plan y resumen</span>
+        </div>
+
+        <section class="form-summary-box">
+          <header>
+            <span>Resumen de datos</span>
+            <button type="button" @click="backToData">Editar datos</button>
+          </header>
+          <div>
+            <strong>{{ form.nombres }} {{ form.apellidos }}</strong>
+            <small>CI {{ form.documento }} - {{ form.telefono }}</small>
+            <small>Usuario solicitado: {{ form.username }}</small>
+          </div>
+        </section>
+
+        <section class="plan-selection-section">
+          <header>
+            <h2>Selecciona tu plan</h2>
+            <p>Elige el plan con el que quieres ingresar a la red.</p>
+          </header>
+
+          <div v-if="selectedPlan" class="selected-plan-box">
+            <span>Plan seleccionado</span>
+            <strong>{{ selectedPlan.nombre }} - Bs. {{ money(selectedPlan.precio) }}</strong>
+          </div>
+
+          <p v-if="loading" class="loading-box">Cargando planes...</p>
+
+          <div class="plans-grid">
+            <article v-for="plan in sortedPlanes" :key="plan.id" class="plan-card" :class="{ selected: selectedPlan?.id === plan.id }">
+              <img v-if="plan.imagenUrl" class="plan-image" :src="assetUrl(plan.imagenUrl)" :alt="plan.nombre" />
+              <div>
+                <span class="plan-chip">{{ plan.nivelesAlcance }} niveles</span>
+                <h3>{{ plan.nombre }}</h3>
+                <p>{{ plan.descripcion || "Plan de ingreso Vidayoung" }}</p>
+              </div>
+              <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
+              <ul class="level-list">
+                <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
+                  <span>Nivel {{ nivel.numeroNivel }}</span>
+                  <strong>Bs. {{ money(nivel.porcentajeComision) }}</strong>
+                </li>
+              </ul>
+              <button type="button" class="select-plan-button" :disabled="loading || !patrocinador" @click="selectPlan(plan)">
+                <CheckCircle2 :size="16" />
+                {{ selectedPlan?.id === plan.id ? "Seleccionado" : "Seleccionar" }}
+              </button>
+            </article>
+          </div>
+
+          <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
+        </section>
+
+        <section class="final-summary-box">
+          <span>Resumen final</span>
+          <strong>{{ selectedPlan ? `${selectedPlan.nombre} - Bs. ${money(selectedPlan.precio)}` : "Selecciona un plan para continuar" }}</strong>
+          <small>Tu solicitud quedara vinculada a {{ sponsorName }}.</small>
+        </section>
+
+        <button type="button" class="submit-button" :disabled="saving || loading || !patrocinador || !canSubmit" @click="submitForm">
+          <Send :size="17" />
+          {{ saving ? "Enviando..." : "Enviar preinscripcion" }}
+        </button>
+      </section>
 
       <article v-else class="success-panel">
         <CheckCircle2 :size="44" />
