@@ -10,6 +10,7 @@ import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Persona;
+import com.vidayoung.platform.Model.Entity.Recompensa;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
@@ -88,7 +89,8 @@ public class BilleteraRestController {
                             billeteraService.listarHistorialMembresias(personaId),
                             billeteraService.listarCierresMensuales(personaId),
                             efectivoRecompensasDisponible(personaId),
-                            BigDecimal.ZERO
+                            BigDecimal.ZERO,
+                            detalleEfectivoMensual(personaId)
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -158,6 +160,27 @@ public class BilleteraRestController {
         private final BigDecimal efectivoRecompensasDisponible;
 
         private final BigDecimal productosRecompensasDisponible;
+
+        private final List<DetalleEfectivoMensualResponse> detalleEfectivoMensual;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class DetalleEfectivoMensualResponse {
+
+        private final Long recompensaId;
+
+        private final Integer nivelGenerado;
+
+        private final BigDecimal montoDisponible;
+
+        private final String planIngreso;
+
+        private final Long referidoId;
+
+        private final String referidoNombre;
+
+        private final String referidoDocumento;
     }
 
     @Getter
@@ -280,12 +303,49 @@ public class BilleteraRestController {
     }
 
     private BigDecimal efectivoMensualDisponible(Long personaId) {
+        return recompensasMensualesDisponibles(personaId).stream()
+                .map(this::efectivoDisponible)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<DetalleEfectivoMensualResponse> detalleEfectivoMensual(Long personaId) {
+        return recompensasMensualesDisponibles(personaId).stream()
+                .map(recompensa -> {
+                    Persona referido = recompensa.getReferido() == null ? null : recompensa.getReferido().getPersona();
+                    return new DetalleEfectivoMensualResponse(
+                            recompensa.getId(),
+                            recompensa.getNivelGenerado(),
+                            efectivoDisponible(recompensa),
+                            recompensa.getPlanIngreso() == null ? null : recompensa.getPlanIngreso().getNombre(),
+                            recompensa.getReferido() == null ? null : recompensa.getReferido().getId(),
+                            nombreCompleto(referido),
+                            referido == null ? null : referido.getDocumento()
+                    );
+                })
+                .toList();
+    }
+
+    private List<Recompensa> recompensasMensualesDisponibles(Long personaId) {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
                 .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
-                .map(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado())).max(BigDecimal.ZERO))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(recompensa -> efectivoDisponible(recompensa).compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+    }
+
+    private BigDecimal efectivoDisponible(Recompensa recompensa) {
+        return zeroIfNull(recompensa.getMontoEfectivo())
+                .subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado()))
+                .max(BigDecimal.ZERO);
+    }
+
+    private String nombreCompleto(Persona persona) {
+        if (persona == null) {
+            return "Persona";
+        }
+        return ((persona.getNombres() == null ? "" : persona.getNombres()) + " "
+                + (persona.getApellidos() == null ? "" : persona.getApellidos())).trim();
     }
 
     private BigDecimal productosRecompensasDisponible(Long personaId) {

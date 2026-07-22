@@ -64,6 +64,7 @@ const billeteraSeleccionada = computed(() => selectedWallet.value?.billetera || 
 const efectivoDisponibleRetiro = computed(() =>
   Number(billeteraSeleccionada.value.saldoDinero || 0) + Number(selectedWallet.value?.efectivoRecompensasDisponible || 0)
 );
+const detalleEfectivoMensual = computed(() => selectedWallet.value?.detalleEfectivoMensual || []);
 const productosDisponiblesRetiro = computed(() => Number(selectedWallet.value?.productosRecompensasDisponible || 0));
 const selectedProducto = computed(() =>
   productos.value.find((producto) => Number(producto.id) === Number(selectedProductoId.value))
@@ -502,7 +503,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="wallet-values">
                 <div>
-                  <small>Efectivo inmediato</small>
+                  <small>Efectivo mensual disponible</small>
                   <strong>Bs. {{ money(efectivoDisponibleRetiro) }}</strong>
                   <span>Billetera Bs. {{ money(billeteraSeleccionada.saldoDinero) }} + recompensas Bs. {{ money(selectedWallet?.efectivoRecompensasDisponible) }}</span>
                 </div>
@@ -512,6 +513,36 @@ onBeforeUnmount(() => {
                   <span>Se retiran desde el modulo de nivel 1.</span>
                 </div>
               </div>
+
+              <section class="cash-breakdown">
+                <header>
+                  <div>
+                    <small>Origen del efectivo</small>
+                    <strong>Detalle del monto a pagar</strong>
+                  </div>
+                  <b>Bs. {{ money(efectivoDisponibleRetiro) }}</b>
+                </header>
+
+                <div class="breakdown-row">
+                  <span>
+                    <strong>Saldo directo de billetera</strong>
+                    <small>Dinero acreditado previamente a la billetera.</small>
+                  </span>
+                  <b>Bs. {{ money(billeteraSeleccionada.saldoDinero) }}</b>
+                </div>
+
+                <div v-for="item in detalleEfectivoMensual" :key="item.recompensaId" class="breakdown-row">
+                  <span>
+                    <strong>Nivel {{ item.nivelGenerado }} - {{ item.referidoNombre || "Referido" }}</strong>
+                    <small>{{ item.planIngreso || "Plan" }}<template v-if="item.referidoDocumento"> - CI {{ item.referidoDocumento }}</template></small>
+                  </span>
+                  <b>Bs. {{ money(item.montoDisponible) }}</b>
+                </div>
+
+                <div v-if="!detalleEfectivoMensual.length" class="breakdown-empty">
+                  No hay recompensas mensuales pendientes; el retiro saldra solo del saldo directo.
+                </div>
+              </section>
 
               <div class="withdraw-grid">
                 <label class="field">
@@ -597,6 +628,19 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .selected-person strong, .wallet-values strong { display: block; margin-top: 5px; color: var(--vy-ink); font-size: 16px; font-weight: 900; }
 .selected-person span, .wallet-values span { display: block; margin-top: 4px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; line-height: 1.35; }
 .wallet-values, .withdraw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cash-breakdown { border: 1px solid var(--vy-line); border-radius: 14px; background: #fff; overflow: hidden; }
+.cash-breakdown header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--vy-line-2); background: var(--vy-surface-2); }
+.cash-breakdown header small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.cash-breakdown header strong { display: block; margin-top: 3px; font-size: 15px; font-weight: 900; }
+.cash-breakdown header b { white-space: nowrap; font-size: 18px; font-weight: 950; }
+.breakdown-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border-bottom: 1px solid var(--vy-line-2); }
+.breakdown-row:last-child { border-bottom: 0; }
+.breakdown-row span { min-width: 0; }
+.breakdown-row strong, .breakdown-row small { display: block; }
+.breakdown-row strong { font-size: 13px; font-weight: 900; }
+.breakdown-row small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.breakdown-row b { white-space: nowrap; font-size: 14px; font-weight: 950; }
+.breakdown-empty { padding: 12px 14px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
 .readonly-total { min-height: 42px; display: flex; align-items: center; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); font-weight: 900; }
 .max-button { width: fit-content; min-height: 36px; padding: 0 13px; border-radius: 10px; background: rgba(242, 135, 5, 0.1); color: var(--vy-orange-deep); font-size: 12px; font-weight: 900; }
 .product-withdrawal { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
