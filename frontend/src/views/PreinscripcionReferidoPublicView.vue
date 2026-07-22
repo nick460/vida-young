@@ -12,6 +12,7 @@ const saved = ref(false);
 const patrocinador = ref(null);
 const planes = ref([]);
 const selectedPlanId = ref("");
+const currentStep = ref("datos");
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
 const checkingUsername = ref(false);
@@ -218,6 +219,22 @@ function selectPlan(plan) {
   selectedPlanId.value = String(plan.id);
 }
 
+function continueToPlans() {
+  markAllTouched();
+  error.value = "";
+
+  if (!isFormValid.value) {
+    error.value = "Revisa los campos marcados antes de continuar.";
+    return;
+  }
+
+  currentStep.value = "plan";
+}
+
+function backToData() {
+  currentStep.value = "datos";
+}
+
 function assetUrl(path) {
   if (!path) {
     return "";
@@ -309,199 +326,230 @@ watch(
       </article>
 
       <form v-if="!saved" class="referral-form" novalidate @submit.prevent="submitForm">
-        <h2>Datos personales</h2>
+        <div class="step-indicator">
+          <span :class="{ active: currentStep === 'datos' }">1. Datos</span>
+          <span :class="{ active: currentStep === 'plan' }">2. Plan y resumen</span>
+        </div>
+
+        <h2>{{ currentStep === "datos" ? "Datos personales" : "Selecciona tu plan" }}</h2>
         <p v-if="error" class="error-box">{{ error }}</p>
         <p v-if="loading" class="loading-box">Validando enlace...</p>
 
-        <label>
-          CI
-          <input
-            v-model.trim="form.documento"
-            type="text"
-            required
-            maxlength="30"
-            autocomplete="off"
-            :class="{ invalid: fieldError('documento') }"
-            @blur="markTouched('documento')"
-            @input="markTouched('documento')"
-          />
-          <small v-if="fieldError('documento')" class="field-error">{{ fieldError("documento") }}</small>
-        </label>
-        <label>
-          Nombres
-          <input
-            v-model.trim="form.nombres"
-            type="text"
-            required
-            maxlength="100"
-            autocomplete="given-name"
-            :class="{ invalid: fieldError('nombres') }"
-            @blur="markTouched('nombres')"
-            @input="markTouched('nombres')"
-          />
-          <small v-if="fieldError('nombres')" class="field-error">{{ fieldError("nombres") }}</small>
-        </label>
-        <label>
-          Apellidos
-          <input
-            v-model.trim="form.apellidos"
-            type="text"
-            required
-            maxlength="100"
-            autocomplete="family-name"
-            :class="{ invalid: fieldError('apellidos') }"
-            @blur="markTouched('apellidos')"
-            @input="markTouched('apellidos')"
-          />
-          <small v-if="fieldError('apellidos')" class="field-error">{{ fieldError("apellidos") }}</small>
-        </label>
-        <label>
-          Numero de celular
-          <input
-            v-model.trim="form.telefono"
-            type="tel"
-            required
-            maxlength="30"
-            autocomplete="tel"
-            :class="{ invalid: fieldError('telefono') }"
-            @blur="markTouched('telefono')"
-            @input="markTouched('telefono')"
-          />
-          <small v-if="fieldError('telefono')" class="field-error">{{ fieldError("telefono") }}</small>
-        </label>
-        <label>
-          Email opcional
-          <input
-            v-model.trim="form.email"
-            type="email"
-            maxlength="120"
-            autocomplete="email"
-            :class="{ invalid: fieldError('email') }"
-            @blur="markTouched('email')"
-            @input="markTouched('email')"
-          />
-          <small v-if="fieldError('email')" class="field-error">{{ fieldError("email") }}</small>
-        </label>
-        <label>
-          Nombre de usuario
-          <input
-            v-model.trim="form.username"
-            type="text"
-            required
-            minlength="4"
-            maxlength="50"
-            autocomplete="username"
-            :class="{ invalid: fieldError('username') }"
-            @blur="markTouched('username')"
-            @input="markTouched('username')"
-          />
-          <small v-if="fieldError('username')" class="field-error">{{ fieldError("username") }}</small>
-          <small v-else-if="checkingUsername" class="field-hint">Verificando disponibilidad...</small>
-          <small v-else-if="usernameAvailable === true" class="field-success">Nombre de usuario disponible.</small>
-        </label>
-        <label>
-          Contrasena
-          <span class="password-field">
+        <template v-if="currentStep === 'datos'">
+          <label>
+            CI
             <input
-              v-model="form.password"
-              :type="showPassword ? 'text' : 'password'"
+              v-model.trim="form.documento"
+              type="text"
               required
-              minlength="6"
-              maxlength="80"
-              autocomplete="new-password"
-              :class="{ invalid: fieldError('password') }"
-              @blur="markTouched('password')"
-              @input="markTouched('password')"
+              maxlength="30"
+              autocomplete="off"
+              :class="{ invalid: fieldError('documento') }"
+              @blur="markTouched('documento')"
+              @input="markTouched('documento')"
             />
-            <button
-              type="button"
-              class="password-toggle"
-              :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
-              @click="showPassword = !showPassword"
-            >
-              <EyeOff v-if="showPassword" :size="18" />
-              <Eye v-else :size="18" />
-            </button>
-          </span>
-          <small v-if="fieldError('password')" class="field-error">{{ fieldError("password") }}</small>
-        </label>
-        <label>
-          Confirmar contrasena
-          <span class="password-field">
+            <small v-if="fieldError('documento')" class="field-error">{{ fieldError("documento") }}</small>
+          </label>
+          <label>
+            Nombres
             <input
-              v-model="form.confirmPassword"
-              :type="showConfirmPassword ? 'text' : 'password'"
+              v-model.trim="form.nombres"
+              type="text"
               required
-              minlength="6"
-              maxlength="80"
-              autocomplete="new-password"
-              :class="{ invalid: fieldError('confirmPassword') }"
-              @blur="markTouched('confirmPassword')"
-              @input="markTouched('confirmPassword')"
+              maxlength="100"
+              autocomplete="given-name"
+              :class="{ invalid: fieldError('nombres') }"
+              @blur="markTouched('nombres')"
+              @input="markTouched('nombres')"
             />
-            <button
-              type="button"
-              class="password-toggle"
-              :aria-label="showConfirmPassword ? 'Ocultar confirmacion' : 'Mostrar confirmacion'"
-              @click="showConfirmPassword = !showConfirmPassword"
-            >
-              <EyeOff v-if="showConfirmPassword" :size="18" />
-              <Eye v-else :size="18" />
-            </button>
-          </span>
-          <small v-if="fieldError('confirmPassword')" class="field-error">{{ fieldError("confirmPassword") }}</small>
-        </label>
-
-        <section class="plan-selection-section">
-          <header>
-            <h2>Selecciona tu plan</h2>
-            <p>Despues de llenar tus datos, elige el plan con el que quieres ingresar a la red.</p>
-          </header>
-
-          <div v-if="selectedPlan" class="selected-plan-box">
-            <span>Plan seleccionado</span>
-            <strong>{{ selectedPlan.nombre }} - Bs. {{ money(selectedPlan.precio) }}</strong>
-          </div>
-
-          <p v-if="loading" class="loading-box">Cargando planes...</p>
-
-          <div class="plans-grid">
-            <article
-              v-for="plan in sortedPlanes"
-              :key="plan.id"
-              class="plan-card"
-              :class="{ selected: selectedPlan?.id === plan.id }"
-            >
-              <img v-if="plan.imagenUrl" class="plan-image" :src="assetUrl(plan.imagenUrl)" :alt="plan.nombre" />
-              <div>
-                <span class="plan-chip">{{ plan.nivelesAlcance }} niveles</span>
-                <h3>{{ plan.nombre }}</h3>
-                <p>{{ plan.descripcion || "Plan de ingreso Vidayoung" }}</p>
-              </div>
-
-              <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
-
-              <ul class="level-list">
-                <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
-                  <span>Nivel {{ nivel.numeroNivel }}</span>
-                  <strong>Bs. {{ money(nivel.porcentajeComision) }}</strong>
-                </li>
-              </ul>
-
-              <button type="button" class="select-plan-button" :disabled="loading || !patrocinador" @click="selectPlan(plan)">
-                <CheckCircle2 :size="16" />
-                {{ selectedPlan?.id === plan.id ? "Seleccionado" : "Seleccionar" }}
+            <small v-if="fieldError('nombres')" class="field-error">{{ fieldError("nombres") }}</small>
+          </label>
+          <label>
+            Apellidos
+            <input
+              v-model.trim="form.apellidos"
+              type="text"
+              required
+              maxlength="100"
+              autocomplete="family-name"
+              :class="{ invalid: fieldError('apellidos') }"
+              @blur="markTouched('apellidos')"
+              @input="markTouched('apellidos')"
+            />
+            <small v-if="fieldError('apellidos')" class="field-error">{{ fieldError("apellidos") }}</small>
+          </label>
+          <label>
+            Numero de celular
+            <input
+              v-model.trim="form.telefono"
+              type="tel"
+              required
+              maxlength="30"
+              autocomplete="tel"
+              :class="{ invalid: fieldError('telefono') }"
+              @blur="markTouched('telefono')"
+              @input="markTouched('telefono')"
+            />
+            <small v-if="fieldError('telefono')" class="field-error">{{ fieldError("telefono") }}</small>
+          </label>
+          <label>
+            Email opcional
+            <input
+              v-model.trim="form.email"
+              type="email"
+              maxlength="120"
+              autocomplete="email"
+              :class="{ invalid: fieldError('email') }"
+              @blur="markTouched('email')"
+              @input="markTouched('email')"
+            />
+            <small v-if="fieldError('email')" class="field-error">{{ fieldError("email") }}</small>
+          </label>
+          <label>
+            Nombre de usuario
+            <input
+              v-model.trim="form.username"
+              type="text"
+              required
+              minlength="4"
+              maxlength="50"
+              autocomplete="username"
+              :class="{ invalid: fieldError('username') }"
+              @blur="markTouched('username')"
+              @input="markTouched('username')"
+            />
+            <small v-if="fieldError('username')" class="field-error">{{ fieldError("username") }}</small>
+            <small v-else-if="checkingUsername" class="field-hint">Verificando disponibilidad...</small>
+            <small v-else-if="usernameAvailable === true" class="field-success">Nombre de usuario disponible.</small>
+          </label>
+          <label>
+            Contrasena
+            <span class="password-field">
+              <input
+                v-model="form.password"
+                :type="showPassword ? 'text' : 'password'"
+                required
+                minlength="6"
+                maxlength="80"
+                autocomplete="new-password"
+                :class="{ invalid: fieldError('password') }"
+                @blur="markTouched('password')"
+                @input="markTouched('password')"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
+                @click="showPassword = !showPassword"
+              >
+                <EyeOff v-if="showPassword" :size="18" />
+                <Eye v-else :size="18" />
               </button>
-            </article>
-          </div>
+            </span>
+            <small v-if="fieldError('password')" class="field-error">{{ fieldError("password") }}</small>
+          </label>
+          <label>
+            Confirmar contrasena
+            <span class="password-field">
+              <input
+                v-model="form.confirmPassword"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                required
+                minlength="6"
+                maxlength="80"
+                autocomplete="new-password"
+                :class="{ invalid: fieldError('confirmPassword') }"
+                @blur="markTouched('confirmPassword')"
+                @input="markTouched('confirmPassword')"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showConfirmPassword ? 'Ocultar confirmacion' : 'Mostrar confirmacion'"
+                @click="showConfirmPassword = !showConfirmPassword"
+              >
+                <EyeOff v-if="showConfirmPassword" :size="18" />
+                <Eye v-else :size="18" />
+              </button>
+            </span>
+            <small v-if="fieldError('confirmPassword')" class="field-error">{{ fieldError("confirmPassword") }}</small>
+          </label>
 
-          <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
-        </section>
+          <button type="button" class="submit-button" :disabled="loading || !patrocinador" @click="continueToPlans">
+            Continuar a seleccion de plan
+          </button>
+        </template>
 
-        <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador || !canSubmit">
-          <Send :size="17" />
-          {{ saving ? "Enviando..." : "Enviar preinscripcion" }}
-        </button>
+        <template v-else>
+          <section class="form-summary-box">
+            <header>
+              <span>Resumen de datos</span>
+              <button type="button" @click="backToData">Editar datos</button>
+            </header>
+            <div>
+              <strong>{{ form.nombres }} {{ form.apellidos }}</strong>
+              <small>CI {{ form.documento }} - {{ form.telefono }}</small>
+              <small>Usuario solicitado: {{ form.username }}</small>
+            </div>
+          </section>
+
+          <section class="plan-selection-section">
+            <header>
+              <h2>Selecciona tu plan</h2>
+              <p>Elige el plan con el que quieres ingresar a la red.</p>
+            </header>
+
+            <div v-if="selectedPlan" class="selected-plan-box">
+              <span>Plan seleccionado</span>
+              <strong>{{ selectedPlan.nombre }} - Bs. {{ money(selectedPlan.precio) }}</strong>
+            </div>
+
+            <p v-if="loading" class="loading-box">Cargando planes...</p>
+
+            <div class="plans-grid">
+              <article
+                v-for="plan in sortedPlanes"
+                :key="plan.id"
+                class="plan-card"
+                :class="{ selected: selectedPlan?.id === plan.id }"
+              >
+                <img v-if="plan.imagenUrl" class="plan-image" :src="assetUrl(plan.imagenUrl)" :alt="plan.nombre" />
+                <div>
+                  <span class="plan-chip">{{ plan.nivelesAlcance }} niveles</span>
+                  <h3>{{ plan.nombre }}</h3>
+                  <p>{{ plan.descripcion || "Plan de ingreso Vidayoung" }}</p>
+                </div>
+
+                <strong class="plan-price">Bs. {{ money(plan.precio) }}</strong>
+
+                <ul class="level-list">
+                  <li v-for="nivel in sortedLevels(plan)" :key="nivel.id || nivel.numeroNivel">
+                    <span>Nivel {{ nivel.numeroNivel }}</span>
+                    <strong>Bs. {{ money(nivel.porcentajeComision) }}</strong>
+                  </li>
+                </ul>
+
+                <button type="button" class="select-plan-button" :disabled="loading || !patrocinador" @click="selectPlan(plan)">
+                  <CheckCircle2 :size="16" />
+                  {{ selectedPlan?.id === plan.id ? "Seleccionado" : "Seleccionar" }}
+                </button>
+              </article>
+            </div>
+
+            <p v-if="!sortedPlanes.length && !loading" class="empty-box">No hay planes disponibles por el momento.</p>
+          </section>
+
+          <section class="final-summary-box">
+            <span>Resumen final</span>
+            <strong>{{ selectedPlan ? `${selectedPlan.nombre} - Bs. ${money(selectedPlan.precio)}` : "Selecciona un plan para continuar" }}</strong>
+            <small>Tu solicitud quedara vinculada a {{ sponsorName }}.</small>
+          </section>
+
+          <button type="submit" class="submit-button" :disabled="saving || loading || !patrocinador || !canSubmit">
+            <Send :size="17" />
+            {{ saving ? "Enviando..." : "Enviar preinscripcion" }}
+          </button>
+        </template>
       </form>
 
       <article v-else class="success-panel">
@@ -722,6 +770,32 @@ watch(
   margin-bottom: 16px;
 }
 
+.step-indicator {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.step-indicator span {
+  min-height: 36px;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  background: var(--vy-surface-2);
+  color: var(--vy-ink-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.step-indicator span.active {
+  border-color: rgba(242, 135, 5, 0.44);
+  background: rgba(242, 135, 5, 0.12);
+  color: var(--vy-orange-deep);
+}
+
 .plans-panel header p {
   margin-top: -8px;
   margin-bottom: 16px;
@@ -731,9 +805,7 @@ watch(
 }
 
 .plan-selection-section {
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--vy-line-2);
+  margin-top: 16px;
 }
 
 .plan-selection-section header h2 {
@@ -879,6 +951,64 @@ watch(
   border: 1px solid rgba(242, 135, 5, 0.28);
   border-radius: 8px;
   background: rgba(242, 135, 5, 0.08);
+}
+
+.form-summary-box,
+.final-summary-box {
+  margin-bottom: 16px;
+  padding: 13px;
+  border: 1px solid rgba(242, 135, 5, 0.26);
+  border-radius: 8px;
+  background: rgba(242, 135, 5, 0.07);
+}
+
+.form-summary-box header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.form-summary-box header span,
+.final-summary-box span {
+  color: var(--vy-orange-deep);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.form-summary-box header button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(242, 135, 5, 0.32);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--vy-orange-deep);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.form-summary-box strong,
+.form-summary-box small,
+.final-summary-box strong,
+.final-summary-box small {
+  display: block;
+}
+
+.form-summary-box strong,
+.final-summary-box strong {
+  color: var(--vy-ink);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.form-summary-box small,
+.final-summary-box small {
+  margin-top: 4px;
+  color: var(--vy-ink-3);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .selected-plan-box span,
