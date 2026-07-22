@@ -20,6 +20,7 @@ export const BASE_MENU_ITEMS = [
   { id: "gestiones", label: "Gestiones", icon: "CalendarClock", roles: [ROLE_ADMIN] },
   { id: "caja-empresa", label: "Caja empresa", icon: "Building2", roles: [ROLE_ADMIN] },
   { id: "retiros-billeteras", label: "Retiros billeteras", icon: "ArrowDownToLine", roles: [ROLE_ADMIN] },
+  { id: "retiros-nivel-1", label: "Retiros nivel 1", icon: "Gift", roles: [ROLE_ADMIN] },
   { id: "wallet", label: "Finanzas", icon: "Wallet", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] },
   { id: "shop", label: "Tienda", icon: "ShoppingBag", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] },
   { id: "network", label: "Mi red", icon: "Users", badge: "138", roles: [ROLE_ADMIN, "EMBAJADOR"] },

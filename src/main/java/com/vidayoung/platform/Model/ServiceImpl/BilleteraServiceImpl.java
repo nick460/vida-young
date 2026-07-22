@@ -274,12 +274,15 @@ public class BilleteraServiceImpl implements BilleteraService {
                 : productosCalculados.stream()
                         .map(RetiroProductoCalculado::subtotal)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal efectivoRecompensasDisponible = efectivoRecompensasDisponible(personaId);
-        BigDecimal productosRecompensasDisponible = zeroIfNull(billetera.getSaldoProductos());
+        BigDecimal efectivoRecompensasDisponible = efectivoRecompensasMensualesDisponible(personaId);
+        BigDecimal productosRecompensasDisponible = BigDecimal.ZERO;
         BigDecimal efectivoTotalDisponible = zeroIfNull(billetera.getSaldoDinero()).add(efectivoRecompensasDisponible);
 
         if (dinero.compareTo(BigDecimal.ZERO) < 0 || productos.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Los montos de retiro no pueden ser negativos.");
+        }
+        if (productos.compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException("Los retiros mensuales solo permiten efectivo de recompensas de nivel 2 en adelante.");
         }
         if (dinero.add(productos).compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Ingresa un monto de efectivo o productos para retirar.");
@@ -478,10 +481,11 @@ public class BilleteraServiceImpl implements BilleteraService {
                 });
     }
 
-    private BigDecimal efectivoRecompensasDisponible(Long personaId) {
+    private BigDecimal efectivoRecompensasMensualesDisponible(Long personaId) {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
                 .map(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado())).max(BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
@@ -500,7 +504,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             return;
         }
 
-        for (Recompensa recompensa : recompensasCobrables(personaId)) {
+        for (Recompensa recompensa : recompensasMensualesCobrables(personaId)) {
             BigDecimal disponible = zeroIfNull(recompensa.getMontoEfectivo())
                     .subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado()))
                     .max(BigDecimal.ZERO);
@@ -546,10 +550,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             return;
         }
 
-        BigDecimal objetivo = Boolean.TRUE.equals(recompensa.getCobrable())
-                && Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado())
-                ? zeroIfNull(recompensa.getValorProductos()).subtract(zeroIfNull(recompensa.getValorProductosRetirado())).max(BigDecimal.ZERO)
-                : BigDecimal.ZERO;
+        BigDecimal objetivo = BigDecimal.ZERO;
         BigDecimal registrado = movimientoBilleteraDao
                 .findByReferenciaTipoAndReferenciaIdAndTipo("RECOMPENSA_PRODUCTOS", recompensa.getId(), MovimientoBilletera.TIPO_PRODUCTOS)
                 .stream()
@@ -585,6 +586,14 @@ public class BilleteraServiceImpl implements BilleteraService {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .toList();
+    }
+
+    private List<Recompensa> recompensasMensualesCobrables(Long personaId) {
+        return recompensaDao.findByBeneficiarioId(personaId).stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
                 .toList();
     }
 

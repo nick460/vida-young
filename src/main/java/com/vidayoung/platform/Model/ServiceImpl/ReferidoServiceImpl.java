@@ -221,7 +221,7 @@ public class ReferidoServiceImpl implements ReferidoService {
         while (beneficiario != null && nivelActual <= alcance) {
             PlanNivel nivel = nivelesPorNumero.get(nivelActual);
             BigDecimal efectivo = nivel == null ? BigDecimal.ZERO : zeroIfNull(nivel.getPorcentajeComision());
-            BigDecimal productos = nivel == null ? BigDecimal.ZERO : zeroIfNull(nivel.getValorProductosBeneficio());
+            BigDecimal productos = nivel == null || nivelActual > 1 ? BigDecimal.ZERO : zeroIfNull(nivel.getValorProductosBeneficio());
             Optional<Referido> beneficiarioReferido = referidoDao.findByPersonaId(beneficiario.getId())
                     .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()));
             int alcanceBeneficiario = beneficiarioReferido

@@ -56,8 +56,7 @@ public class BilleteraRestController {
                     .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                     .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
                     .filter(recompensa -> recompensa.getBeneficiario() != null && recompensa.getBeneficiario().getId() != null)
-                    .filter(recompensa -> efectivoDisponible(recompensa.getBeneficiario().getId()).compareTo(BigDecimal.ZERO) > 0
-                            || productosRecompensasDisponible(recompensa.getBeneficiario().getId()).compareTo(BigDecimal.ZERO) > 0)
+                    .filter(recompensa -> efectivoMensualDisponible(recompensa.getBeneficiario().getId()).compareTo(BigDecimal.ZERO) > 0)
                     .forEach(recompensa -> billeterasConSaldo.computeIfAbsent(
                             recompensa.getBeneficiario().getId(),
                             id -> billeteraService.asegurarBilletera(recompensa.getBeneficiario())
@@ -67,7 +66,7 @@ public class BilleteraRestController {
                     .map(billetera -> BilleteraSaldoResponse.desdeBilletera(
                             billetera,
                             efectivoRecompensasDisponible(billetera.getPersona().getId()),
-                            zeroIfNull(billetera.getSaldoProductos()),
+                            BigDecimal.ZERO,
                             true
                     ))
                     .toList());
@@ -89,7 +88,7 @@ public class BilleteraRestController {
                             billeteraService.listarHistorialMembresias(personaId),
                             billeteraService.listarCierresMensuales(personaId),
                             efectivoRecompensasDisponible(personaId),
-                            zeroIfNull(billetera.getSaldoProductos())
+                            BigDecimal.ZERO
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -213,7 +212,7 @@ public class BilleteraRestController {
                     zeroIfNullStatic(billetera.getSaldoPv()),
                     zeroIfNullStatic(billetera.getSaldoQp()),
                     zeroIfNullStatic(billetera.getSaldoCr()),
-                    zeroIfNullStatic(billetera.getSaldoProductos()),
+                    BigDecimal.ZERO,
                     zeroIfNullStatic(efectivoRecompensasDisponible),
                     zeroIfNullStatic(productosRecompensasDisponible),
                     periodoActivo,
@@ -277,13 +276,14 @@ public class BilleteraRestController {
     }
 
     private BigDecimal efectivoRecompensasDisponible(Long personaId) {
-        return efectivoDisponible(personaId);
+        return efectivoMensualDisponible(personaId);
     }
 
-    private BigDecimal efectivoDisponible(Long personaId) {
+    private BigDecimal efectivoMensualDisponible(Long personaId) {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
                 .map(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado())).max(BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }

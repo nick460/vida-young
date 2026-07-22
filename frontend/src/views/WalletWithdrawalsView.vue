@@ -64,7 +64,7 @@ const billeteraSeleccionada = computed(() => selectedWallet.value?.billetera || 
 const efectivoDisponibleRetiro = computed(() =>
   Number(billeteraSeleccionada.value.saldoDinero || 0) + Number(selectedWallet.value?.efectivoRecompensasDisponible || 0)
 );
-const productosDisponiblesRetiro = computed(() => Number(billeteraSeleccionada.value.saldoProductos || 0));
+const productosDisponiblesRetiro = computed(() => Number(selectedWallet.value?.productosRecompensasDisponible || 0));
 const selectedProducto = computed(() =>
   productos.value.find((producto) => Number(producto.id) === Number(selectedProductoId.value))
 );
@@ -271,11 +271,8 @@ async function registrarRetiro() {
       method: "POST",
       body: JSON.stringify({
         montoDinero: Number(retiroForm.value.montoDinero || 0),
-        montoProductos: retiroProductosTotal.value,
-        productos: retiroForm.value.productos.map((item) => ({
-          productoId: Number(item.productoId),
-          cantidad: Number(item.cantidad || 1)
-        })),
+        montoProductos: 0,
+        productos: [],
         observacion: retiroForm.value.observacion || null
       })
     });
@@ -416,7 +413,7 @@ onBeforeUnmount(() => {
         <header class="section-header">
           <div>
             <h2>Saldos por persona</h2>
-            <p>Gestiona retiros de efectivo y productos desde la billetera activa.</p>
+            <p>Gestiona retiros de efectivo mensual desde la billetera activa.</p>
           </div>
           <label class="search-box">
             <Search :size="16" />
@@ -510,9 +507,9 @@ onBeforeUnmount(() => {
                   <span>Billetera Bs. {{ money(billeteraSeleccionada.saldoDinero) }} + recompensas Bs. {{ money(selectedWallet?.efectivoRecompensasDisponible) }}</span>
                 </div>
                 <div>
-                  <small>Productos canjeables</small>
+                  <small>Productos nivel 1</small>
                   <strong>Bs. {{ money(productosDisponiblesRetiro) }}</strong>
-                  <span>Selecciona productos a precio proveedor.</span>
+                  <span>Se retiran desde el modulo de nivel 1.</span>
                 </div>
               </div>
 
@@ -522,38 +519,11 @@ onBeforeUnmount(() => {
                   <input v-model.number="retiroForm.montoDinero" type="number" min="0" step="0.01" />
                 </label>
                 <div class="field">
-                  <span>Total productos</span>
-                  <div class="readonly-total">Bs. {{ money(retiroProductosTotal) }}</div>
+                  <span>Tipo de retiro</span>
+                  <div class="readonly-total">Efectivo mensual</div>
                 </div>
               </div>
               <button class="max-button" type="button" @click="setMaxRetiro">Usar maximo efectivo</button>
-
-              <section class="product-withdrawal">
-                <label class="field">
-                  <span>Producto a entregar</span>
-                  <select ref="productoSelect" v-model="selectedProductoId">
-                    <option value="">Selecciona producto</option>
-                    <option v-for="producto in productos" :key="producto.id" :value="producto.id">
-                      {{ producto.nombre }} - Bs. {{ money(producto.precio) }}
-                    </option>
-                  </select>
-                </label>
-                <button class="max-button" type="button" :disabled="!selectedProductoId" @click="addRetiroProducto">
-                  Agregar producto
-                </button>
-
-                <div v-if="retiroForm.productos.length" class="withdraw-products-list">
-                  <article v-for="item in retiroForm.productos" :key="item.productoId">
-                    <div>
-                      <strong>{{ item.nombre }}</strong>
-                      <small>{{ item.sku || "Sin SKU" }} - Precio proveedor Bs. {{ money(item.precio) }}</small>
-                    </div>
-                    <input :value="item.cantidad" type="number" min="1" @input="updateRetiroProductoCantidad(item, $event.target.value)" />
-                    <span>Bs. {{ money(Number(item.precio || 0) * Number(item.cantidad || 0)) }}</span>
-                    <button type="button" @click="removeRetiroProducto(item)">Quitar</button>
-                  </article>
-                </div>
-              </section>
 
               <label class="field">
                 <span>Observacion</span>
