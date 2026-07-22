@@ -26,6 +26,8 @@ const retiroModalOpen = ref(false);
 const searchTerm = ref("");
 const page = ref(1);
 const pageSize = ref(10);
+let previousBodyOverflow = "";
+let previousHtmlOverflow = "";
 const retiroForm = ref({
   montoDinero: 0,
   productos: [],
@@ -218,6 +220,7 @@ async function openRetiroModal(saldo) {
   selectedProductoId.value = "";
   retiroForm.value = { montoDinero: 0, productos: [], observacion: "" };
   retiroModalOpen.value = true;
+  lockPageScroll();
   await loadSelectedWallet();
   await initProductoSelect2();
 }
@@ -230,6 +233,19 @@ function closeRetiroModal() {
   selectedWallet.value = null;
   selectedProductoId.value = "";
   retiroForm.value = { montoDinero: 0, productos: [], observacion: "" };
+  unlockPageScroll();
+}
+
+function lockPageScroll() {
+  previousBodyOverflow = document.body.style.overflow;
+  previousHtmlOverflow = document.documentElement.style.overflow;
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = "hidden";
+}
+
+function unlockPageScroll() {
+  document.body.style.overflow = previousBodyOverflow;
+  document.documentElement.style.overflow = previousHtmlOverflow;
 }
 
 function setMaxRetiro() {
@@ -344,6 +360,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   destroyPeriodoSelect2();
   destroyProductoSelect2();
+  unlockPageScroll();
 });
 </script>
 
@@ -369,7 +386,7 @@ onBeforeUnmount(() => {
               </option>
             </select>
           </label>
-          <button class="vy-btn vy-btn-primary" type="button" :disabled="loading" @click="loadSaldos">
+          <button class="refresh-action" type="button" :disabled="loading" @click="loadSaldos">
             <RefreshCw :size="16" /> Actualizar
           </button>
         </div>
@@ -450,7 +467,7 @@ onBeforeUnmount(() => {
                 <td>{{ money(saldo.saldoQp) }}</td>
                 <td>{{ money(saldo.saldoCr) }}</td>
                 <td class="actions-cell">
-                  <button class="vy-btn vy-btn-ghost" type="button" :disabled="!isPeriodoActivo" @click="openRetiroModal(saldo)">
+                  <button class="row-withdraw-button" type="button" :disabled="!isPeriodoActivo" @click="openRetiroModal(saldo)">
                     <ArrowDownToLine :size="15" /> Retiro
                   </button>
                 </td>
@@ -585,6 +602,9 @@ onBeforeUnmount(() => {
 .period-filter, .field { display: grid; gap: 7px; }
 .period-filter span, .field span { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .period-filter { min-width: 260px; }
+.refresh-action { min-height: 42px; padding: 0 16px; border: 1px solid rgba(242, 135, 5, 0.32); border-radius: 12px; background: #fff7e8; color: #1f1a14; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 950; box-shadow: 0 10px 24px rgba(242, 135, 5, 0.14); }
+.refresh-action:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
+.refresh-action:disabled { cursor: not-allowed; opacity: 0.55; box-shadow: none; }
 .summary-grid { display: grid; grid-template-columns: minmax(260px, 1.35fr) repeat(3, minmax(160px, 1fr)); gap: 14px; }
 .balance-card, .metric-card, .table-card { border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-sm); }
 .balance-card, .metric-card { border-radius: 18px; padding: 18px; }
@@ -605,6 +625,9 @@ th { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: 
 td strong, td small { display: block; }
 td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
 .actions-cell { text-align: right; }
+.row-withdraw-button { min-height: 36px; padding: 0 12px; border: 1px solid rgba(31, 26, 20, 0.12); border-radius: 10px; background: #1f1a14; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 950; white-space: nowrap; box-shadow: 0 8px 18px rgba(31, 26, 20, 0.16); }
+.row-withdraw-button:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
+.row-withdraw-button:disabled { cursor: not-allowed; opacity: 0.5; box-shadow: none; }
 .pagination-bar { padding-top: 14px; }
 .pagination-bar > div { display: flex; align-items: center; gap: 10px; color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
 .pagination-bar select, .field select, .field input, .field textarea, .period-filter select { width: 100%; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }
@@ -662,7 +685,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 button:disabled { cursor: not-allowed; opacity: 0.55; }
 @media (max-width: 900px) {
   .page-header, .section-header, .pagination-bar, .header-actions { align-items: stretch; flex-direction: column; }
-  .period-filter, .search-box, .header-actions .vy-btn { width: 100%; }
+  .period-filter, .search-box, .header-actions .vy-btn, .refresh-action { width: 100%; }
   .summary-grid { grid-template-columns: 1fr; }
   .wallet-values, .withdraw-grid, .product-withdrawal { grid-template-columns: 1fr; }
   .withdraw-products-list article { grid-template-columns: 1fr; }
