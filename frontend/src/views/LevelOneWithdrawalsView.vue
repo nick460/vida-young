@@ -1,9 +1,14 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import $ from "jquery";
+import select2 from "select2";
+import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { ArrowDownToLine, Gift, PackageCheck, Plus, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
+
+select2($);
 
 const loading = ref(false);
 const processing = ref(false);
@@ -13,6 +18,7 @@ const productos = ref([]);
 const searchTerm = ref("");
 const selected = ref(null);
 const selectedProductoId = ref("");
+const productoSelect = ref(null);
 const form = ref({ montoDinero: 0, productos: [], observacion: "" });
 
 const filteredRecompensas = computed(() => {
@@ -90,13 +96,51 @@ async function loadAll() {
   }
 }
 
-function openModal(recompensa) {
+async function initProductoSelect2() {
+  if (!selected.value) return;
+  await nextTick();
+  if (!productoSelect.value) return;
+
+  destroyProductoSelect2();
+  const element = $(productoSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Busca y selecciona producto",
+      allowClear: true,
+      dropdownParent: $(".retiro-modal"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedProductoId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.retiros-nivel-1", () => {
+    selectedProductoId.value = element.val() || "";
+  });
+}
+
+function destroyProductoSelect2() {
+  if (!productoSelect.value) return;
+  const element = $(productoSelect.value);
+  element.off("change.retiros-nivel-1");
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.select2("destroy");
+  }
+}
+
+async function openModal(recompensa) {
   selected.value = recompensa;
   form.value = { montoDinero: efectivoDisponible(recompensa), productos: [], observacion: "" };
+  selectedProductoId.value = "";
+  await initProductoSelect2();
 }
 
 function closeModal() {
   if (processing.value) return;
+  destroyProductoSelect2();
   selected.value = null;
   selectedProductoId.value = "";
   form.value = { montoDinero: 0, productos: [], observacion: "" };
@@ -115,6 +159,7 @@ function addProducto() {
   if (existente) {
     existente.cantidad += 1;
     selectedProductoId.value = "";
+    initProductoSelect2();
     return;
   }
   form.value.productos.push({
@@ -125,6 +170,7 @@ function addProducto() {
     cantidad: 1
   });
   selectedProductoId.value = "";
+  initProductoSelect2();
 }
 
 function removeProducto(item) {
@@ -171,7 +217,23 @@ async function registrarRetiro() {
   }
 }
 
+watch(selectedProductoId, (value) => {
+  if (!productoSelect.value) return;
+  const element = $(productoSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
+watch(productos, () => {
+  initProductoSelect2();
+});
+
 onMounted(loadAll);
+
+onBeforeUnmount(() => {
+  destroyProductoSelect2();
+});
 </script>
 
 <template>
@@ -183,7 +245,7 @@ onMounted(loadAll);
           <h1>Retiros nivel 1</h1>
           <p>Retiros individuales de efectivo inmediato y credito en producto del patrocinador directo.</p>
         </div>
-        <button class="vy-btn vy-btn-primary" type="button" :disabled="loading" @click="loadAll">
+        <button class="refresh-action" type="button" :disabled="loading" @click="loadAll">
           <RefreshCw :size="16" /> Actualizar
         </button>
       </header>
@@ -242,7 +304,7 @@ onMounted(loadAll);
                 <td>Bs. {{ money(efectivoDisponible(recompensa)) }}</td>
                 <td>Bs. {{ money(productosDisponible(recompensa)) }}</td>
                 <td class="actions-cell">
-                  <button class="vy-btn vy-btn-ghost" type="button" @click="openModal(recompensa)">
+                  <button class="row-withdraw-button" type="button" @click="openModal(recompensa)">
                     <Gift :size="15" /> Retirar
                   </button>
                 </td>
@@ -314,7 +376,7 @@ onMounted(loadAll);
               <label class="field">
                 <span>Producto a entregar</span>
                 <div class="select-action">
-                  <select v-model="selectedProductoId">
+                  <select ref="productoSelect" v-model="selectedProductoId">
                     <option value="">Selecciona producto</option>
                     <option v-for="producto in productos" :key="producto.id" :value="producto.id">
                       {{ producto.nombre }} - {{ producto.sku || "Sin SKU" }} - Bs. {{ money(producto.precio) }}
@@ -369,6 +431,9 @@ onMounted(loadAll);
 .page-header { margin-bottom: 18px; }
 .page-header h1 { margin-top: 6px; font-size: 34px; font-weight: 900; }
 .page-header p, .section-header p { margin-top: 5px; color: var(--vy-ink-3); font-weight: 700; }
+.refresh-action { min-height: 42px; padding: 0 16px; border: 1px solid rgba(242, 135, 5, 0.32); border-radius: 8px; background: #fff7e8; color: #1f1a14; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 950; box-shadow: 0 10px 24px rgba(242, 135, 5, 0.14); }
+.refresh-action:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
+.refresh-action:disabled { cursor: not-allowed; opacity: 0.55; box-shadow: none; }
 .summary-grid { display: grid; grid-template-columns: minmax(260px, 1.4fr) minmax(220px, 0.8fr); gap: 14px; margin-bottom: 16px; }
 .balance-card, .metric-card { padding: 18px; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface); box-shadow: var(--vy-shadow-sm); }
 .balance-card span, .metric-card small { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; text-transform: uppercase; }
@@ -384,6 +449,8 @@ th { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: 
 td strong, td small { display: block; }
 td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight: 700; }
 .actions-cell { text-align: right; }
+.row-withdraw-button { min-height: 36px; padding: 0 12px; border: 1px solid rgba(31, 26, 20, 0.12); border-radius: 8px; background: #1f1a14; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 950; white-space: nowrap; box-shadow: 0 8px 18px rgba(31, 26, 20, 0.16); }
+.row-withdraw-button:hover { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
 .error-box, .loading-box { margin-bottom: 14px; padding: 13px 15px; border-radius: 8px; font-size: 13px; font-weight: 800; }
 .error-box { color: #8a2c1c; background: #fff1ec; border: 1px solid #ffd0c2; }
 .loading-box { color: var(--vy-ink-2); background: var(--vy-surface-2); }
@@ -408,6 +475,16 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 .select-action { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
 .select-action button { height: 42px; padding: 0 14px; border-radius: 8px; background: var(--vy-ink); color: #fff; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 900; }
 .select-action button:disabled { cursor: not-allowed; opacity: 0.45; }
+:deep(.select-action .select2-container) { margin-top: 7px; }
+:deep(.select-action .select2-container--default .select2-selection--single) { height: 42px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; display: flex; align-items: center; }
+:deep(.select-action .select2-container--default .select2-selection--single .select2-selection__rendered) { width: 100%; padding-left: 12px; padding-right: 34px; color: var(--vy-ink); font-size: 14px; font-weight: 850; line-height: 42px; }
+:deep(.select-action .select2-container--default .select2-selection--single .select2-selection__placeholder) { color: var(--vy-ink-3); }
+:deep(.select-action .select2-container--default .select2-selection--single .select2-selection__arrow) { height: 40px; right: 8px; }
+:deep(.select2-dropdown) { border: 1px solid var(--vy-line); border-radius: 8px; overflow: hidden; box-shadow: var(--vy-shadow-lg); }
+:deep(.select2-search--dropdown) { padding: 8px; background: var(--vy-surface-2); }
+:deep(.select2-container--default .select2-search--dropdown .select2-search__field) { min-height: 36px; border: 1px solid var(--vy-line); border-radius: 8px; padding: 7px 9px; outline: 0; }
+:deep(.select2-results__option) { padding: 9px 12px; font-size: 13px; font-weight: 800; }
+:deep(.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable) { background: #f28705; color: #1f1a14; }
 .credit-meter { padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; }
 .credit-meter span { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .credit-meter strong { display: block; margin-top: 5px; color: var(--vy-ink); font-size: 14px; font-weight: 900; }
