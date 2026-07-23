@@ -29,6 +29,12 @@ const billetera = computed(() => resumen.value.billetera || {});
 const movimientos = computed(() => resumen.value.movimientos || []);
 const membresias = computed(() => resumen.value.membresias || []);
 const cierresMensuales = computed(() => resumen.value.cierresMensuales || []);
+const efectivoMensualDisponible = computed(() =>
+  Number(billetera.value.saldoDinero || 0) + Number(resumen.value.efectivoRecompensasDisponible || 0)
+);
+const efectivoNivel1Disponible = computed(() => Number(resumen.value.efectivoNivel1Disponible || 0));
+const productosNivel1Disponible = computed(() => Number(resumen.value.productosNivel1Disponible || 0));
+const totalNivel1Disponible = computed(() => efectivoNivel1Disponible.value + productosNivel1Disponible.value);
 const activationPlans = computed(() => proyeccionActivacion.value?.planes || []);
 const activeMembership = computed(() =>
   membresias.value.find((membresia) => membresia.estadoMembresia === "ACTIVA")
@@ -114,8 +120,8 @@ onMounted(loadWallet);
             <span class="card-icon"><WalletCards :size="24" /></span>
             <div>
               <span>Efectivo disponible</span>
-              <strong>Bs. {{ money(billetera.saldoDinero) }}</strong>
-              <p>Dinero listo para solicitar retiro cuando administracion lo habilite.</p>
+              <strong>Bs. {{ money(efectivoMensualDisponible) }}</strong>
+              <p>Saldo mensual del periodo activo, sin recompensas de nivel 1.</p>
             </div>
           </header>
         </article>
@@ -124,9 +130,9 @@ onMounted(loadWallet);
           <header>
             <span class="card-icon"><Box :size="24" /></span>
             <div>
-              <span>Productos canjeables</span>
-              <strong>Bs. {{ money(billetera.saldoProductos) }}</strong>
-              <p>Saldo disponible para canjear por productos de la tienda.</p>
+              <span>Nivel 1 por cobrar</span>
+              <strong>Bs. {{ money(totalNivel1Disponible) }}</strong>
+              <p>Efectivo Bs. {{ money(efectivoNivel1Disponible) }} + credito producto Bs. {{ money(productosNivel1Disponible) }}.</p>
             </div>
           </header>
         </article>
@@ -159,8 +165,8 @@ onMounted(loadWallet);
         </article>
         <article class="point-card">
           <span>Productos</span>
-            <strong>{{ money(billetera.saldoProductos) }}</strong>
-          <small>Canjeable en catalogo.</small>
+            <strong>{{ money(productosNivel1Disponible) }}</strong>
+          <small>Credito nivel 1 fuera de la billetera mensual.</small>
         </article>
       </section>
 

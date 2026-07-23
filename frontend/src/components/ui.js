@@ -177,7 +177,7 @@ export const AppShell = defineComponent({
       USER,
       items: [
         { id: "dashboard", l: "Dashboard",    icon: "home"    },
-        { id: "wallet",    l: "Finanzas",     icon: "wallet"  },
+        { id: "wallet",    l: "Billetera",    icon: "wallet"  },
         { id: "shop",      l: "Tienda",       icon: "shop"    },
         { id: "network",   l: "Mi red",       icon: "network", badge: "138" },
         { id: "rewards",   l: "Recompensas",  icon: "gift",    badge: "3" },

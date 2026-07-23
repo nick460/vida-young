@@ -14,4 +14,6 @@ public interface HistorialMembresiaDao extends JpaRepository<HistorialMembresia,
     List<HistorialMembresia> findByEstadoMembresiaAndFechaFinLessThanEqual(String estadoMembresia, LocalDateTime fechaFin);
 
     boolean existsByReferenciaTipoAndReferenciaIdAndTipo(String referenciaTipo, Long referenciaId, String tipo);
+
+    boolean existsByPersonaIdAndPeriodoIdAndTipo(Long personaId, Long periodoId, String tipo);
 }

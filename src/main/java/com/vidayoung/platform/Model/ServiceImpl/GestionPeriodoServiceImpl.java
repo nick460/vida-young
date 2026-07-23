@@ -140,9 +140,13 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
                 .orElseThrow(() -> new IllegalArgumentException("Periodo no encontrado."));
 
+        if (PeriodoGestion.ESTADO_PERIODO_CERRADO.equals(periodo.getEstadoPeriodo())) {
+            throw new IllegalArgumentException("No se puede activar un periodo cerrado.");
+        }
+
         buscarPeriodoActivo().ifPresent(actual -> {
             if (!actual.getId().equals(periodo.getId())) {
-                actual.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_CERRADO);
+                actual.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_PENDIENTE_CIERRE);
                 periodoGestionDao.save(actual);
             }
         });
@@ -153,23 +157,20 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
 
     @Override
     @Transactional
+    public PeriodoGestion desactivarPeriodoActivo() {
+        PeriodoGestion activo = buscarPeriodoActivo()
+                .orElseThrow(() -> new IllegalArgumentException("No existe un periodo activo."));
+        activo.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_PENDIENTE_CIERRE);
+        return periodoGestionDao.save(activo);
+    }
+
+    @Override
+    @Transactional
     public PeriodoGestion cerrarPeriodoActivo() {
         PeriodoGestion activo = buscarPeriodoActivo()
                 .orElseThrow(() -> new IllegalArgumentException("No existe un periodo activo."));
         activo.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_CERRADO);
-        periodoGestionDao.save(activo);
-
-        LocalDate siguienteFecha = activo.getFechaInicio().plusMonths(1);
-        Gestion siguienteGestion = crearGestion(siguienteFecha.getYear(), "Gestion " + siguienteFecha.getYear());
-        PeriodoGestion siguientePeriodo = periodoGestionDao.findByGestionIdAndMes(siguienteGestion.getId(), siguienteFecha.getMonthValue())
-                .orElseGet(() -> periodoGestionDao.save(buildPeriodo(
-                        siguienteGestion,
-                        siguienteFecha.getMonthValue(),
-                        null,
-                        PeriodoGestion.ESTADO_PERIODO_PENDIENTE
-                )));
-        siguientePeriodo.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_ACTIVO);
-        return periodoGestionDao.save(siguientePeriodo);
+        return periodoGestionDao.save(activo);
     }
 
     private PeriodoGestion crearPeriodoActualActivo() {

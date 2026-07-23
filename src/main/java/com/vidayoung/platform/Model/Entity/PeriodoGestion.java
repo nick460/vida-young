@@ -34,6 +34,7 @@ import lombok.ToString;
 public class PeriodoGestion extends Auditoria {
 
     public static final String ESTADO_PERIODO_PENDIENTE = "PENDIENTE";
+    public static final String ESTADO_PERIODO_PENDIENTE_CIERRE = "PENDIENTE_CIERRE";
     public static final String ESTADO_PERIODO_ACTIVO = "ACTIVO";
     public static final String ESTADO_PERIODO_CERRADO = "CERRADO";
 

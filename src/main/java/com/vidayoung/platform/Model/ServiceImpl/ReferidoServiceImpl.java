@@ -8,6 +8,7 @@ import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Persona;
+import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Plan;
 import com.vidayoung.platform.Model.Entity.PlanNivel;
 import com.vidayoung.platform.Model.Entity.Recompensa;
@@ -129,7 +130,9 @@ public class ReferidoServiceImpl implements ReferidoService {
     @Override
     @Transactional(rollbackOn = Exception.class)
     public int vencerMembresiasExpiradas() {
-        List<Referido> vencidos = referidoDao.findByMembresiaActivaTrueAndFechaFinMembresiaLessThanEqual(LocalDateTime.now());
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
+        LocalDateTime limitePeriodoActivo = periodoActivo.getFechaInicio().atStartOfDay();
+        List<Referido> vencidos = referidoDao.findByMembresiaActivaTrueAndFechaFinMembresiaLessThanEqual(limitePeriodoActivo);
 
         vencidos.forEach(referido -> {
             referido.setMembresiaActiva(false);
@@ -139,6 +142,27 @@ public class ReferidoServiceImpl implements ReferidoService {
         billeteraService.vencerHistorialMembresiasExpiradas();
 
         return vencidos.size();
+    }
+
+    @Override
+    @Transactional(rollbackOn = Exception.class)
+    public int desactivarMembresiasActivas() {
+        LocalDateTime finPeriodoActivo = LocalDateTime.of(
+                gestionPeriodoService.obtenerPeriodoActivo().getFechaFin(),
+                LocalTime.of(23, 59, 59)
+        );
+        List<Referido> activos = referidoDao.findByMembresiaActivaTrue().stream()
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .filter(referido -> referido.getFechaFinMembresia() != null)
+                .filter(referido -> !referido.getFechaFinMembresia().isAfter(finPeriodoActivo))
+                .toList();
+
+        activos.forEach(referido -> {
+            referido.setMembresiaActiva(false);
+            referidoDao.save(referido);
+        });
+
+        return activos.size();
     }
 
     private Referido buildReferido(Referido referido, Long personaId, Long patrocinadorId, Long planId) {
@@ -172,9 +196,10 @@ public class ReferidoServiceImpl implements ReferidoService {
 
         if (referido.getFechaUnion() == null) {
             LocalDateTime fechaUnion = LocalDateTime.now();
+            PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
             referido.setFechaUnion(fechaUnion);
-            referido.setFechaInicioMembresia(fechaUnion);
-            referido.setFechaFinMembresia(calcularFechaFinMembresia(fechaUnion));
+            referido.setFechaInicioMembresia(fechaEnPeriodoActivo(fechaUnion, periodoActivo));
+            referido.setFechaFinMembresia(calcularFechaFinMembresiaInicial(fechaUnion, periodoActivo));
             referido.setMembresiaActiva(true);
         } else {
             if (referido.getFechaInicioMembresia() == null) {
@@ -196,6 +221,20 @@ public class ReferidoServiceImpl implements ReferidoService {
     private LocalDateTime calcularFechaFinMembresia(LocalDateTime fechaInicio) {
         LocalDate fechaFin = fechaInicio.toLocalDate().plusMonths(1);
         return LocalDateTime.of(fechaFin, LocalTime.of(23, 59, 59));
+    }
+
+    private LocalDateTime calcularFechaFinMembresiaInicial(LocalDateTime fechaIngreso, PeriodoGestion periodoActivo) {
+        LocalDate fechaFin = fechaIngreso.getDayOfMonth() <= 14
+                ? periodoActivo.getFechaFin()
+                : periodoActivo.getFechaInicio().plusMonths(1).withDayOfMonth(1)
+                        .withDayOfMonth(periodoActivo.getFechaInicio().plusMonths(1).lengthOfMonth());
+        return LocalDateTime.of(fechaFin, LocalTime.of(23, 59, 59));
+    }
+
+    private LocalDateTime fechaEnPeriodoActivo(LocalDateTime fechaIngreso, PeriodoGestion periodoActivo) {
+        int dia = Math.min(fechaIngreso.getDayOfMonth(), periodoActivo.getFechaInicio().lengthOfMonth());
+        LocalDate fechaPeriodo = periodoActivo.getFechaInicio().withDayOfMonth(dia);
+        return LocalDateTime.of(fechaPeriodo, fechaIngreso.toLocalTime());
     }
 
     private void regenerarRecompensas(Referido referido) {
@@ -256,9 +295,10 @@ public class ReferidoServiceImpl implements ReferidoService {
     }
 
     private boolean membresiaActiva(Referido referido) {
+        LocalDate fechaFinPeriodoActivo = gestionPeriodoService.obtenerPeriodoActivo().getFechaFin();
         return Boolean.TRUE.equals(referido.getMembresiaActiva())
                 && referido.getFechaFinMembresia() != null
-                && !referido.getFechaFinMembresia().isBefore(LocalDateTime.now());
+                && !referido.getFechaFinMembresia().toLocalDate().isBefore(fechaFinPeriodoActivo);
     }
 
     private void desactivarRecompensas(Referido referido) {

@@ -2,6 +2,7 @@ package com.vidayoung.platform.Rescontroller;
 
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
+import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
@@ -39,14 +40,18 @@ public class BilleteraRestController {
     private final BilleteraService billeteraService;
     private final PersonaDao personaDao;
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
+    private final MovimientoBilleteraDao movimientoBilleteraDao;
     private final RecompensaDao recompensaDao;
     private final GestionPeriodoService gestionPeriodoService;
 
     @GetMapping("/saldos")
     public ResponseEntity<List<BilleteraSaldoResponse>> listarSaldos(@RequestParam(required = false) Long periodoId) {
-        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
-        Long periodoConsultaId = periodoId == null ? periodoActivo.getId() : periodoId;
-        boolean periodoActivoSeleccionado = periodoConsultaId != null && periodoConsultaId.equals(periodoActivo.getId());
+        PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
+        Long periodoConsultaId = periodoId == null ? (periodoActivo == null ? null : periodoActivo.getId()) : periodoId;
+        if (periodoConsultaId == null) {
+            return ResponseEntity.ok(List.of());
+        }
+        boolean periodoActivoSeleccionado = periodoActivo != null && periodoConsultaId.equals(periodoActivo.getId());
 
         if (periodoActivoSeleccionado) {
             Map<Long, Billetera> billeterasConSaldo = new LinkedHashMap<>();
@@ -57,7 +62,7 @@ public class BilleteraRestController {
                     .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                     .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
                     .filter(recompensa -> recompensa.getBeneficiario() != null && recompensa.getBeneficiario().getId() != null)
-                    .filter(recompensa -> efectivoMensualDisponible(recompensa.getBeneficiario().getId()).compareTo(BigDecimal.ZERO) > 0)
+                    .filter(recompensa -> efectivoMensualDisponible(recompensa.getBeneficiario().getId(), periodoActivo).compareTo(BigDecimal.ZERO) > 0)
                     .forEach(recompensa -> billeterasConSaldo.computeIfAbsent(
                             recompensa.getBeneficiario().getId(),
                             id -> billeteraService.asegurarBilletera(recompensa.getBeneficiario())
@@ -66,7 +71,7 @@ public class BilleteraRestController {
             return ResponseEntity.ok(billeterasConSaldo.values().stream()
                     .map(billetera -> BilleteraSaldoResponse.desdeBilletera(
                             billetera,
-                            efectivoRecompensasDisponible(billetera.getPersona().getId()),
+                            efectivoRecompensasDisponible(billetera.getPersona().getId(), periodoActivo),
                             BigDecimal.ZERO,
                             true
                     ))
@@ -83,14 +88,20 @@ public class BilleteraRestController {
         return personaDao.findById(personaId)
                 .map(persona -> {
                     Billetera billetera = billeteraService.asegurarBilletera(persona);
+                    PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
+                    List<MovimientoBilletera> movimientos = periodoActivo == null
+                            ? List.of()
+                            : movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodoActivo.getId());
                     return ResponseEntity.ok(new BilleteraResumenResponse(
-                            billetera,
-                            billeteraService.listarMovimientos(personaId),
+                            billeteraDesdeMovimientos(billetera, movimientos),
+                            movimientos,
                             billeteraService.listarHistorialMembresias(personaId),
                             billeteraService.listarCierresMensuales(personaId),
-                            efectivoRecompensasDisponible(personaId),
+                            efectivoRecompensasDisponible(personaId, periodoActivo),
                             BigDecimal.ZERO,
-                            detalleEfectivoMensual(personaId)
+                            detalleEfectivoMensual(personaId, periodoActivo),
+                            efectivoNivel1Disponible(personaId, periodoActivo),
+                            productosNivel1Disponible(personaId, periodoActivo)
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -114,6 +125,11 @@ public class BilleteraRestController {
     @PostMapping("/cierres-mensuales")
     public ResponseEntity<Integer> cerrarMesBilleteras() {
         return ResponseEntity.ok(billeteraService.cerrarMesBilleteras());
+    }
+
+    @PostMapping("/cierres-mensuales/cerrar-periodo")
+    public ResponseEntity<PeriodoGestion> cerrarPeriodoActivoPagado() {
+        return ResponseEntity.ok(billeteraService.cerrarPeriodoActivoPagado());
     }
 
     @PostMapping("/persona/{personaId}/retiros")
@@ -162,6 +178,10 @@ public class BilleteraRestController {
         private final BigDecimal productosRecompensasDisponible;
 
         private final List<DetalleEfectivoMensualResponse> detalleEfectivoMensual;
+
+        private final BigDecimal efectivoNivel1Disponible;
+
+        private final BigDecimal productosNivel1Disponible;
     }
 
     @Getter
@@ -299,17 +319,21 @@ public class BilleteraRestController {
     }
 
     private BigDecimal efectivoRecompensasDisponible(Long personaId) {
-        return efectivoMensualDisponible(personaId);
+        return efectivoMensualDisponible(personaId, gestionPeriodoService.buscarPeriodoActivo().orElse(null));
     }
 
-    private BigDecimal efectivoMensualDisponible(Long personaId) {
-        return recompensasMensualesDisponibles(personaId).stream()
+    private BigDecimal efectivoRecompensasDisponible(Long personaId, PeriodoGestion periodo) {
+        return efectivoMensualDisponible(personaId, periodo);
+    }
+
+    private BigDecimal efectivoMensualDisponible(Long personaId, PeriodoGestion periodo) {
+        return recompensasMensualesDisponibles(personaId, periodo).stream()
                 .map(this::efectivoDisponible)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private List<DetalleEfectivoMensualResponse> detalleEfectivoMensual(Long personaId) {
-        return recompensasMensualesDisponibles(personaId).stream()
+    private List<DetalleEfectivoMensualResponse> detalleEfectivoMensual(Long personaId, PeriodoGestion periodo) {
+        return recompensasMensualesDisponibles(personaId, periodo).stream()
                 .map(recompensa -> {
                     Persona referido = recompensa.getReferido() == null ? null : recompensa.getReferido().getPersona();
                     return new DetalleEfectivoMensualResponse(
@@ -326,9 +350,14 @@ public class BilleteraRestController {
     }
 
     private List<Recompensa> recompensasMensualesDisponibles(Long personaId) {
+        return recompensasMensualesDisponibles(personaId, gestionPeriodoService.buscarPeriodoActivo().orElse(null));
+    }
+
+    private List<Recompensa> recompensasMensualesDisponibles(Long personaId, PeriodoGestion periodo) {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> periodo == null || recompensa.getPeriodo() != null && periodo.getId().equals(recompensa.getPeriodo().getId()))
                 .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
                 .filter(recompensa -> efectivoDisponible(recompensa).compareTo(BigDecimal.ZERO) > 0)
                 .toList();
@@ -354,6 +383,52 @@ public class BilleteraRestController {
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
                 .map(recompensa -> zeroIfNull(recompensa.getValorProductos()).subtract(zeroIfNull(recompensa.getValorProductosRetirado())).max(BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal efectivoNivel1Disponible(Long personaId, PeriodoGestion periodo) {
+        return recompensasNivel1Disponibles(personaId, periodo).stream()
+                .map(this::efectivoDisponible)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal productosNivel1Disponible(Long personaId, PeriodoGestion periodo) {
+        return recompensasNivel1Disponibles(personaId, periodo).stream()
+                .map(recompensa -> zeroIfNull(recompensa.getValorProductos())
+                        .subtract(zeroIfNull(recompensa.getValorProductosRetirado()))
+                        .max(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<Recompensa> recompensasNivel1Disponibles(Long personaId, PeriodoGestion periodo) {
+        return recompensaDao.findByBeneficiarioId(personaId).stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> periodo == null || recompensa.getPeriodo() != null && periodo.getId().equals(recompensa.getPeriodo().getId()))
+                .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) == 1)
+                .filter(recompensa -> efectivoDisponible(recompensa).compareTo(BigDecimal.ZERO) > 0
+                        || zeroIfNull(recompensa.getValorProductos()).subtract(zeroIfNull(recompensa.getValorProductosRetirado())).compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+    }
+
+    private Billetera billeteraDesdeMovimientos(Billetera billetera, List<MovimientoBilletera> movimientos) {
+        Billetera reconstruida = new Billetera();
+        reconstruida.setId(billetera.getId());
+        reconstruida.setPersona(billetera.getPersona());
+        reconstruida.setSaldoDinero(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_DINERO));
+        reconstruida.setSaldoPv(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_PV));
+        reconstruida.setSaldoQp(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_QP));
+        reconstruida.setSaldoCr(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_CR));
+        reconstruida.setSaldoProductos(BigDecimal.ZERO);
+        return reconstruida;
+    }
+
+    private BigDecimal ultimoSaldoPorTipo(List<MovimientoBilletera> movimientos, String tipo) {
+        return movimientos.stream()
+                .filter(movimiento -> tipo.equals(movimiento.getTipo()))
+                .findFirst()
+                .map(MovimientoBilletera::getSaldoResultado)
+                .map(this::zeroIfNull)
+                .orElse(BigDecimal.ZERO);
     }
 
     private BigDecimal zeroIfNull(BigDecimal value) {

@@ -5,6 +5,7 @@ import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
+import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
 import com.vidayoung.platform.Model.Dao.PlanDao;
 import com.vidayoung.platform.Model.Dao.ProductoDao;
 import com.vidayoung.platform.Model.Dao.RangoDao;
@@ -20,6 +21,7 @@ import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Plan;
+import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.Producto;
 import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Recompensa;
@@ -51,6 +53,7 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final MovimientoBilleteraDao movimientoBilleteraDao;
     private final HistorialMembresiaDao historialMembresiaDao;
     private final PersonaDao personaDao;
+    private final PlanActivacionDao planActivacionDao;
     private final PlanDao planDao;
     private final ProductoDao productoDao;
     private final RangoDao rangoDao;
@@ -204,8 +207,8 @@ public class BilleteraServiceImpl implements BilleteraService {
 
         Billetera billetera = asegurarBilletera(persona);
         PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
-        LocalDateTime fechaInicio = LocalDateTime.now();
-        LocalDateTime fechaFin = calcularFechaFinMembresia(fechaInicio);
+        LocalDateTime fechaInicio = periodoActivo.getFechaInicio().atStartOfDay();
+        LocalDateTime fechaFin = finDeDia(periodoActivo.getFechaFin());
 
         referido.setPlan(plan);
         referido.setFechaInicioMembresia(fechaInicio);
@@ -255,6 +258,60 @@ public class BilleteraServiceImpl implements BilleteraService {
 
     @Override
     @Transactional
+    public void activarMembresiaPorPv(Persona persona, BigDecimal pvActual, PeriodoGestion periodo) {
+        if (persona == null || persona.getId() == null || periodo == null) {
+            return;
+        }
+
+        PlanActivacion planActivacion = obtenerPlanActivacionPorPv(pvActual).orElse(null);
+        if (planActivacion == null) {
+            return;
+        }
+
+        Referido referido = referidoDao.findByPersonaId(persona.getId())
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElse(null);
+        if (referido == null || referido.getPlan() == null) {
+            return;
+        }
+
+        LocalDateTime fechaInicio = periodo.getFechaInicio().atStartOfDay();
+        LocalDateTime fechaFin = finDeDia(periodo.getFechaFin());
+        if (Boolean.TRUE.equals(referido.getMembresiaActiva())
+                && referido.getFechaFinMembresia() != null
+                && !referido.getFechaFinMembresia().isBefore(fechaFin)) {
+            return;
+        }
+
+        referido.setFechaInicioMembresia(fechaInicio);
+        referido.setFechaFinMembresia(fechaFin);
+        referido.setMembresiaActiva(true);
+        referidoDao.save(referido);
+        actualizarRecompensasCobrables(persona, true);
+
+        if (!historialMembresiaDao.existsByPersonaIdAndPeriodoIdAndTipo(
+                persona.getId(),
+                periodo.getId(),
+                HistorialMembresia.TIPO_ACTIVACION
+        )) {
+            historialMembresiaDao.save(HistorialMembresia.builder()
+                    .persona(persona)
+                    .plan(referido.getPlan())
+                    .tipo(HistorialMembresia.TIPO_ACTIVACION)
+                    .fechaInicio(fechaInicio)
+                    .fechaFin(fechaFin)
+                    .precioPlan(BigDecimal.ZERO)
+                    .qpPlan(BigDecimal.ZERO)
+                    .referenciaTipo("PV_ACTIVACION")
+                    .referenciaId(planActivacion.getId())
+                    .estadoMembresia(HistorialMembresia.MEMBRESIA_ACTIVA)
+                    .periodo(periodo)
+                    .build());
+        }
+    }
+
+    @Override
+    @Transactional
     public RetiroBilletera registrarRetiro(
             Long personaId,
             BigDecimal montoDinero,
@@ -284,15 +341,17 @@ public class BilleteraServiceImpl implements BilleteraService {
         if (productos.compareTo(BigDecimal.ZERO) > 0) {
             throw new IllegalArgumentException("Los retiros mensuales solo permiten efectivo de recompensas de nivel 2 en adelante.");
         }
-        if (dinero.add(productos).compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Ingresa un monto de efectivo o productos para retirar.");
-        }
         if (efectivoTotalDisponible.compareTo(dinero) < 0) {
             throw new IllegalArgumentException("La persona no tiene efectivo suficiente para retirar.");
+        }
+        if (dinero.compareTo(efectivoTotalDisponible) != 0) {
+            throw new IllegalArgumentException("El cierre personal debe retirar el total de efectivo disponible.");
         }
         if (productosRecompensasDisponible.compareTo(productos) < 0) {
             throw new IllegalArgumentException("La persona no tiene productos canjeables suficientes para retirar.");
         }
+
+        CierreMensualBilletera cierrePersonal = registrarCierrePersonalPagado(persona, billetera, periodoActivo);
 
         RetiroBilletera retiro = retiroBilleteraDao.save(RetiroBilletera.builder()
                 .persona(persona)
@@ -345,7 +404,48 @@ public class BilleteraServiceImpl implements BilleteraService {
             retirarProductosRecompensas(personaId, productos);
         }
 
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_PV, zeroIfNull(billetera.getSaldoPv()), periodoActivo);
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_QP, zeroIfNull(billetera.getSaldoQp()), periodoActivo);
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_CR, zeroIfNull(billetera.getSaldoCr()), periodoActivo);
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_PRODUCTOS, zeroIfNull(billetera.getSaldoProductos()), periodoActivo);
+
+        billetera.setSaldoDinero(BigDecimal.ZERO);
+        billetera.setSaldoPv(BigDecimal.ZERO);
+        billetera.setSaldoQp(BigDecimal.ZERO);
+        billetera.setSaldoCr(BigDecimal.ZERO);
+        billetera.setSaldoProductos(BigDecimal.ZERO);
+        billeteraDao.save(billetera);
+        actualizarRangoActual(persona, BigDecimal.ZERO);
+
         return retiro;
+    }
+
+    private CierreMensualBilletera registrarCierrePersonalPagado(Persona persona, Billetera billetera, PeriodoGestion periodoActivo) {
+        String periodo = periodoKey(periodoActivo);
+        if (cierreMensualBilleteraDao.existsByPersonaIdAndPeriodo(persona.getId(), periodo)) {
+            return cierreMensualBilleteraDao.findByPersonaIdOrderByPeriodoDesc(persona.getId()).stream()
+                    .filter(cierre -> periodo.equals(cierre.getPeriodo()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("El cierre personal no pudo ser encontrado."));
+        }
+
+        BigDecimal saldoQp = zeroIfNull(billetera.getSaldoQp());
+        Rango rango = rangoAlcanzadoPorQp(saldoQp).orElse(null);
+        return cierreMensualBilleteraDao.save(CierreMensualBilletera.builder()
+                .persona(persona)
+                .periodo(periodo)
+                .saldoDinero(zeroIfNull(billetera.getSaldoDinero()))
+                .saldoPv(zeroIfNull(billetera.getSaldoPv()))
+                .saldoQp(saldoQp)
+                .saldoCr(zeroIfNull(billetera.getSaldoCr()))
+                .saldoProductos(zeroIfNull(billetera.getSaldoProductos()))
+                .rango(rango)
+                .rangoNombre(rango == null ? null : rango.getNombre())
+                .rangoQpMinimo(rango == null ? null : zeroIfNull(rango.getQpMinimo()))
+                .estadoPlanilla(CierreMensualBilletera.ESTADO_PLANILLA_PAGADA)
+                .fechaCierre(LocalDateTime.now())
+                .periodoGestion(periodoActivo)
+                .build());
     }
 
     private List<RetiroProductoCalculado> calcularProductosRetiro(List<ProductoRetiroRequest> productosRetiro) {
@@ -387,9 +487,10 @@ public class BilleteraServiceImpl implements BilleteraService {
     @Override
     @Transactional
     public int vencerHistorialMembresiasExpiradas() {
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
         List<HistorialMembresia> vencidas = historialMembresiaDao.findByEstadoMembresiaAndFechaFinLessThanEqual(
                 HistorialMembresia.MEMBRESIA_ACTIVA,
-                LocalDateTime.now()
+                periodoActivo.getFechaInicio().atStartOfDay()
         );
 
         vencidas.forEach(historial -> {
@@ -403,9 +504,29 @@ public class BilleteraServiceImpl implements BilleteraService {
 
     @Override
     @Transactional
+    public int vencerHistorialMembresiasActivas() {
+        LocalDateTime finPeriodoActivo = finDeDia(gestionPeriodoService.obtenerPeriodoActivo().getFechaFin());
+        List<HistorialMembresia> activas = historialMembresiaDao.findAll().stream()
+                .filter(historial -> HistorialMembresia.MEMBRESIA_ACTIVA.equals(historial.getEstadoMembresia()))
+                .filter(historial -> Auditoria.ESTADO_ACTIVO.equals(historial.getEstado()))
+                .filter(historial -> historial.getFechaFin() != null)
+                .filter(historial -> !historial.getFechaFin().isAfter(finPeriodoActivo))
+                .toList();
+
+        activas.forEach(historial -> {
+            historial.setEstadoMembresia(HistorialMembresia.MEMBRESIA_VENCIDA);
+            historialMembresiaDao.save(historial);
+            actualizarRecompensasCobrables(historial.getPersona(), false);
+        });
+
+        return activas.size();
+    }
+
+    @Override
+    @Transactional
     public int cerrarMesBilleteras() {
         PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
-        String periodo = periodoActivo.getGestion().getAnio() + "-" + String.format("%02d", periodoActivo.getMes());
+        String periodo = periodoKey(periodoActivo);
         LocalDateTime fechaCierre = LocalDateTime.now();
         int totalCierres = 0;
 
@@ -457,6 +578,33 @@ public class BilleteraServiceImpl implements BilleteraService {
         return totalCierres;
     }
 
+    @Override
+    @Transactional
+    public PeriodoGestion cerrarPeriodoActivoPagado() {
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
+        if (!listarBilleterasConSaldos().isEmpty()) {
+            throw new IllegalArgumentException("Aun existen personas pendientes de cierre personal.");
+        }
+
+        boolean existenRecompensasPendientes = recompensaDao.findAll().stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> recompensa.getPeriodo() != null && recompensa.getPeriodo().getId().equals(periodoActivo.getId()))
+                .filter(recompensa -> Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
+                .anyMatch(recompensa -> zeroIfNull(recompensa.getMontoEfectivo())
+                        .subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado()))
+                        .max(BigDecimal.ZERO)
+                        .compareTo(BigDecimal.ZERO) > 0);
+        if (existenRecompensasPendientes) {
+            throw new IllegalArgumentException("Aun existen recompensas mensuales pendientes de pago.");
+        }
+
+        cerrarMesBilleteras();
+        vencerHistorialMembresiasActivas();
+        desactivarMembresiasVencidasDelPeriodoActivo();
+        return gestionPeriodoService.cerrarPeriodoActivo();
+    }
+
     private Optional<Rango> rangoAlcanzadoPorQp(BigDecimal qp) {
         BigDecimal qpActual = zeroIfNull(qp);
 
@@ -464,6 +612,28 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .filter(rango -> Auditoria.ESTADO_ACTIVO.equals(rango.getEstado()))
                 .filter(rango -> qpActual.compareTo(zeroIfNull(rango.getQpMinimo())) >= 0)
                 .max(Comparator.comparing(rango -> zeroIfNull(rango.getQpMinimo())));
+    }
+
+    private void desactivarMembresiasVencidasDelPeriodoActivo() {
+        LocalDateTime finPeriodoActivo = finDeDia(gestionPeriodoService.obtenerPeriodoActivo().getFechaFin());
+        referidoDao.findByMembresiaActivaTrue().stream()
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .filter(referido -> referido.getFechaFinMembresia() != null)
+                .filter(referido -> !referido.getFechaFinMembresia().isAfter(finPeriodoActivo))
+                .forEach(referido -> {
+                    referido.setMembresiaActiva(false);
+                    referidoDao.save(referido);
+                });
+    }
+
+    private String periodoKey(PeriodoGestion periodo) {
+        return periodo.getGestion().getAnio() + "-" + String.format("%02d", periodo.getMes());
+    }
+
+    private Optional<PlanActivacion> obtenerPlanActivacionPorPv(BigDecimal pvActual) {
+        return planActivacionDao.findByPvMinimoMensualLessThanEqualOrderByPvMinimoMensualDesc(zeroIfNull(pvActual)).stream()
+                .filter(plan -> Auditoria.ESTADO_ACTIVO.equals(plan.getEstado()))
+                .findFirst();
     }
 
     private void actualizarRecompensasCobrables(Persona persona, boolean cobrable) {
@@ -645,5 +815,9 @@ public class BilleteraServiceImpl implements BilleteraService {
     private LocalDateTime calcularFechaFinMembresia(LocalDateTime fechaInicio) {
         LocalDate fechaFin = fechaInicio.toLocalDate().plusMonths(1);
         return LocalDateTime.of(fechaFin, LocalTime.of(23, 59, 59));
+    }
+
+    private LocalDateTime finDeDia(LocalDate fecha) {
+        return LocalDateTime.of(fecha, LocalTime.of(23, 59, 59));
     }
 }

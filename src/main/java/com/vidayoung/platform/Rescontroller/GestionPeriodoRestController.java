@@ -64,7 +64,9 @@ public class GestionPeriodoRestController {
 
     @GetMapping("/periodos/activo")
     public ResponseEntity<PeriodoGestion> obtenerPeriodoActivo() {
-        return ResponseEntity.ok(gestionPeriodoService.obtenerPeriodoActivo());
+        return gestionPeriodoService.buscarPeriodoActivo()
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @PutMapping("/periodos/{periodoId}/activar")
@@ -72,9 +74,9 @@ public class GestionPeriodoRestController {
         return ResponseEntity.ok(gestionPeriodoService.activarPeriodo(periodoId));
     }
 
-    @PutMapping("/periodos/activo/cerrar")
-    public ResponseEntity<PeriodoGestion> cerrarPeriodoActivo() {
-        return ResponseEntity.ok(gestionPeriodoService.cerrarPeriodoActivo());
+    @PutMapping("/periodos/activo/desactivar")
+    public ResponseEntity<PeriodoGestion> desactivarPeriodoActivo() {
+        return ResponseEntity.ok(gestionPeriodoService.desactivarPeriodoActivo());
     }
 
     @Getter

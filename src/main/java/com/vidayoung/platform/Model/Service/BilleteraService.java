@@ -5,6 +5,7 @@ import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
+import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import java.math.BigDecimal;
@@ -31,13 +32,19 @@ public interface BilleteraService {
 
     HistorialMembresia registrarActivacion(Long personaId, Long planId);
 
+    void activarMembresiaPorPv(Persona persona, BigDecimal pvActual, PeriodoGestion periodo);
+
     RetiroBilletera registrarRetiro(Long personaId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);
 
     void sincronizarSaldoProductosRecompensa(Long recompensaId);
 
     int vencerHistorialMembresiasExpiradas();
 
+    int vencerHistorialMembresiasActivas();
+
     int cerrarMesBilleteras();
+
+    PeriodoGestion cerrarPeriodoActivoPagado();
 
     record ProductoRetiroRequest(Long productoId, Integer cantidad) {
     }

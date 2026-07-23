@@ -39,7 +39,7 @@ const user = computed(() => ({
 const staticMenuItems = [
   { id: "dashboard", label: "Dashboard", icon: Home },
   { id: "personas", label: "Personas", icon: User },
-  { id: "wallet", label: "Finanzas", icon: Wallet },
+  { id: "wallet", label: "Billetera", icon: Wallet },
   { id: "shop", label: "Tienda", icon: ShoppingBag },
   { id: "network", label: "Mi red", icon: Users, badge: "138" },
   { id: "rewards", label: "Recompensas", icon: Gift, badge: "3" },

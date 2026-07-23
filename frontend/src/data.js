@@ -58,7 +58,7 @@ export const SCREENS = [
   { id: "login",     label: "Login",                icon: "key",      group: "Público",      public: true, fullbleed: true },
   { id: "dashboard", label: "Dashboard",            icon: "home",     group: "Embajador" },
   { id: "personas",  label: "Personas",             icon: "user",     group: "Operación" },
-  { id: "wallet",    label: "Finanzas",             icon: "wallet",   group: "Embajador" },
+  { id: "wallet",    label: "Billetera",            icon: "wallet",   group: "Embajador" },
   { id: "shop",      label: "Tienda",               icon: "shop",     group: "Comercio" },
   { id: "cart",      label: "Carrito",              icon: "cart",     group: "Comercio" },
   { id: "network",   label: "Red multinivel",       icon: "network",  group: "Embajador", badge: "138" },

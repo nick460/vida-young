@@ -5,7 +5,7 @@ import select2 from "select2";
 import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { ArrowDownToLine, CalendarClock, PackageCheck, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
+import { ArrowDownToLine, CalendarClock, CheckCircle2, PackageCheck, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 
 select2($);
@@ -38,6 +38,7 @@ const selectedPeriodo = computed(() =>
   periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
 );
 const isPeriodoActivo = computed(() => selectedPeriodo.value?.estadoPeriodo === "ACTIVO");
+const canCloseMonth = computed(() => isPeriodoActivo.value && !loading.value && saldos.value.length === 0);
 const filteredSaldos = computed(() => {
   const term = searchTerm.value.trim().toLowerCase();
   if (!term) return saldos.value;
@@ -222,6 +223,7 @@ async function openRetiroModal(saldo) {
   retiroModalOpen.value = true;
   lockPageScroll();
   await loadSelectedWallet();
+  setMaxRetiro();
   await initProductoSelect2();
 }
 
@@ -284,6 +286,7 @@ async function registrarRetiro() {
   processing.value = true;
   error.value = "";
   try {
+    setMaxRetiro();
     await apiRequest(`/api/billeteras/persona/${selectedSaldo.value.personaId}/retiros`, {
       method: "POST",
       body: JSON.stringify({
@@ -303,6 +306,36 @@ async function registrarRetiro() {
     await loadSaldos();
   } catch (exception) {
     error.value = exception.message || "No se pudo registrar el retiro.";
+  } finally {
+    processing.value = false;
+  }
+}
+
+async function cerrarPeriodoMensual() {
+  if (!canCloseMonth.value || processing.value) return;
+
+  const result = await Swal.fire({
+    title: "Cerrar mes",
+    text: `Se marcara ${selectedPeriodo.value?.nombre || "el periodo activo"} como CERRADO. Luego no podra activarse nuevamente.`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Cerrar mes",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#C4452A"
+  });
+
+  if (!result.isConfirmed) return;
+
+  processing.value = true;
+  error.value = "";
+  try {
+    await apiRequest("/api/billeteras/cierres-mensuales/cerrar-periodo", { method: "POST" });
+    await Swal.fire("Mes cerrado", "El periodo fue cerrado correctamente.", "success");
+    selectedPeriodoId.value = "";
+    periodos.value = [];
+    await loadSaldos();
+  } catch (exception) {
+    error.value = exception.message || "No se pudo cerrar el periodo.";
   } finally {
     processing.value = false;
   }
@@ -389,12 +422,18 @@ onBeforeUnmount(() => {
           <button class="refresh-action" type="button" :disabled="loading" @click="loadSaldos">
             <RefreshCw :size="16" /> Actualizar
           </button>
+          <button class="month-close-action" type="button" :disabled="!canCloseMonth || processing" @click="cerrarPeriodoMensual">
+            <CheckCircle2 :size="16" /> Cierre de mes
+          </button>
         </div>
       </header>
 
       <div v-if="error" class="error-box">{{ error }}</div>
       <div v-if="!isPeriodoActivo" class="info-box">
         El mes seleccionado no esta activo. Puedes consultar saldos cerrados, pero los retiros solo se registran en el mes activo.
+      </div>
+      <div v-else-if="canCloseMonth" class="success-box">
+        Todas las personas con saldo mensual fueron cerradas. Ya puedes cerrar el mes de forma definitiva.
       </div>
 
       <section class="summary-grid">
@@ -562,16 +601,15 @@ onBeforeUnmount(() => {
               </section>
 
               <div class="withdraw-grid">
-                <label class="field">
-                  <span>Retirar efectivo</span>
-                  <input v-model.number="retiroForm.montoDinero" type="number" min="0" step="0.01" />
-                </label>
+                <div class="field">
+                  <span>Retiro total obligatorio</span>
+                  <div class="readonly-total">Bs. {{ money(efectivoDisponibleRetiro) }}</div>
+                </div>
                 <div class="field">
                   <span>Tipo de retiro</span>
-                  <div class="readonly-total">Efectivo mensual</div>
+                  <div class="readonly-total">Cierre personal</div>
                 </div>
               </div>
-              <button class="max-button" type="button" @click="setMaxRetiro">Usar maximo efectivo</button>
 
               <label class="field">
                 <span>Observacion</span>
@@ -605,6 +643,9 @@ onBeforeUnmount(() => {
 .refresh-action { min-height: 42px; padding: 0 16px; border: 1px solid rgba(242, 135, 5, 0.32); border-radius: 12px; background: #fff7e8; color: #1f1a14; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 950; box-shadow: 0 10px 24px rgba(242, 135, 5, 0.14); }
 .refresh-action:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
 .refresh-action:disabled { cursor: not-allowed; opacity: 0.55; box-shadow: none; }
+.month-close-action { min-height: 42px; padding: 0 16px; border: 1px solid rgba(22, 101, 52, 0.22); border-radius: 12px; background: #166534; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 950; box-shadow: 0 10px 24px rgba(22, 101, 52, 0.16); }
+.month-close-action:hover:not(:disabled) { background: #15803d; transform: translateY(-1px); }
+.month-close-action:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
 .summary-grid { display: grid; grid-template-columns: minmax(260px, 1.35fr) repeat(3, minmax(160px, 1fr)); gap: 14px; }
 .balance-card, .metric-card, .table-card { border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-sm); }
 .balance-card, .metric-card { border-radius: 18px; padding: 18px; }
@@ -634,9 +675,10 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .pagination-bar select, .field select, .field input, .period-filter select { min-height: 42px; padding: 0 12px; }
 .field textarea { padding: 11px 12px; resize: vertical; }
 .pagination-actions button { min-height: 36px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--vy-line); background: var(--vy-surface-2); color: var(--vy-ink); font-weight: 900; }
-.error-box, .info-box, .loading-box { padding: 13px 14px; border-radius: 14px; font-size: 13px; font-weight: 800; }
+.error-box, .info-box, .success-box, .loading-box { padding: 13px 14px; border-radius: 14px; font-size: 13px; font-weight: 800; }
 .error-box { border: 1px solid rgba(220, 38, 38, 0.2); background: rgba(220, 38, 38, 0.08); color: #991b1b; }
 .info-box, .loading-box { border: 1px solid var(--vy-line); background: var(--vy-surface-2); color: var(--vy-ink-2); }
+.success-box { border: 1px solid rgba(22, 101, 52, 0.2); background: rgba(22, 101, 52, 0.08); color: #166534; }
 .retiro-backdrop { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.42); backdrop-filter: blur(8px); }
 .retiro-modal { width: min(780px, 100%); max-height: calc(100vh - 40px); padding: 20px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); overflow: hidden; display: flex; flex-direction: column; }
 .retiro-modal > header, .retiro-modal > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }

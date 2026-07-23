@@ -2,14 +2,17 @@ package com.vidayoung.platform.Model.ServiceImpl;
 
 import com.vidayoung.platform.Dto.PlanActivacionProyeccionResponse;
 import com.vidayoung.platform.Model.Dao.BilleteraDao;
+import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionNivelDao;
 import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
-import com.vidayoung.platform.Model.Entity.Billetera;
+import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
+import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
 import com.vidayoung.platform.Model.Entity.Referido;
+import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import com.vidayoung.platform.Model.Service.PlanActivacionService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
@@ -32,7 +35,9 @@ public class PlanActivacionServiceImpl implements PlanActivacionService {
     private final PlanActivacionDao planActivacionDao;
     private final PlanActivacionNivelDao planActivacionNivelDao;
     private final BilleteraDao billeteraDao;
+    private final MovimientoBilleteraDao movimientoBilleteraDao;
     private final ReferidoDao referidoDao;
+    private final GestionPeriodoService gestionPeriodoService;
 
     @Override
     public List<PlanActivacion> listar() {
@@ -91,10 +96,7 @@ public class PlanActivacionServiceImpl implements PlanActivacionService {
 
     @Override
     public PlanActivacionProyeccionResponse proyectarPorPersona(Long personaId) {
-        BigDecimal pvActual = billeteraDao.findByPersonaId(personaId)
-                .map(Billetera::getSaldoPv)
-                .map(this::zeroIfNull)
-                .orElse(BigDecimal.ZERO);
+        BigDecimal pvActual = pvActualPeriodoActivo(personaId);
         Map<Integer, Integer> personasPorNivel = contarDescendientesPorNivel(personaId);
 
         List<PlanActivacionProyeccionResponse.PlanProyectado> planes = listar().stream()
@@ -102,6 +104,20 @@ public class PlanActivacionServiceImpl implements PlanActivacionService {
                 .toList();
 
         return new PlanActivacionProyeccionResponse(personaId, pvActual, planes);
+    }
+
+    private BigDecimal pvActualPeriodoActivo(Long personaId) {
+        PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
+        if (periodoActivo == null || billeteraDao.findByPersonaId(personaId).isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        return movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodoActivo.getId()).stream()
+                .filter(movimiento -> MovimientoBilletera.TIPO_PV.equals(movimiento.getTipo()))
+                .findFirst()
+                .map(MovimientoBilletera::getSaldoResultado)
+                .map(this::zeroIfNull)
+                .orElse(BigDecimal.ZERO);
     }
 
     private PlanActivacionProyeccionResponse.PlanProyectado proyectarPlan(

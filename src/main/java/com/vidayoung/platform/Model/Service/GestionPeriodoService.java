@@ -27,5 +27,7 @@ public interface GestionPeriodoService {
 
     PeriodoGestion activarPeriodo(Long periodoId);
 
+    PeriodoGestion desactivarPeriodoActivo();
+
     PeriodoGestion cerrarPeriodoActivo();
 }

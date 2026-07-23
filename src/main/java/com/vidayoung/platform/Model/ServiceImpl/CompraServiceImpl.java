@@ -245,14 +245,15 @@ public class CompraServiceImpl implements CompraService {
                 zeroIfNull(compra.getSubtotal()),
                 "Ingreso por venta interna #" + compra.getId()
         );
-        acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()), zeroIfNull(compra.getTotalCr()));
+        Billetera billeteraComprador = acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()), zeroIfNull(compra.getTotalCr()));
+        billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPv(), compra.getPeriodo());
 
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {
             generarBeneficiosActivacion(compra, totalProductos);
         }
     }
 
-    private void acreditarVolumenComprador(Persona comprador, Compra compra, BigDecimal totalPv, BigDecimal totalQp, BigDecimal totalCr) {
+    private Billetera acreditarVolumenComprador(Persona comprador, Compra compra, BigDecimal totalPv, BigDecimal totalQp, BigDecimal totalCr) {
         Billetera billetera = billeteraService.asegurarBilletera(comprador);
 
         if (totalPv.compareTo(BigDecimal.ZERO) > 0
@@ -303,6 +304,8 @@ public class CompraServiceImpl implements CompraService {
                     .saldoResultado(billetera.getSaldoCr())
                     .build());
         }
+
+        return billetera;
     }
 
     private void generarBeneficiosActivacion(Compra compra, int totalProductos) {

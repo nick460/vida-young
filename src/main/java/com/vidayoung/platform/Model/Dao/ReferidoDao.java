@@ -16,5 +16,7 @@ public interface ReferidoDao extends JpaRepository<Referido, Long> {
 
     List<Referido> findByMembresiaActivaTrueAndFechaFinMembresiaLessThanEqual(LocalDateTime fechaFin);
 
+    List<Referido> findByMembresiaActivaTrue();
+
     boolean existsByPersonaId(Long personaId);
 }

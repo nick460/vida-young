@@ -277,7 +277,7 @@ async function savePeriodo() {
 }
 
 async function activatePeriodo(periodo) {
-  if (saving.value || periodo.estadoPeriodo === "ACTIVO") return;
+  if (saving.value || periodo.estadoPeriodo === "ACTIVO" || periodo.estadoPeriodo === "CERRADO") return;
   saving.value = true;
   error.value = "";
   try {
@@ -290,15 +290,15 @@ async function activatePeriodo(periodo) {
   }
 }
 
-async function closeActivePeriodo() {
+async function deactivateActivePeriodo() {
   if (saving.value || !activePeriod.value) return;
   saving.value = true;
   error.value = "";
   try {
-    await apiRequest("/api/gestiones/periodos/activo/cerrar", { method: "PUT" });
+    await apiRequest("/api/gestiones/periodos/activo/desactivar", { method: "PUT" });
     await loadAll();
   } catch (exception) {
-    error.value = exception.message || "No se pudo cerrar el periodo activo.";
+    error.value = exception.message || "No se pudo desactivar el periodo activo.";
   } finally {
     saving.value = false;
   }
@@ -350,9 +350,9 @@ onBeforeUnmount(() => {
           {{ formatDate(activePeriod.fechaInicio) }} al {{ formatDate(activePeriod.fechaFin) }}
         </small>
       </div>
-      <button type="button" class="secondary-button" :disabled="saving || !activePeriod" @click="closeActivePeriodo">
+      <button type="button" class="secondary-button" :disabled="saving || !activePeriod" @click="deactivateActivePeriodo">
         <Lock :size="16" />
-        Cerrar activo
+        Enviar a pendiente
       </button>
     </div>
 
@@ -360,7 +360,7 @@ onBeforeUnmount(() => {
       <div class="section-title">
         <div>
           <h2>Meses de {{ selectedGestion?.nombre || "la gestion" }}</h2>
-          <p>Solo un mes puede estar activo. Al activar otro, el activo anterior queda cerrado.</p>
+          <p>Solo un mes puede estar activo. Al activar otro, el activo anterior queda pendiente de cierre.</p>
         </div>
         <div class="section-actions">
           <label class="filter-field">
@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="secondary-button compact"
-              :disabled="saving || periodo.estadoPeriodo === 'ACTIVO'"
+              :disabled="saving || periodo.estadoPeriodo === 'ACTIVO' || periodo.estadoPeriodo === 'CERRADO'"
               @click="activatePeriodo(periodo)"
             >
               Activar
@@ -846,6 +846,11 @@ button:disabled {
 .status.cerrado {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.status.pendiente_cierre {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .alert {

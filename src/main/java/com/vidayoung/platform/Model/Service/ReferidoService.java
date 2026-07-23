@@ -21,4 +21,6 @@ public interface ReferidoService {
     void eliminar(Long id);
 
     int vencerMembresiasExpiradas();
+
+    int desactivarMembresiasActivas();
 }
