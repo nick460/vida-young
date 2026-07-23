@@ -68,6 +68,18 @@ function formatDate(value) {
   });
 }
 
+function formatLocalDate(value) {
+  if (!value) return "Sin fecha";
+  const [datePart] = String(value).split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return formatDate(value);
+  return new Date(year, month - 1, day).toLocaleDateString("es-BO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit"
+  });
+}
+
 function movementAmount(movimiento) {
   const prefix = movimiento.tipo === "DINERO" || movimiento.tipo === "PRODUCTOS" ? "Bs. " : "";
   return `${prefix}${money(movimiento.monto)}`;
@@ -142,7 +154,7 @@ onMounted(loadWallet);
           <div>
             <span>Membresia actual</span>
             <strong>{{ activeMembership?.plan?.nombre || "Sin membresia activa" }}</strong>
-            <small>{{ activeMembership ? `Vigente hasta ${formatDate(activeMembership.fechaFin)}` : "Activa un plan para habilitar beneficios." }}</small>
+            <small>{{ activeMembership ? `Vigente hasta fin de mes: ${formatLocalDate(activeMembership.fechaFin)}` : "Activa un plan para habilitar beneficios." }}</small>
           </div>
         </article>
       </section>
