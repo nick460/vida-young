@@ -8,6 +8,7 @@ import com.vidayoung.platform.Dto.Asistente.AsistenteChatRequest;
 import com.vidayoung.platform.Dto.Asistente.AsistenteChatResponse;
 import com.vidayoung.platform.Dto.Asistente.AsistenteMessage;
 import com.vidayoung.platform.Model.Service.AsistenteService;
+import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -16,10 +17,12 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
+@Slf4j
 public class GeminiAsistenteServiceImpl implements AsistenteService {
 
     private static final String GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent";
@@ -29,11 +32,16 @@ public class GeminiAsistenteServiceImpl implements AsistenteService {
             .connectTimeout(Duration.ofSeconds(12))
             .build();
 
-    @Value("${gemini.api-key:${gemini.api.key:}}")
+    @Value("${gemini.api-key:${gemini.api.key:${GEMINI_API_KEY:}}}")
     private String apiKey;
 
     @Value("${gemini.model:gemini-3.1-flash-lite}")
     private String model;
+
+    @PostConstruct
+    public void logConfig() {
+        log.info("Gemini assistant config: model={} apiKeyConfigured={}", model, apiKey != null && !apiKey.isBlank());
+    }
 
     @Override
     public AsistenteChatResponse enviarMensaje(AsistenteChatRequest request) {
