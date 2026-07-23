@@ -95,7 +95,9 @@ public class BilleteraServiceImpl implements BilleteraService {
 
     @Override
     public List<HistorialMembresia> listarHistorialMembresias(Long personaId) {
-        return historialMembresiaDao.findByPersonaIdOrderByFechaInicioDesc(personaId);
+        return historialMembresiaDao.findByPersonaIdOrderByFechaInicioDesc(personaId).stream()
+                .peek(this::hidratarNombreActivacion)
+                .toList();
     }
 
     @Override
@@ -634,6 +636,19 @@ public class BilleteraServiceImpl implements BilleteraService {
         return planActivacionDao.findByPvMinimoMensualLessThanEqualOrderByPvMinimoMensualDesc(zeroIfNull(pvActual)).stream()
                 .filter(plan -> Auditoria.ESTADO_ACTIVO.equals(plan.getEstado()))
                 .findFirst();
+    }
+
+    private void hidratarNombreActivacion(HistorialMembresia historial) {
+        if (historial == null
+                || historial.getReferenciaId() == null
+                || !"PV_ACTIVACION".equals(historial.getReferenciaTipo())) {
+            return;
+        }
+
+        planActivacionDao.findById(historial.getReferenciaId())
+                .filter(plan -> Auditoria.ESTADO_ACTIVO.equals(plan.getEstado()))
+                .map(PlanActivacion::getNombre)
+                .ifPresent(historial::setNombreActivacion);
     }
 
     private void actualizarRecompensasCobrables(Persona persona, boolean cobrable) {

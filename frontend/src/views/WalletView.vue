@@ -37,7 +37,7 @@ const productosNivel1Disponible = computed(() => Number(resumen.value.productosN
 const totalNivel1Disponible = computed(() => efectivoNivel1Disponible.value + productosNivel1Disponible.value);
 const activationPlans = computed(() => proyeccionActivacion.value?.planes || []);
 const activeMembership = computed(() =>
-  membresias.value.find((membresia) => membresia.estadoMembresia === "ACTIVA")
+  membresias.value.find((membresia) => membresia.estadoMembresia === "ACTIVA" && membershipCoversActivePeriod(membresia))
 );
 const filteredMovimientos = computed(() => {
   if (movementFilter.value === "TODOS") return movimientos.value;
@@ -80,9 +80,28 @@ function formatLocalDate(value) {
   });
 }
 
+function dateOnly(value) {
+  if (!value) return null;
+  const [datePart] = String(value).split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function membershipCoversActivePeriod(membership) {
+  const activePeriodEnd = dateOnly(resumen.value.periodoActivo?.fechaFin);
+  const membershipEnd = dateOnly(membership?.fechaFin);
+  if (!activePeriodEnd || !membershipEnd) return true;
+  return membershipEnd >= activePeriodEnd;
+}
+
 function movementAmount(movimiento) {
   const prefix = movimiento.tipo === "DINERO" || movimiento.tipo === "PRODUCTOS" ? "Bs. " : "";
   return `${prefix}${money(movimiento.monto)}`;
+}
+
+function membershipName(membership) {
+  return membership?.nombreActivacion || membership?.plan?.nombre || "Plan";
 }
 
 async function loadWallet() {
@@ -153,8 +172,8 @@ onMounted(loadWallet);
           <span class="card-icon"><BadgeCheck :size="22" /></span>
           <div>
             <span>Membresia actual</span>
-            <strong>{{ activeMembership?.plan?.nombre || "Sin membresia activa" }}</strong>
-            <small>{{ activeMembership ? `Vigente hasta fin de mes: ${formatLocalDate(activeMembership.fechaFin)}` : "Activa un plan para habilitar beneficios." }}</small>
+            <strong>{{ activeMembership ? membershipName(activeMembership) : "Sin membresia activa" }}</strong>
+            <small>{{ activeMembership ? `Vigente hasta ${formatLocalDate(activeMembership.fechaFin)}` : "Activa un plan para habilitar beneficios." }}</small>
           </div>
         </article>
       </section>
@@ -283,7 +302,7 @@ onMounted(loadWallet);
             <tbody>
               <tr v-for="membresia in membresias" :key="membresia.id">
                 <td>{{ membresia.tipo }}</td>
-                <td>{{ membresia.plan?.nombre || "Plan" }}</td>
+                <td>{{ membershipName(membresia) }}</td>
                 <td>{{ formatDate(membresia.fechaInicio) }}</td>
                 <td>{{ formatDate(membresia.fechaFin) }}</td>
                 <td><span class="vy-chip" :class="membresia.estadoMembresia === 'ACTIVA' ? 'vy-chip-success' : 'vy-chip-orange'">{{ membresia.estadoMembresia }}</span></td>

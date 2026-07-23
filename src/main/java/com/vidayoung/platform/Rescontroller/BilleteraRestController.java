@@ -101,7 +101,8 @@ public class BilleteraRestController {
                             BigDecimal.ZERO,
                             detalleEfectivoMensual(personaId, periodoActivo),
                             efectivoNivel1Disponible(personaId, periodoActivo),
-                            productosNivel1Disponible(personaId, periodoActivo)
+                            productosNivel1Disponible(personaId, periodoActivo),
+                            periodoActivo
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -182,6 +183,8 @@ public class BilleteraRestController {
         private final BigDecimal efectivoNivel1Disponible;
 
         private final BigDecimal productosNivel1Disponible;
+
+        private final PeriodoGestion periodoActivo;
     }
 
     @Getter

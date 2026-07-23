@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
@@ -83,4 +84,7 @@ public class HistorialMembresia extends Auditoria {
     @JsonIgnoreProperties({"gestion"})
     @ToString.Exclude
     private PeriodoGestion periodo;
+
+    @Transient
+    private String nombreActivacion;
 }
