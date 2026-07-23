@@ -12,3 +12,14 @@ export function sendAssistantMessage(message, history = []) {
     })
   });
 }
+
+export function loadAssistantConfig() {
+  return apiRequest("/api/asistente/config");
+}
+
+export function saveAssistantConfig(systemInstruction) {
+  return apiRequest("/api/asistente/config", {
+    method: "PUT",
+    body: JSON.stringify({ systemInstruction })
+  });
+}

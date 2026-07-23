@@ -6,9 +6,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vidayoung.platform.Dto.Asistente.AsistenteChatRequest;
 import com.vidayoung.platform.Dto.Asistente.AsistenteChatResponse;
+import com.vidayoung.platform.Dto.Asistente.AsistenteConfigRequest;
+import com.vidayoung.platform.Dto.Asistente.AsistenteConfigResponse;
 import com.vidayoung.platform.Dto.Asistente.AsistenteMessage;
+import com.vidayoung.platform.Model.Dao.AsistenteConfigDao;
+import com.vidayoung.platform.Model.Entity.AsistenteConfig;
 import com.vidayoung.platform.Model.Service.AsistenteService;
 import jakarta.annotation.PostConstruct;
+import jakarta.transaction.Transactional;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -25,8 +30,10 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class GeminiAsistenteServiceImpl implements AsistenteService {
 
+    private static final Long CONFIG_ID = 1L;
     private static final String GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent";
 
+    private final AsistenteConfigDao asistenteConfigDao;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(12))
@@ -37,6 +44,13 @@ public class GeminiAsistenteServiceImpl implements AsistenteService {
 
     @Value("${gemini.model:gemini-3.1-flash-lite}")
     private String model;
+
+    @Value("${gemini.system-instruction:}")
+    private String defaultSystemInstruction;
+
+    public GeminiAsistenteServiceImpl(AsistenteConfigDao asistenteConfigDao) {
+        this.asistenteConfigDao = asistenteConfigDao;
+    }
 
     @PostConstruct
     public void logConfig() {
@@ -81,8 +95,32 @@ public class GeminiAsistenteServiceImpl implements AsistenteService {
         }
     }
 
+    @Override
+    public AsistenteConfigResponse obtenerConfiguracion() {
+        return new AsistenteConfigResponse(obtenerSystemInstruction());
+    }
+
+    @Override
+    @Transactional
+    public AsistenteConfigResponse guardarConfiguracion(AsistenteConfigRequest request) {
+        String systemInstruction = request.getSystemInstruction() == null ? "" : request.getSystemInstruction().trim();
+        AsistenteConfig config = asistenteConfigDao.findById(CONFIG_ID)
+                .orElseGet(() -> AsistenteConfig.builder().id(CONFIG_ID).build());
+        config.setSystemInstruction(systemInstruction);
+        asistenteConfigDao.save(config);
+        return new AsistenteConfigResponse(systemInstruction);
+    }
+
     private String construirBody(AsistenteChatRequest request, String message) throws Exception {
         ObjectNode root = objectMapper.createObjectNode();
+        String systemInstruction = obtenerSystemInstruction();
+
+        if (!systemInstruction.isBlank()) {
+            ObjectNode instruction = root.putObject("systemInstruction");
+            ArrayNode parts = instruction.putArray("parts");
+            parts.addObject().put("text", systemInstruction);
+        }
+
         ArrayNode contents = root.putArray("contents");
 
         if (request.getHistory() != null) {
@@ -99,6 +137,13 @@ public class GeminiAsistenteServiceImpl implements AsistenteService {
         generationConfig.put("maxOutputTokens", 2048);
 
         return objectMapper.writeValueAsString(root);
+    }
+
+    private String obtenerSystemInstruction() {
+        return asistenteConfigDao.findById(CONFIG_ID)
+                .map(AsistenteConfig::getSystemInstruction)
+                .filter(value -> value != null && !value.isBlank())
+                .orElse(defaultSystemInstruction == null ? "" : defaultSystemInstruction.trim());
     }
 
     private boolean mensajeValido(AsistenteMessage message) {

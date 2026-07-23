@@ -73,6 +73,28 @@ ALTER TABLE menus_sistema
     ALTER COLUMN usuario_registro SET DEFAULT 'SYSTEM',
     ALTER COLUMN usuario_modificacion SET DEFAULT 'SYSTEM';
 
+CREATE TABLE IF NOT EXISTS asistente_config (
+    id BIGINT PRIMARY KEY,
+    system_instruction TEXT,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+ALTER TABLE asistente_config
+    ADD COLUMN IF NOT EXISTS system_instruction TEXT,
+    ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    ADD COLUMN IF NOT EXISTS fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    ADD COLUMN IF NOT EXISTS usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM';
+
+INSERT INTO asistente_config (id, system_instruction)
+VALUES (1, '')
+ON CONFLICT (id) DO NOTHING;
+
 UPDATE menus_sistema
 SET estado = COALESCE(estado, 'ACTIVO'),
     fecha_registro = COALESCE(fecha_registro, CURRENT_TIMESTAMP),
