@@ -2,8 +2,11 @@
 import { computed, onMounted, ref } from "vue";
 import {
   Copy,
+  Maximize2,
   Plus,
-  RefreshCw
+  RefreshCw,
+  ZoomIn,
+  ZoomOut
 } from "lucide-vue-next";
 import { useAuthStore } from "../stores/authStore.js";
 import { apiRequest } from "../services/api.js";
@@ -16,6 +19,10 @@ const error = ref("");
 const referidos = ref([]);
 const viewMode = ref("tree");
 const copiedInvite = ref(false);
+const zoomLevel = ref(1);
+const panStage = ref(null);
+const panning = ref(false);
+const panStart = ref({ x: 0, y: 0, left: 0, top: 0 });
 
 const currentPersona = computed(() => authStore.usuario?.persona || null);
 const directChildren = computed(() => childrenOf(currentPersona.value?.id));
@@ -36,6 +43,11 @@ const maxDepth = computed(() => {
   return Math.max(0, ...planDepths);
 });
 const volumeLabel = computed(() => activeCount.value ? `${activeCount.value} miembros` : "Sin red");
+const zoomPercent = computed(() => `${Math.round(zoomLevel.value * 100)}%`);
+const zoomStyle = computed(() => ({
+  transform: `scale(${zoomLevel.value})`,
+  transformOrigin: viewMode.value === "tree" ? "top center" : "top left"
+}));
 const inviteCode = computed(() => authStore.usuario?.username || currentPersona.value?.documento || "VIDAYOUNG");
 const inviteLink = computed(() => {
   const username = authStore.usuario?.username?.trim();
@@ -135,6 +147,65 @@ function flattenTree(nodes, level = 1) {
   ]);
 }
 
+function setZoom(value) {
+  zoomLevel.value = Math.min(1.8, Math.max(0.45, Number(value || 1)));
+}
+
+function zoomIn() {
+  setZoom(zoomLevel.value + 0.1);
+}
+
+function zoomOut() {
+  setZoom(zoomLevel.value - 0.1);
+}
+
+function resetZoom() {
+  setZoom(1);
+}
+
+function startPan(event) {
+  const stage = panStage.value;
+  if (!stage || event.button === 2) return;
+  panning.value = true;
+  panStart.value = {
+    x: event.clientX,
+    y: event.clientY,
+    left: stage.scrollLeft,
+    top: stage.scrollTop
+  };
+}
+
+function movePan(event) {
+  if (!panning.value || !panStage.value) return;
+  event.preventDefault();
+  panStage.value.scrollLeft = panStart.value.left - (event.clientX - panStart.value.x);
+  panStage.value.scrollTop = panStart.value.top - (event.clientY - panStart.value.y);
+}
+
+function endPan() {
+  panning.value = false;
+}
+
+function startTouchPan(event) {
+  const touch = event.touches?.[0];
+  const stage = panStage.value;
+  if (!touch || !stage) return;
+  panning.value = true;
+  panStart.value = {
+    x: touch.clientX,
+    y: touch.clientY,
+    left: stage.scrollLeft,
+    top: stage.scrollTop
+  };
+}
+
+function moveTouchPan(event) {
+  const touch = event.touches?.[0];
+  if (!touch || !panning.value || !panStage.value) return;
+  panStage.value.scrollLeft = panStart.value.left - (touch.clientX - panStart.value.x);
+  panStage.value.scrollTop = panStart.value.top - (touch.clientY - panStart.value.y);
+}
+
 async function loadNetwork() {
   loading.value = true;
   error.value = "";
@@ -206,10 +277,18 @@ onMounted(loadNetwork);
         <div class="network-content">
           <header class="network-header">
             <h2>Estructura de red</h2>
-            <div class="view-tabs">
-              <button :class="{ active: viewMode === 'tree' }" type="button" @click="viewMode = 'tree'">Arbol</button>
-              <button :class="{ active: viewMode === 'list' }" type="button" @click="viewMode = 'list'">Lista</button>
-              <button :class="{ active: viewMode === 'map' }" type="button" @click="viewMode = 'map'">Mapa</button>
+            <div class="network-toolbar">
+              <div v-if="viewMode !== 'list'" class="zoom-controls" aria-label="Controles de zoom">
+                <button type="button" title="Alejar" @click="zoomOut"><ZoomOut :size="15" /></button>
+                <span>{{ zoomPercent }}</span>
+                <button type="button" title="Acercar" @click="zoomIn"><ZoomIn :size="15" /></button>
+                <button type="button" title="Restablecer" @click="resetZoom"><Maximize2 :size="15" /></button>
+              </div>
+              <div class="view-tabs">
+                <button :class="{ active: viewMode === 'tree' }" type="button" @click="viewMode = 'tree'">Arbol</button>
+                <button :class="{ active: viewMode === 'list' }" type="button" @click="viewMode = 'list'">Lista</button>
+                <button :class="{ active: viewMode === 'map' }" type="button" @click="viewMode = 'map'">Mapa</button>
+              </div>
             </div>
           </header>
 
@@ -231,8 +310,20 @@ onMounted(loadNetwork);
           <div v-else-if="!currentPersona?.id" class="empty-state">Tu usuario no tiene persona asociada.</div>
           <div v-else-if="!directChildren.length" class="empty-state">Todavia no tienes referidos directos.</div>
 
-          <section v-else-if="viewMode === 'tree'" class="tree-stage">
-            <div class="tree-canvas">
+          <section
+            v-else-if="viewMode === 'tree'"
+            ref="panStage"
+            class="tree-stage zoom-stage"
+            :class="{ panning }"
+            @mousedown="startPan"
+            @mousemove="movePan"
+            @mouseup="endPan"
+            @mouseleave="endPan"
+            @touchstart.passive="startTouchPan"
+            @touchmove.passive="moveTouchPan"
+            @touchend="endPan"
+          >
+            <div class="tree-canvas zoom-content" :style="zoomStyle">
               <div class="root-row">
                 <article class="root-node">
                   <span>Tu</span>
@@ -275,23 +366,37 @@ onMounted(loadNetwork);
             </article>
           </section>
 
-          <section v-else class="network-map-view">
-            <div v-for="level in mapLevels" :key="level.level" class="map-column">
-              <header>
-                <strong>Nivel {{ level.level }}</strong>
-                <span>{{ level.rows.length }}</span>
-              </header>
-              <div class="map-nodes">
-                <article v-for="row in level.rows" :key="row.id" class="map-node">
-                  <span class="small-avatar compact">
-                    <img v-if="photoUrl(row.persona)" :src="photoUrl(row.persona)" :alt="fullName(row.persona)" />
-                    <strong v-else>{{ initials(row.persona) }}</strong>
-                  </span>
-                  <span>
-                    <strong>{{ fullName(row.persona) }}</strong>
-                    <small>{{ row.directCount }} directos</small>
-                  </span>
-                </article>
+          <section
+            v-else
+            ref="panStage"
+            class="map-stage zoom-stage"
+            :class="{ panning }"
+            @mousedown="startPan"
+            @mousemove="movePan"
+            @mouseup="endPan"
+            @mouseleave="endPan"
+            @touchstart.passive="startTouchPan"
+            @touchmove.passive="moveTouchPan"
+            @touchend="endPan"
+          >
+            <div class="network-map-view zoom-content" :style="zoomStyle">
+              <div v-for="level in mapLevels" :key="level.level" class="map-column">
+                <header>
+                  <strong>Nivel {{ level.level }}</strong>
+                  <span>{{ level.rows.length }}</span>
+                </header>
+                <div class="map-nodes">
+                  <article v-for="row in level.rows" :key="row.id" class="map-node">
+                    <span class="small-avatar compact">
+                      <img v-if="photoUrl(row.persona)" :src="photoUrl(row.persona)" :alt="fullName(row.persona)" />
+                      <strong v-else>{{ initials(row.persona) }}</strong>
+                    </span>
+                    <span>
+                      <strong>{{ fullName(row.persona) }}</strong>
+                      <small>{{ row.directCount }} directos</small>
+                    </span>
+                  </article>
+                </div>
               </div>
             </div>
           </section>
@@ -483,6 +588,49 @@ onMounted(loadNetwork);
   font-weight: 800;
 }
 
+.network-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.zoom-controls {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--vy-line);
+  border-radius: 99px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(31, 26, 20, 0.04);
+}
+
+.zoom-controls button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--vy-ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoom-controls button:hover {
+  background: var(--vy-cream);
+  color: var(--vy-orange-deep);
+}
+
+.zoom-controls span {
+  min-width: 48px;
+  color: var(--vy-ink);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
 .view-tabs {
   display: flex;
   gap: 6px;
@@ -594,6 +742,20 @@ onMounted(loadNetwork);
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(242, 135, 5, 0.52) rgba(214, 204, 188, 0.35);
+}
+
+.zoom-stage {
+  cursor: grab;
+  user-select: none;
+}
+
+.zoom-stage.panning {
+  cursor: grabbing;
+}
+
+.zoom-content {
+  transition: transform 0.16s ease;
+  will-change: transform;
 }
 
 .tree-stage::-webkit-scrollbar {
@@ -807,6 +969,23 @@ onMounted(loadNetwork);
   margin-top: 16px;
 }
 
+.map-stage {
+  min-height: 420px;
+  max-height: min(68vh, 720px);
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid rgba(214, 204, 188, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.64);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(242, 135, 5, 0.52) rgba(214, 204, 188, 0.35);
+}
+
+.map-stage .network-map-view {
+  width: max(100%, 920px);
+  margin-top: 0;
+}
+
 .map-column {
   min-height: 240px;
   padding: 12px;
@@ -920,6 +1099,18 @@ onMounted(loadNetwork);
 
   .network-header {
     gap: 12px;
+  }
+
+  .network-toolbar {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .zoom-controls {
+    width: 100%;
+    justify-content: center;
+    border-radius: 8px;
   }
 
   .view-tabs {
