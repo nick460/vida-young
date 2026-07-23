@@ -26,6 +26,7 @@ import RangosView from "./views/RangosView.vue";
 import ActivationPlansView from "./views/ActivationPlansView.vue";
 import ReferidosView from "./views/ReferidosView.vue";
 import AdminSalesView from "./views/AdminSalesView.vue";
+import AssistantConfigView from "./views/AssistantConfigView.vue";
 import AssistantView from "./views/AssistantView.vue";
 import RegistroReferidoView from "./views/RegistroReferidoView.vue";
 import DigitalToolsView from "./views/DigitalToolsView.vue";
@@ -62,6 +63,7 @@ const routes = [
   { path: "/roles-menus", name: "roles-menus", component: RolesMenusView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/novedades-login", name: "login-carousel-config", component: LoginCarouselConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/asistente", name: "asistente", component: AssistantView, meta: { sidebar: true, roles: ["*"] } },
+  { path: "/asistente-config", name: "asistente-config", component: AssistantConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/personas", name: "personas", component: PersonasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/rangos", name: "rangos", component: RangosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes", name: "planes", component: PlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
