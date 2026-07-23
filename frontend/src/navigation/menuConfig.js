@@ -8,6 +8,7 @@ export const BASE_MENU_ITEMS = [
   { id: "pagina-principal-config", label: "Pagina principal", icon: "PanelTop", roles: [ROLE_ADMIN] },
   { id: "login-carousel-config", label: "Novedades", icon: "Images", roles: [ROLE_ADMIN] },
   { id: "landing-productos-config", label: "Configuracion landings", icon: "PanelsTopLeft", roles: [ROLE_ADMIN] },
+  { id: "asistente", label: "Asistente", icon: "Bot", roles: ["*"] },
   { id: "personas", label: "Personas", icon: "User", roles: [ROLE_ADMIN] },
   { id: "rangos", label: "Rangos", icon: "Trophy", roles: [ROLE_ADMIN] },
   { id: "planes", label: "Planes", icon: "BadgePercent", roles: [ROLE_ADMIN] },

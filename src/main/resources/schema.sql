@@ -93,25 +93,26 @@ VALUES
     ('pagina-principal-config', 'Pagina principal', 'PanelTop', FALSE, 30),
     ('login-carousel-config', 'Novedades', 'Images', FALSE, 40),
     ('landing-productos-config', 'Configuracion landings', 'PanelsTopLeft', FALSE, 50),
-    ('personas', 'Personas', 'User', FALSE, 60),
-    ('rangos', 'Rangos', 'Trophy', FALSE, 70),
-    ('planes', 'Planes', 'BadgePercent', FALSE, 80),
-    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 90),
-    ('referidos', 'Referidos', 'Network', FALSE, 100),
-    ('inventario', 'Inventario', 'PackageSearch', FALSE, 110),
-    ('ventanilla', 'Ventanilla', 'Store', FALSE, 120),
-    ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 130),
-    ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 140),
-    ('gestiones', 'Gestiones', 'CalendarClock', FALSE, 150),
-    ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 160),
-    ('retiros-billeteras', 'Retiros billeteras', 'ArrowDownToLine', FALSE, 170),
-    ('retiros-nivel-1', 'Retiros nivel 1', 'Gift', FALSE, 180),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 190),
-    ('shop', 'Tienda', 'ShoppingBag', FALSE, 200),
-    ('network', 'Mi red', 'Users', FALSE, 210),
-    ('rewards', 'Recompensas', 'Gift', FALSE, 220),
-    ('stats', 'Estadisticas', 'BarChart3', FALSE, 230),
-    ('profile', 'Perfil', 'User', FALSE, 240)
+    ('asistente', 'Asistente', 'Bot', FALSE, 60),
+    ('personas', 'Personas', 'User', FALSE, 70),
+    ('rangos', 'Rangos', 'Trophy', FALSE, 80),
+    ('planes', 'Planes', 'BadgePercent', FALSE, 90),
+    ('planes-activacion', 'Activaciones', 'Activity', FALSE, 100),
+    ('referidos', 'Referidos', 'Network', FALSE, 110),
+    ('inventario', 'Inventario', 'PackageSearch', FALSE, 120),
+    ('ventanilla', 'Ventanilla', 'Store', FALSE, 130),
+    ('registro-referido', 'Registro referido', 'UserPlus', FALSE, 140),
+    ('herramientas-digitales', 'Herramientas digitales', 'Wrench', FALSE, 150),
+    ('gestiones', 'Gestiones', 'CalendarClock', FALSE, 160),
+    ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 170),
+    ('retiros-billeteras', 'Retiros billeteras', 'ArrowDownToLine', FALSE, 180),
+    ('retiros-nivel-1', 'Retiros nivel 1', 'Gift', FALSE, 190),
+    ('wallet', 'Finanzas', 'Wallet', FALSE, 200),
+    ('shop', 'Tienda', 'ShoppingBag', FALSE, 210),
+    ('network', 'Mi red', 'Users', FALSE, 220),
+    ('rewards', 'Recompensas', 'Gift', FALSE, 230),
+    ('stats', 'Estadisticas', 'BarChart3', FALSE, 240),
+    ('profile', 'Perfil', 'User', FALSE, 250)
 ON CONFLICT (menu_id) DO UPDATE
 SET label = EXCLUDED.label,
     icon = EXCLUDED.icon,
@@ -128,21 +129,21 @@ ON CONFLICT DO NOTHING;
 INSERT INTO roles_menus (rol_id, menu_id)
 SELECT r.id, m.id
 FROM roles r
-JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'wallet', 'shop', 'network', 'profile', 'rewards', 'herramientas-digitales')
+JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'asistente', 'wallet', 'shop', 'network', 'profile', 'rewards', 'herramientas-digitales')
 WHERE r.nombre = 'EMBAJADOR'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_menus (rol_id, menu_id)
 SELECT r.id, m.id
 FROM roles r
-JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'wallet', 'shop', 'profile', 'herramientas-digitales')
+JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'asistente', 'wallet', 'shop', 'profile', 'herramientas-digitales')
 WHERE r.nombre = 'USUARIO'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_menus (rol_id, menu_id)
 SELECT r.id, m.id
 FROM roles r
-JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'shop', 'profile')
+JOIN menus_sistema m ON m.menu_id IN ('dashboard', 'asistente', 'shop', 'profile')
 WHERE r.nombre = 'CLIENTE'
 ON CONFLICT DO NOTHING;
 
