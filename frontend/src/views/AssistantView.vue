@@ -13,6 +13,7 @@ const configSaving = ref(false);
 const error = ref("");
 const configError = ref("");
 const configSuccess = ref("");
+const configOpen = ref(false);
 const systemInstruction = ref("");
 const messages = ref([
   {
@@ -104,6 +105,12 @@ async function saveConfig() {
   }
 }
 
+function openConfig() {
+  configOpen.value = true;
+  configError.value = "";
+  configSuccess.value = "";
+}
+
 onMounted(loadConfig);
 </script>
 
@@ -116,10 +123,16 @@ onMounted(loadConfig);
           <h1>Asistente Vidayoung</h1>
           <p>Conversa con Gemini desde la plataforma.</p>
         </div>
-        <button class="vy-btn vy-btn-ghost" type="button" @click="resetChat">
-          <RotateCcw :size="15" />
-          Reiniciar
-        </button>
+        <div class="header-actions">
+          <button v-if="canConfigure" class="vy-btn vy-btn-ghost config-trigger" type="button" @click="openConfig">
+            <Settings :size="15" />
+            Reglas
+          </button>
+          <button class="vy-btn vy-btn-ghost" type="button" @click="resetChat">
+            <RotateCcw :size="15" />
+            Reiniciar
+          </button>
+        </div>
       </header>
 
       <div class="assistant-layout">
@@ -196,6 +209,38 @@ onMounted(loadConfig);
           </button>
         </aside>
       </div>
+
+      <div v-if="canConfigure && configOpen" class="config-modal" role="dialog" aria-modal="true">
+        <div class="config-modal-card">
+          <header>
+            <span class="config-icon"><Settings :size="18" /></span>
+            <div>
+              <h2>Instruccion del sistema</h2>
+              <p>Define el comportamiento base del asistente.</p>
+            </div>
+          </header>
+
+          <textarea
+            v-model="systemInstruction"
+            class="instruction-input"
+            rows="10"
+            :disabled="configLoading || configSaving"
+            placeholder="Ejemplo: Responde como asesor de Vidayoung, con tono claro, breve y orientado a ventas responsables."
+          ></textarea>
+
+          <div v-if="configError" class="config-alert error">{{ configError }}</div>
+          <div v-if="configSuccess" class="config-alert success">{{ configSuccess }}</div>
+
+          <footer>
+            <button class="vy-btn vy-btn-ghost" type="button" @click="configOpen = false">Cerrar</button>
+            <button class="vy-btn vy-btn-dark save-config" type="button" :disabled="configSaving" @click="saveConfig">
+              <Loader2 v-if="configSaving" :size="15" class="spin" />
+              <Save v-else :size="15" />
+              Guardar
+            </button>
+          </footer>
+        </div>
+      </div>
     </main>
   </div>
 </template>
@@ -206,6 +251,8 @@ onMounted(loadConfig);
 .page-header h1 { margin-top: 8px; font-size: 30px; font-weight: 900; }
 .page-header p { margin-top: 4px; color: var(--vy-ink-2); font-size: 14px; }
 .page-header .vy-btn { min-height: 40px; padding: 10px 16px; border-radius: 12px; font-weight: 800; }
+.header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.config-trigger { display: none; }
 .assistant-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: stretch; }
 .assistant-shell { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface); overflow: hidden; box-shadow: 0 18px 44px rgba(31, 26, 20, 0.08); }
 .chat-body { flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(180deg, #fff 0%, #fffaf0 100%); }
@@ -239,20 +286,32 @@ onMounted(loadConfig);
 .config-alert.success { background: rgba(70, 142, 90, 0.12); color: #2f7447; }
 .save-config { width: 100%; min-height: 42px; border-radius: 8px; font-weight: 900; }
 .save-config:disabled { opacity: 0.58; cursor: not-allowed; }
+.config-modal { position: fixed; inset: 0; z-index: 120; display: none; align-items: flex-end; justify-content: center; padding: 14px; background: rgba(31, 26, 20, 0.42); box-sizing: border-box; }
+.config-modal-card { width: min(560px, 100%); max-height: calc(100dvh - 28px); display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 8px; border: 1px solid var(--vy-line); background: #fff; box-shadow: 0 24px 60px rgba(31, 26, 20, 0.24); box-sizing: border-box; }
+.config-modal-card header { display: flex; gap: 12px; align-items: flex-start; }
+.config-modal-card h2 { margin: 0; font-size: 17px; font-weight: 900; }
+.config-modal-card p { margin: 4px 0 0; color: var(--vy-ink-2); font-size: 13px; line-height: 1.4; }
+.config-modal-card footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 860px) {
-  .assistant-view { min-height: calc(100dvh - 92px); }
-  .workspace { height: calc(100dvh - 92px); min-height: 0; padding: 22px 10px 8px !important; overflow: hidden; }
+  .assistant-view { position: fixed; inset: 0 0 84px 0; z-index: 1; min-height: 0; overflow: hidden; background: var(--vy-bg); }
+  .workspace { height: 100%; min-height: 0; padding: 12px 10px 8px !important; overflow: hidden; }
   .page-header { align-items: stretch; flex-direction: column; }
-  .page-header { flex-shrink: 0; gap: 12px; margin-bottom: 12px; }
-  .page-header .vy-btn { align-self: center; }
-  .assistant-layout { grid-template-columns: 1fr; }
-  .assistant-shell { min-height: 0; }
+  .page-header { flex-shrink: 0; gap: 8px; margin-bottom: 10px; }
+  .page-header h1 { margin-top: 4px; font-size: 24px !important; }
+  .page-header p { margin-top: 2px; }
+  .header-actions { justify-content: center; }
+  .page-header .vy-btn { min-height: 38px; padding: 9px 13px; }
+  .config-trigger { display: inline-flex; }
+  .assistant-layout { flex: 1; min-height: 0; grid-template-columns: 1fr; }
+  .assistant-shell { height: 100%; min-height: 0; }
   .config-panel { display: none; }
-  .chat-body { padding: 16px; }
+  .chat-body { min-height: 0; padding: 16px; }
   .message-row { max-width: 100%; }
   .composer { flex-shrink: 0; padding: 12px; }
   .composer textarea { min-height: 46px; max-height: 92px; }
+  .config-modal { display: flex; }
+  .config-modal .instruction-input { min-height: 260px; }
 }
 </style>
