@@ -29,7 +29,7 @@ public class GeminiAsistenteServiceImpl implements AsistenteService {
             .connectTimeout(Duration.ofSeconds(12))
             .build();
 
-    @Value("${gemini.api-key:}")
+    @Value("${gemini.api-key:${gemini.api.key:}}")
     private String apiKey;
 
     @Value("${gemini.model:gemini-3.1-flash-lite}")
@@ -44,7 +44,7 @@ public class GeminiAsistenteServiceImpl implements AsistenteService {
         }
 
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("La API key de Gemini no esta configurada.");
+            throw new IllegalStateException("La API key de Gemini no esta configurada. Define gemini.api-key o la variable GEMINI_API_KEY.");
         }
 
         try {
