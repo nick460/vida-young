@@ -20,6 +20,20 @@ public interface RetiroBilleteraDao extends JpaRepository<RetiroBilletera, Long>
             left join fetch r.periodo periodo
             left join fetch periodo.gestion
             where r.periodo.id = :periodoId
+              and r.referenciaTipo = :referenciaTipo
+            order by r.fechaRetiro desc
+            """)
+    List<RetiroBilletera> findByPeriodoIdAndReferenciaTipoWithPersonaOrderByFechaRetiroDesc(
+            @Param("periodoId") Long periodoId,
+            @Param("referenciaTipo") String referenciaTipo
+    );
+
+    @Query("""
+            select r from RetiroBilletera r
+            join fetch r.persona p
+            left join fetch r.periodo periodo
+            left join fetch periodo.gestion
+            where r.periodo.id = :periodoId
             order by r.fechaRetiro desc
             """)
     List<RetiroBilletera> findByPeriodoIdWithPersonaOrderByFechaRetiroDesc(@Param("periodoId") Long periodoId);

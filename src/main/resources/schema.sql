@@ -740,6 +740,12 @@ ALTER TABLE movimientos_billetera
 ALTER TABLE retiros_billetera
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
+ALTER TABLE retiros_billetera
+    ADD COLUMN IF NOT EXISTS referencia_tipo VARCHAR(60);
+
+ALTER TABLE retiros_billetera
+    ADD COLUMN IF NOT EXISTS referencia_id BIGINT;
+
 CREATE TABLE IF NOT EXISTS retiros_billetera_detalles (
     id BIGSERIAL PRIMARY KEY,
     retiro_id BIGINT NOT NULL REFERENCES retiros_billetera(id),
@@ -1229,6 +1235,13 @@ UPDATE retiros_billetera
 SET periodo_id = (SELECT id FROM periodo_activo)
 WHERE periodo_id IS NULL
   AND EXISTS (SELECT 1 FROM periodo_activo);
+
+UPDATE retiros_billetera retiro
+SET referencia_tipo = 'RETIRO_RECOMPENSA_NIVEL_1'
+FROM movimientos_cartera_empresa movimiento
+WHERE retiro.referencia_tipo IS NULL
+  AND movimiento.referencia_tipo = 'RETIRO_RECOMPENSA_NIVEL_1'
+  AND movimiento.referencia_id = retiro.id;
 
 WITH periodo_activo AS (
     SELECT id

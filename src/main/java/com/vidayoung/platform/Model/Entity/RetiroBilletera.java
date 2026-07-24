@@ -68,6 +68,12 @@ public class RetiroBilletera extends Auditoria {
     @Column(length = 240)
     private String observacion;
 
+    @Column(name = "referencia_tipo", length = 60)
+    private String referenciaTipo;
+
+    @Column(name = "referencia_id")
+    private Long referenciaId;
+
     @jakarta.persistence.OneToMany(mappedBy = "retiro", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
     @JsonIgnoreProperties({"retiro"})
     @ToString.Exclude

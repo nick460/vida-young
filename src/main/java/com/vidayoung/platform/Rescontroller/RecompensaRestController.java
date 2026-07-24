@@ -34,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class RecompensaRestController {
 
+    private static final String REFERENCIA_RETIRO_NIVEL_1 = "RETIRO_RECOMPENSA_NIVEL_1";
+
     private final RecompensaDao recompensaDao;
     private final ProductoDao productoDao;
     private final RetiroBilleteraDao retiroBilleteraDao;
@@ -62,6 +64,18 @@ public class RecompensaRestController {
                 .filter(recompensa -> periodoId == null
                         || (recompensa.getPeriodo() != null && periodoId.equals(recompensa.getPeriodo().getId())))
                 .filter(this::tieneSaldoNivelUno)
+                .toList());
+    }
+
+    @GetMapping("/nivel-1/retiros")
+    public ResponseEntity<List<RetiroNivelUnoResponse>> listarRetirosNivelUno(@RequestParam(required = false) Long periodoId) {
+        PeriodoGestion periodo = periodoId == null
+                ? gestionPeriodoService.obtenerPeriodoActivo()
+                : gestionPeriodoService.buscarPorId(periodoId);
+        return ResponseEntity.ok(retiroBilleteraDao
+                .findByPeriodoIdAndReferenciaTipoWithPersonaOrderByFechaRetiroDesc(periodo.getId(), REFERENCIA_RETIRO_NIVEL_1)
+                .stream()
+                .map(this::retiroNivelUnoResponse)
                 .toList());
     }
 
@@ -109,6 +123,8 @@ public class RecompensaRestController {
                 .fechaRetiro(LocalDateTime.now())
                 .observacion(normalizarTexto(request.getObservacion()))
                 .periodo(periodo)
+                .referenciaTipo(REFERENCIA_RETIRO_NIVEL_1)
+                .referenciaId(recompensa.getId())
                 .build());
 
         for (ProductoRetiroCalculado item : productosCalculados) {
@@ -128,7 +144,7 @@ public class RecompensaRestController {
 
         if (dinero.compareTo(BigDecimal.ZERO) > 0) {
             carteraEmpresaService.registrarEgreso(
-                    "RETIRO_RECOMPENSA_NIVEL_1",
+                    REFERENCIA_RETIRO_NIVEL_1,
                     retiro.getId(),
                     dinero,
                     "Retiro inmediato de recompensa nivel 1 #" + recompensa.getId()
@@ -191,6 +207,45 @@ public class RecompensaRestController {
         return value.trim();
     }
 
+    private RetiroNivelUnoResponse retiroNivelUnoResponse(RetiroBilletera retiro) {
+        Recompensa recompensa = retiro.getReferenciaId() == null
+                ? null
+                : recompensaDao.findById(retiro.getReferenciaId()).orElse(null);
+        PeriodoGestion periodo = retiro.getPeriodo();
+        return new RetiroNivelUnoResponse(
+                retiro.getId(),
+                retiro.getReferenciaId(),
+                retiro.getPersona() == null ? null : retiro.getPersona().getId(),
+                retiro.getPersona() == null ? null : retiro.getPersona().getNombres(),
+                retiro.getPersona() == null ? null : retiro.getPersona().getApellidos(),
+                retiro.getPersona() == null ? null : retiro.getPersona().getDocumento(),
+                retiro.getMontoDinero(),
+                retiro.getMontoProductos(),
+                retiro.getEstadoRetiro(),
+                retiro.getFechaRetiro(),
+                periodo == null ? null : periodo.getId(),
+                periodo == null ? null : periodo.getNombre(),
+                periodo == null || periodo.getGestion() == null ? null : periodo.getGestion().getAnio(),
+                recompensa == null || recompensa.getReferido() == null ? null : recompensa.getReferido().getPersona(),
+                recompensa == null ? null : recompensa.getPlanIngreso(),
+                retiro.getObservacion(),
+                retiroBilleteraDetalleDao.findByRetiroId(retiro.getId()).stream()
+                        .map(this::retiroDetalleResponse)
+                        .toList()
+        );
+    }
+
+    private RetiroDetalleResponse retiroDetalleResponse(RetiroBilleteraDetalle detalle) {
+        return new RetiroDetalleResponse(
+                detalle.getProducto() == null ? null : detalle.getProducto().getId(),
+                detalle.getProducto() == null ? null : detalle.getProducto().getNombre(),
+                detalle.getProducto() == null ? null : detalle.getProducto().getSku(),
+                detalle.getCantidad(),
+                zeroIfNull(detalle.getPrecioProveedor()),
+                zeroIfNull(detalle.getSubtotal())
+        );
+    }
+
     private record ProductoRetiroCalculado(Producto producto, Integer cantidad, BigDecimal precioProveedor, BigDecimal subtotal) {
     }
 
@@ -214,5 +269,40 @@ public class RecompensaRestController {
         private Long productoId;
 
         private Integer cantidad;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class RetiroNivelUnoResponse {
+
+        private final Long id;
+        private final Long recompensaId;
+        private final Long personaId;
+        private final String nombres;
+        private final String apellidos;
+        private final String documento;
+        private final BigDecimal montoDinero;
+        private final BigDecimal montoProductos;
+        private final String estadoRetiro;
+        private final LocalDateTime fechaRetiro;
+        private final Long periodoId;
+        private final String periodoNombre;
+        private final Integer gestionAnio;
+        private final com.vidayoung.platform.Model.Entity.Persona referidoPersona;
+        private final com.vidayoung.platform.Model.Entity.Plan planIngreso;
+        private final String observacion;
+        private final List<RetiroDetalleResponse> detalles;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class RetiroDetalleResponse {
+
+        private final Long productoId;
+        private final String productoNombre;
+        private final String productoSku;
+        private final Integer cantidad;
+        private final BigDecimal precioProveedor;
+        private final BigDecimal subtotal;
     }
 }

@@ -5,7 +5,7 @@ import select2 from "select2";
 import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { ArrowDownToLine, CalendarClock, Gift, PackageCheck, Plus, Printer, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
+import { ArrowDownToLine, Eye, Gift, PackageCheck, Plus, Printer, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import logoFull from "../assets/logoFull.png";
 
@@ -15,11 +15,13 @@ const loading = ref(false);
 const processing = ref(false);
 const error = ref("");
 const recompensas = ref([]);
+const retirosProcesados = ref([]);
 const productos = ref([]);
 const periodos = ref([]);
 const selectedPeriodoId = ref("");
 const searchTerm = ref("");
 const selected = ref(null);
+const selectedRetiroDetalle = ref(null);
 const selectedProductoId = ref("");
 const periodoSelect = ref(null);
 const productoSelect = ref(null);
@@ -36,11 +38,33 @@ const filteredRecompensas = computed(() => {
     `${fullName(item.beneficiario)} ${fullName(item.referido?.persona)} ${item.planIngreso?.nombre || ""}`.toLowerCase().includes(term)
   );
 });
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredRecompensas.value.length / Number(pageSize.value || 10))));
-const paginatedRecompensas = computed(() => {
+const retiroRows = computed(() =>
+  retirosProcesados.value.map((retiro) => ({
+    ...retiro,
+    rowType: "RETIRADO",
+    rowKey: `retiro-${retiro.id}`
+  }))
+);
+const filteredRetiros = computed(() => {
+  const term = searchTerm.value.trim().toLowerCase();
+  if (!term) return retiroRows.value;
+  return retiroRows.value.filter((item) =>
+    `${item.nombres || ""} ${item.apellidos || ""} ${item.documento || ""} ${fullName(item.referidoPersona)} ${item.planIngreso?.nombre || ""}`.toLowerCase().includes(term)
+  );
+});
+const allRows = computed(() => [
+  ...filteredRecompensas.value.map((recompensa) => ({
+    ...recompensa,
+    rowType: "PENDIENTE",
+    rowKey: `recompensa-${recompensa.id}`
+  })),
+  ...filteredRetiros.value
+]);
+const totalPages = computed(() => Math.max(1, Math.ceil(allRows.value.length / Number(pageSize.value || 10))));
+const paginatedRows = computed(() => {
   const size = Number(pageSize.value || 10);
   const start = (page.value - 1) * size;
-  return filteredRecompensas.value.slice(start, start + size);
+  return allRows.value.slice(start, start + size);
 });
 
 const totals = computed(() =>
@@ -124,6 +148,39 @@ function efectivoDisponible(recompensa) {
 
 function productosDisponible(recompensa) {
   return Math.max(0, Number(recompensa?.valorProductos || 0) - Number(recompensa?.valorProductosRetirado || 0));
+}
+
+function receiptFromProcessedRetiro(retiro) {
+  return {
+    beneficiario: `${retiro.nombres || ""} ${retiro.apellidos || ""}`.trim() || "Persona",
+    documento: retiro.documento || "Sin documento",
+    periodo: `${retiro.periodoNombre || selectedPeriodo.value?.nombre || "Periodo"}${retiro.gestionAnio ? ` - Gestion ${retiro.gestionAnio}` : ""}`,
+    referido: fullName(retiro.referidoPersona),
+    plan: retiro.planIngreso?.nombre || "Plan",
+    montoDinero: Number(retiro.montoDinero || 0),
+    productos: (retiro.detalles || []).map((item) => ({
+      nombre: item.productoNombre || "Producto",
+      sku: item.productoSku,
+      precio: Number(item.precioProveedor || 0),
+      cantidad: Number(item.cantidad || 0)
+    })),
+    total: Number(retiro.montoDinero || 0) + Number(retiro.montoProductos || 0),
+    retiroId: retiro.id ? `#${retiro.id}` : "procesado",
+    fechaRetiro: formatDateTime(retiro.fechaRetiro),
+    impresoPor: currentUserName()
+  };
+}
+
+function openRetiroDetalle(retiro) {
+  selectedRetiroDetalle.value = retiro;
+}
+
+function closeRetiroDetalle() {
+  selectedRetiroDetalle.value = null;
+}
+
+function imprimirRetiroProcesado(retiro) {
+  printLevelOneReceipt(receiptFromProcessedRetiro(retiro));
 }
 
 function buildLevelOneReceipt(retiro) {
@@ -224,11 +281,13 @@ async function loadAll() {
       await loadPeriodoOptions();
     }
     const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
-    const [recompensasData, productosData] = await Promise.all([
+    const [recompensasData, retirosData, productosData] = await Promise.all([
       apiRequest(`/api/recompensas/nivel-1${query}`),
+      apiRequest(`/api/recompensas/nivel-1/retiros${query}`),
       apiRequest("/api/productos")
     ]);
     recompensas.value = Array.isArray(recompensasData) ? recompensasData : [];
+    retirosProcesados.value = Array.isArray(retirosData) ? retirosData : [];
     productos.value = Array.isArray(productosData) ? productosData : [];
     await initPeriodoSelect2();
   } catch (exception) {
@@ -412,23 +471,10 @@ async function registrarRetiro() {
     error.value = "Revisa los montos: no pueden superar el efectivo o credito disponible.";
     return;
   }
-  const receipt = {
-    beneficiario: fullName(selected.value.beneficiario),
-    documento: selected.value.beneficiario?.documento || "Sin documento",
-    periodo: selectedPeriodo.value ? `${selectedPeriodo.value.nombre} - Gestion ${selectedPeriodo.value.gestion?.anio || ""}` : "Periodo seleccionado",
-    referido: fullName(selected.value.referido?.persona),
-    plan: selected.value.planIngreso?.nombre || "Plan",
-    montoDinero: Number(form.value.montoDinero || 0),
-    productos: form.value.productos.map((item) => ({ ...item })),
-    total: Number(form.value.montoDinero || 0) + retiroProductosTotal.value,
-    retiroId: "procesado",
-    fechaRetiro: formatDateTime(),
-    impresoPor: currentUserName()
-  };
   processing.value = true;
   error.value = "";
   try {
-    const retiroProcesado = await apiRequest(`/api/recompensas/nivel-1/${selected.value.id}/retiro`, {
+    await apiRequest(`/api/recompensas/nivel-1/${selected.value.id}/retiro`, {
       method: "POST",
       body: JSON.stringify({
         montoDinero: Number(form.value.montoDinero || 0),
@@ -440,15 +486,12 @@ async function registrarRetiro() {
         observacion: form.value.observacion || null
       })
     });
-    receipt.retiroId = retiroProcesado?.id ? `#${retiroProcesado.id}` : "procesado";
-    receipt.fechaRetiro = formatDateTime(retiroProcesado?.fechaRetiro);
     await Swal.fire({
       title: "Retiro procesado",
       text: "La recompensa de nivel 1 fue actualizada.",
       icon: "success",
       confirmButtonColor: "#F28705"
     });
-    printLevelOneReceipt(receipt);
     processing.value = false;
     closeModal();
     await loadAll();
@@ -491,7 +534,7 @@ watch(pageSize, () => {
   page.value = 1;
 });
 
-watch(filteredRecompensas, () => {
+watch(allRows, () => {
   page.value = Math.min(page.value, totalPages.value);
 });
 
@@ -572,33 +615,50 @@ onBeforeUnmount(() => {
                 <th>Plan</th>
                 <th>Efectivo</th>
                 <th>Producto</th>
+                <th>Estado</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="recompensa in paginatedRecompensas" :key="recompensa.id">
+              <tr v-for="recompensa in paginatedRows" :key="recompensa.rowKey">
                 <td>
-                  <strong>{{ fullName(recompensa.beneficiario) }}</strong>
-                  <small>{{ recompensa.beneficiario?.documento || "Sin documento" }}</small>
+                  <strong>{{ recompensa.rowType === "RETIRADO" ? `${recompensa.nombres || ""} ${recompensa.apellidos || ""}` : fullName(recompensa.beneficiario) }}</strong>
+                  <small>
+                    <template v-if="recompensa.rowType === 'RETIRADO'">Retiro #{{ recompensa.id }} - {{ formatDateTime(recompensa.fechaRetiro) }}</template>
+                    <template v-else>{{ recompensa.beneficiario?.documento || "Sin documento" }}</template>
+                  </small>
                 </td>
-                <td>{{ fullName(recompensa.referido?.persona) }}</td>
+                <td>{{ recompensa.rowType === "RETIRADO" ? fullName(recompensa.referidoPersona) : fullName(recompensa.referido?.persona) }}</td>
                 <td>{{ recompensa.planIngreso?.nombre || "Plan" }}</td>
-                <td>Bs. {{ money(efectivoDisponible(recompensa)) }}</td>
-                <td>Bs. {{ money(productosDisponible(recompensa)) }}</td>
+                <td>Bs. {{ money(recompensa.rowType === "RETIRADO" ? recompensa.montoDinero : efectivoDisponible(recompensa)) }}</td>
+                <td>Bs. {{ money(recompensa.rowType === "RETIRADO" ? recompensa.montoProductos : productosDisponible(recompensa)) }}</td>
+                <td>
+                  <span class="withdrawal-status" :class="recompensa.rowType === 'RETIRADO' ? 'processed' : 'pending'">
+                    {{ recompensa.rowType === "RETIRADO" ? "Retirado" : "Pendiente" }}
+                  </span>
+                </td>
                 <td class="actions-cell">
-                  <button class="row-withdraw-button" type="button" @click="openModal(recompensa)">
+                  <button v-if="recompensa.rowType === 'PENDIENTE'" class="row-withdraw-button" type="button" @click="openModal(recompensa)">
                     <Gift :size="15" /> Retirar
                   </button>
+                  <div v-else class="processed-actions">
+                    <button class="detail-button" type="button" @click="openRetiroDetalle(recompensa)">
+                      <Eye :size="15" /> Detalle
+                    </button>
+                    <button class="print-button" type="button" @click="imprimirRetiroProcesado(recompensa)">
+                      <Printer :size="15" /> Imprimir
+                    </button>
+                  </div>
                 </td>
               </tr>
-              <tr v-if="!filteredRecompensas.length && !loading">
-                <td colspan="6">No hay recompensas de nivel 1 pendientes.</td>
+              <tr v-if="!allRows.length && !loading">
+                <td colspan="7">No hay recompensas pendientes ni retiros procesados en el mes seleccionado.</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <footer v-if="filteredRecompensas.length" class="pagination-bar">
+        <footer v-if="allRows.length" class="pagination-bar">
           <div>
             <span>Pagina {{ page }} de {{ totalPages }}</span>
             <select v-model.number="pageSize">
@@ -616,6 +676,83 @@ onBeforeUnmount(() => {
     </main>
 
     <Teleport to="body">
+      <div v-if="selectedRetiroDetalle" class="retiro-backdrop">
+        <article class="retiro-modal">
+          <header>
+            <div>
+              <span class="vy-eyebrow">Nivel 1</span>
+              <h2>Detalle de retiro #{{ selectedRetiroDetalle.id }}</h2>
+              <p>{{ selectedRetiroDetalle.nombres }} {{ selectedRetiroDetalle.apellidos }} - {{ selectedRetiroDetalle.periodoNombre }}</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="closeRetiroDetalle">
+              <X :size="18" />
+            </button>
+          </header>
+
+          <section class="retiro-body">
+            <div class="modal-context">
+              <div>
+                <small>Beneficiario</small>
+                <strong>{{ selectedRetiroDetalle.nombres }} {{ selectedRetiroDetalle.apellidos }}</strong>
+              </div>
+              <div>
+                <small>Nuevo referido</small>
+                <strong>{{ fullName(selectedRetiroDetalle.referidoPersona) }}</strong>
+              </div>
+              <div>
+                <small>Plan</small>
+                <strong>{{ selectedRetiroDetalle.planIngreso?.nombre || "Plan" }}</strong>
+              </div>
+            </div>
+
+            <div class="wallet-values">
+              <div>
+                <small>Efectivo retirado</small>
+                <strong>Bs. {{ money(selectedRetiroDetalle.montoDinero) }}</strong>
+              </div>
+              <div>
+                <small>Productos entregados</small>
+                <strong>Bs. {{ money(selectedRetiroDetalle.montoProductos) }}</strong>
+              </div>
+            </div>
+
+            <section class="processed-detail-list">
+              <header>
+                <div>
+                  <small>Detalle</small>
+                  <strong>Productos del retiro</strong>
+                </div>
+                <b>Bs. {{ money(selectedRetiroDetalle.montoProductos) }}</b>
+              </header>
+              <div v-if="!(selectedRetiroDetalle.detalles || []).length" class="processed-empty">
+                No se registraron productos entregados.
+              </div>
+              <div v-for="item in selectedRetiroDetalle.detalles || []" :key="item.productoId" class="processed-detail-row">
+                <span>
+                  <strong>{{ item.productoNombre || "Producto" }}</strong>
+                  <small>{{ item.cantidad }} x Bs. {{ money(item.precioProveedor) }}{{ item.productoSku ? ` - ${item.productoSku}` : "" }}</small>
+                </span>
+                <b>Bs. {{ money(item.subtotal) }}</b>
+              </div>
+            </section>
+
+            <div v-if="selectedRetiroDetalle.observacion" class="modal-context single">
+              <div>
+                <small>Observacion</small>
+                <strong>{{ selectedRetiroDetalle.observacion }}</strong>
+              </div>
+            </div>
+          </section>
+
+          <footer>
+            <button class="vy-btn vy-btn-ghost" type="button" @click="closeRetiroDetalle">Cerrar</button>
+            <button class="withdraw-submit" type="button" @click="imprimirRetiroProcesado(selectedRetiroDetalle)">
+              <Printer :size="18" /> Imprimir comprobante
+            </button>
+          </footer>
+        </article>
+      </div>
+
       <div v-if="selected" class="retiro-backdrop">
         <article class="retiro-modal">
           <header>
@@ -751,6 +888,14 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 .actions-cell { text-align: right; }
 .row-withdraw-button { min-height: 36px; padding: 0 12px; border: 1px solid rgba(31, 26, 20, 0.12); border-radius: 8px; background: #1f1a14; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 950; white-space: nowrap; box-shadow: 0 8px 18px rgba(31, 26, 20, 0.16); }
 .row-withdraw-button:hover { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
+.withdrawal-status { width: fit-content; min-height: 28px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
+.withdrawal-status.pending { background: #fff7e8; color: #9a4d00; border: 1px solid rgba(242, 135, 5, 0.24); }
+.withdrawal-status.processed { background: rgba(22, 101, 52, 0.1); color: #166534; border: 1px solid rgba(22, 101, 52, 0.2); }
+.processed-actions { display: inline-flex; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.detail-button, .print-button { min-height: 34px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 950; white-space: nowrap; }
+.detail-button { border: 1px solid var(--vy-line); background: var(--vy-surface-2); color: var(--vy-ink); }
+.print-button { border: 1px solid rgba(242, 135, 5, 0.28); background: #fff7e8; color: #1f1a14; }
+.detail-button:hover, .print-button:hover { transform: translateY(-1px); }
 .pagination-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--vy-line-2); color: var(--vy-ink-3); font-size: 13px; font-weight: 800; }
 .pagination-bar > div { display: inline-flex; align-items: center; gap: 10px; }
 .pagination-bar select { min-height: 36px; padding: 0 10px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; color: var(--vy-ink); font-weight: 800; }
@@ -767,6 +912,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 .retiro-modal header button { width: 38px; height: 38px; border-radius: 8px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; }
 .retiro-body { padding: 16px 2px; overflow: auto; }
 .modal-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.modal-context.single { grid-template-columns: 1fr; margin-top: 12px; }
 .modal-context > div { padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; }
 .modal-context small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .modal-context strong { display: block; margin-top: 4px; font-size: 14px; font-weight: 900; }
@@ -774,6 +920,16 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 .wallet-values > div, .readonly-total { padding: 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface-2); }
 .wallet-values small, .field span { display: block; color: var(--vy-ink-3); font-size: 12px; font-weight: 900; text-transform: uppercase; }
 .wallet-values strong { display: block; margin-top: 5px; font-size: 22px; font-weight: 900; }
+.processed-detail-list { margin-top: 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; overflow: hidden; }
+.processed-detail-list header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border-bottom: 1px solid var(--vy-line-2); background: var(--vy-surface-2); }
+.processed-detail-list header small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.processed-detail-list header strong { display: block; margin-top: 3px; font-size: 15px; font-weight: 900; }
+.processed-detail-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-bottom: 1px solid var(--vy-line-2); }
+.processed-detail-row:last-child { border-bottom: 0; }
+.processed-detail-row strong, .processed-detail-row small { display: block; }
+.processed-detail-row small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.processed-detail-row b { white-space: nowrap; }
+.processed-empty { padding: 12px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
 .field input, .field textarea, .field select { width: 100%; margin-top: 7px; padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; color: var(--vy-ink); font-weight: 800; }
 .field.invalid input, .field.invalid .readonly-total { border-color: #c4452a; background: #fff4ef; }
 .field > small { display: block; margin-top: 6px; color: #c4452a; font-size: 12px; font-weight: 900; }
