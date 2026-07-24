@@ -360,7 +360,7 @@ function escapeHtml(value) {
 function buildReceiptHtml(compra) {
   const detalles = (compra.detalles || []).map((detalle) => `
     <div class="product-block">
-      <div class="product-separator">........................................</div>
+      <div class="product-separator"></div>
       <div class="detail-row">
         <span class="qty">${Number(detalle.cantidad || 0)}</span>
         <div class="product-info">
@@ -369,7 +369,7 @@ function buildReceiptHtml(compra) {
         </div>
         <strong class="amount">Bs. ${money(detalle.subtotal)}</strong>
       </div>
-      <div class="product-separator">........................................</div>
+      <div class="product-separator"></div>
     </div>
   `).join("");
   const printedAt = formatDateTime(new Date());
@@ -395,7 +395,7 @@ function buildReceiptHtml(compra) {
     body { width: 7cm; margin: 0 auto; padding: 0; background: #fff; color: #111; font-family: Arial, sans-serif; font-size: 10pt; }
     .receipt { width: 7cm; margin: 0 auto; }
     .center { text-align: center; }
-    .logo { width: 2.9cm; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto .18cm; display: block; }
+    .logo { width: 2.45cm; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto .18cm; display: block; }
     .brand-name { margin: .08cm 0 0; font-size: 12pt; font-weight: 900; text-transform: uppercase; letter-spacing: .02cm; }
     .company-meta { margin-top: .05cm; font-size: 8.4pt; line-height: 1.35; text-transform: uppercase; }
     h1 { margin: .15cm 0 .05cm; font-size: 10.4pt; text-transform: uppercase; }
@@ -408,7 +408,7 @@ function buildReceiptHtml(compra) {
     .detail-header, .detail-row { display: grid; grid-template-columns: .9cm 1fr 1.7cm; gap: .12cm; align-items: start; }
     .detail-header { padding-bottom: .08cm; font-size: 8pt; font-weight: 800; text-transform: uppercase; border-bottom: 1px dashed #111; }
     .product-block { margin-top: .08cm; }
-    .product-separator { overflow: hidden; white-space: nowrap; color: #555; font-size: 8pt; line-height: 1; }
+    .product-separator { width: 100%; border-top: 1px dotted #555; margin: .03cm 0; }
     .detail-row { padding: .12cm 0; }
     .qty, .amount { font-weight: 800; }
     .qty { text-align: center; }
@@ -457,7 +457,7 @@ function buildReceiptHtml(compra) {
         <span>Producto</span>
         <span style="text-align:right;">Sub total</span>
       </div>
-      ${detalles || '<div class="product-block"><div class="product-separator">........................................</div><div class="detail-row"><span class="qty">0</span><div class="product-info"><strong>Sin productos</strong></div><strong class="amount">Bs. 0.00</strong></div><div class="product-separator">........................................</div></div>'}
+      ${detalles || '<div class="product-block"><div class="product-separator"></div><div class="detail-row"><span class="qty">0</span><div class="product-info"><strong>Sin productos</strong></div><strong class="amount">Bs. 0.00</strong></div><div class="product-separator"></div></div>'}
     </section>
 
     <section class="totals">
