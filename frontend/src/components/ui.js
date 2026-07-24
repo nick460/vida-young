@@ -144,7 +144,7 @@ export const VyProductImage = defineComponent({
   props: { grad: String, label: String, h: { default: 220 }, big: Boolean },
   computed: {
     isImage() {
-      return this.grad && (this.grad.startsWith("/uploads/") || this.grad.startsWith("http") || this.grad.startsWith("blob:"));
+      return this.grad && (this.grad.startsWith("/") || this.grad.startsWith("http") || this.grad.startsWith("blob:"));
     }
   },
   template: `<div :style="{height:h+'px',borderRadius:'14px',background:isImage ? 'var(--vy-surface-2)' : grad,position:'relative',overflow:'hidden',display:'flex',alignItems:'flex-end',padding:'14px'}">
