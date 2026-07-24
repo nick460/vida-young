@@ -384,6 +384,7 @@ onBeforeUnmount(() => {
 .page-banner-media {
   position: absolute;
   inset: 0;
+  background: #1a1511;
 }
 
 .page-banner-image {
@@ -876,7 +877,8 @@ onBeforeUnmount(() => {
   }
 
   .page-banner-image {
-    object-position: center 12%;
+    object-fit: contain;
+    object-position: center center;
   }
 
   .home-hero {
