@@ -165,10 +165,6 @@ onBeforeUnmount(() => {
             <span class="hero-kicker">{{ landing.category || "Empresa" }}</span>
             <h1>{{ heroSection?.title || landing.title }}</h1>
             <p>{{ heroSection?.text || landing.description }}</p>
-            <div class="hero-actions">
-              <RouterLink to="/login" class="primary-action"><LogIn :size="18" /> Iniciar sesion</RouterLink>
-              <a href="#contenido" class="secondary-action">Conocer mas <ChevronRight :size="17" /></a>
-            </div>
           </div>
         </section>
       </section>
