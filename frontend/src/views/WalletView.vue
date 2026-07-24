@@ -4,6 +4,7 @@ import {
   ArrowDownToLine,
   BadgeCheck,
   Box,
+  ChevronDown,
   Copy,
   Gem,
   RefreshCw,
@@ -25,6 +26,7 @@ const resumen = ref({
 });
 const proyeccionActivacion = ref(null);
 const movementFilter = ref("TODOS");
+const openMovementGroups = ref(new Set());
 
 const personaId = computed(() => auth.usuario?.persona?.id || "");
 const selectedPeriodo = computed(() =>
@@ -136,6 +138,26 @@ function groupSubtitle(group) {
     return `${group.compra.metodoPago || "Sin metodo"} - ${group.compra.estadoCompra || "Sin estado"}`;
   }
   return group.movimientos[0]?.referenciaTipo || "Movimiento de billetera";
+}
+
+function movementValue(group, tipo) {
+  return group.movimientos
+    .filter((movimiento) => movimiento.tipo === tipo)
+    .reduce((sum, movimiento) => sum + Number(movimiento.monto || 0), 0);
+}
+
+function isMovementGroupOpen(key) {
+  return openMovementGroups.value.has(key);
+}
+
+function toggleMovementGroup(key) {
+  const next = new Set(openMovementGroups.value);
+  if (next.has(key)) {
+    next.delete(key);
+  } else {
+    next.add(key);
+  }
+  openMovementGroups.value = next;
 }
 
 function membershipName(membership) {
@@ -306,41 +328,42 @@ onMounted(loadWallet);
 
         <div class="movement-groups">
           <article v-for="group in groupedMovimientos" :key="group.key" class="movement-group">
-            <header>
-              <div>
-                <h3>{{ groupTitle(group) }}</h3>
-                <p>{{ groupSubtitle(group) }}</p>
-              </div>
-              <div class="movement-date">
+            <button class="movement-accordion-toggle" type="button" @click="toggleMovementGroup(group.key)">
+              <div class="movement-summary-main">
+                <div>
+                  <h3>{{ groupTitle(group) }}</h3>
+                  <p>{{ groupSubtitle(group) }}</p>
+                </div>
                 <span>{{ formatDate(group.fecha) }}</span>
-                <strong v-if="group.compra">Bs. {{ money(group.compra.subtotal) }}</strong>
               </div>
-            </header>
+              <div class="movement-summary-values">
+                <span>PV {{ money(movementValue(group, "PV")) }}</span>
+                <span>QP {{ money(movementValue(group, "QP")) }}</span>
+                <span>CR {{ money(movementValue(group, "CR")) }}</span>
+                <ChevronDown class="accordion-icon" :class="{ open: isMovementGroupOpen(group.key) }" :size="18" />
+              </div>
+            </button>
 
-            <div class="movement-lines">
-              <div v-for="movimiento in group.movimientos" :key="movimiento.id" class="movement-line">
-                <span class="vy-chip vy-chip-success">{{ movimiento.tipo }}</span>
-                <strong>{{ movementAmount(movimiento) }}</strong>
-                <small>{{ movimiento.concepto }}</small>
-              </div>
-            </div>
-
-            <section v-if="group.compra" class="purchase-detail">
-              <div class="purchase-totals">
-                <span>PV {{ money(group.compra.totalPv) }}</span>
-                <span>QP {{ money(group.compra.totalQp) }}</span>
-                <span>CR {{ money(group.compra.totalCr) }}</span>
-              </div>
-              <div v-if="group.compra.detalles?.length" class="purchase-products">
-                <div v-for="detalle in group.compra.detalles" :key="detalle.productoId || detalle.productoNombre" class="purchase-product">
-                  <div>
-                    <strong>{{ detalle.productoNombre || "Producto" }}</strong>
-                    <small>{{ detalle.productoSku || "Sin SKU" }} - {{ detalle.cantidad }} x Bs. {{ money(detalle.precioUnitario) }}</small>
-                    <small>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</small>
-                  </div>
-                  <b>Bs. {{ money(detalle.subtotal) }}</b>
+            <section v-if="isMovementGroupOpen(group.key)" class="movement-accordion-body">
+              <div class="movement-lines">
+                <div v-for="movimiento in group.movimientos" :key="movimiento.id" class="movement-line">
+                  <span class="vy-chip vy-chip-success">{{ movimiento.tipo }}</span>
+                  <strong>{{ movementAmount(movimiento) }}</strong>
+                  <small>{{ movimiento.concepto }}</small>
                 </div>
               </div>
+
+              <section v-if="group.compra" class="purchase-detail">
+                <div v-if="group.compra.detalles?.length" class="purchase-products">
+                  <div v-for="detalle in group.compra.detalles" :key="detalle.productoId || detalle.productoNombre" class="purchase-product">
+                    <div>
+                      <strong>{{ detalle.productoNombre || "Producto" }}</strong>
+                      <small>{{ detalle.productoSku || "Sin SKU" }} - Cantidad {{ detalle.cantidad }}</small>
+                      <small>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</small>
+                    </div>
+                  </div>
+                </div>
+              </section>
             </section>
           </article>
 
@@ -871,19 +894,36 @@ onMounted(loadWallet);
 }
 
 .movement-group {
-  padding: 14px;
   border: 1px solid var(--vy-line);
   border-radius: 14px;
   background: var(--vy-surface-2);
+  overflow: hidden;
 }
 
-.movement-group > header {
+.movement-accordion-toggle {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--vy-line-2);
+  text-align: left;
+}
+
+.movement-accordion-toggle:hover {
+  background: #fffaf0;
+}
+
+.movement-summary-main {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.movement-summary-main > div {
+  min-width: 0;
 }
 
 .movement-group h3 {
@@ -899,26 +939,47 @@ onMounted(loadWallet);
   font-weight: 800;
 }
 
-.movement-date {
-  text-align: right;
-}
-
-.movement-date span,
+.movement-summary-main > span,
 .movement-line small,
 .purchase-product small {
   display: block;
   color: var(--vy-ink-3);
   font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
-.movement-date strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--vy-ink);
-  font-size: 16px;
+.movement-summary-values {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.movement-summary-values span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--vy-ink-2);
+  font-size: 11px;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.accordion-icon {
+  color: var(--vy-ink-3);
+  transition: transform 0.18s ease;
+}
+
+.accordion-icon.open {
+  transform: rotate(180deg);
+}
+
+.movement-accordion-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--vy-line-2);
 }
 
 .movement-lines {
@@ -947,46 +1008,21 @@ onMounted(loadWallet);
   border-top: 1px dashed var(--vy-line);
 }
 
-.purchase-totals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.purchase-totals span {
-  padding: 6px 9px;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--vy-ink-2);
-  font-size: 11px;
-  font-weight: 900;
-}
-
 .purchase-products {
   display: grid;
   gap: 8px;
 }
 
 .purchase-product {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
   padding: 10px;
   border-radius: 10px;
   background: #fff;
 }
 
-.purchase-product strong,
-.purchase-product b {
+.purchase-product strong {
   color: var(--vy-ink);
   font-size: 13px;
   font-weight: 900;
-}
-
-.purchase-product b {
-  white-space: nowrap;
 }
 
 .empty-movements {
@@ -1085,14 +1121,14 @@ td:nth-child(3) {
     min-width: 760px;
   }
 
-  .movement-group > header,
-  .purchase-product {
+  .movement-accordion-toggle,
+  .movement-summary-main {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .movement-date {
-    text-align: left;
+  .movement-summary-values {
+    justify-content: flex-start;
   }
 
   .movement-line {
