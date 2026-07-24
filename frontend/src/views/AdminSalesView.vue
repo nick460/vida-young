@@ -395,7 +395,7 @@ function buildReceiptHtml(compra) {
     body { width: 7cm; margin: 0 auto; padding: 0; background: #fff; color: #111; font-family: Arial, sans-serif; font-size: 10pt; }
     .receipt { width: 7cm; margin: 0 auto; }
     .center { text-align: center; }
-    .logo { width: 4.1cm; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto .14cm; display: block; }
+    .logo { width: 2.9cm; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto .18cm; display: block; }
     .brand-name { margin: .08cm 0 0; font-size: 12pt; font-weight: 900; text-transform: uppercase; letter-spacing: .02cm; }
     .company-meta { margin-top: .05cm; font-size: 8.4pt; line-height: 1.35; text-transform: uppercase; }
     h1 { margin: .15cm 0 .05cm; font-size: 10.4pt; text-transform: uppercase; }
@@ -420,7 +420,7 @@ function buildReceiptHtml(compra) {
     .discount-concept { margin: .08cm 0 .02cm; color: #333; font-size: 8.3pt; line-height: 1.25; }
     .account-pay { margin-top: .12cm; padding-top: .12cm; border-top: 1px solid #111; font-size: 10.6pt; font-weight: 900; }
     .signature { margin-top: .7cm; text-align: center; }
-    .signature-space { height: .95cm; }
+    .signature-space { height: 1.45cm; }
     .signature-line { border-top: 1px solid #111; padding-top: .08cm; font-size: 8.8pt; font-weight: 700; }
     footer { margin-top: .28cm; text-align: center; font-size: 8.2pt; line-height: 1.35; }
     @media print {
