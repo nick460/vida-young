@@ -29,6 +29,8 @@ public interface CompraService {
             String cuentaPago,
             String codigoPago,
             String referenciaPago,
+            java.math.BigDecimal descuentoMonto,
+            String descuentoConcepto,
             String comprobantePagoUrl,
             String comprobantePagoNombre,
             String comprobantePagoTipo

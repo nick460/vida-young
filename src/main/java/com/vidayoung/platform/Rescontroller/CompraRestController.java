@@ -116,6 +116,8 @@ public class CompraRestController {
                 request.getCuentaPago(),
                 request.getCodigoPago(),
                 request.getReferenciaPago(),
+                request.getDescuentoMonto(),
+                request.getDescuentoConcepto(),
                 comprobante == null ? null : comprobante.url(),
                 comprobante == null ? null : comprobante.nombreOriginal(),
                 comprobante == null ? null : comprobante.contentType()
@@ -164,6 +166,10 @@ public class CompraRestController {
         private String codigoPago;
 
         private String referenciaPago;
+
+        private java.math.BigDecimal descuentoMonto;
+
+        private String descuentoConcepto;
     }
 
     @Getter

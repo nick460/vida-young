@@ -1084,6 +1084,8 @@ CREATE TABLE IF NOT EXISTS compras (
     persona_id BIGINT NOT NULL REFERENCES personas(id),
     fecha_compra TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    descuento_monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    descuento_concepto VARCHAR(180),
     total_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -1120,6 +1122,8 @@ ALTER TABLE compras
     ADD COLUMN IF NOT EXISTS comprobante_pago_url VARCHAR(255),
     ADD COLUMN IF NOT EXISTS comprobante_pago_nombre VARCHAR(180),
     ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS descuento_monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS descuento_concepto VARCHAR(180),
     ADD COLUMN IF NOT EXISTS total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 

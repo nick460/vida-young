@@ -61,6 +61,13 @@ public class Compra extends Auditoria {
     @Builder.Default
     private BigDecimal subtotal = BigDecimal.ZERO;
 
+    @Column(name = "descuento_monto", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal descuentoMonto = BigDecimal.ZERO;
+
+    @Column(name = "descuento_concepto", length = 180)
+    private String descuentoConcepto;
+
     @Column(name = "total_pv", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal totalPv = BigDecimal.ZERO;

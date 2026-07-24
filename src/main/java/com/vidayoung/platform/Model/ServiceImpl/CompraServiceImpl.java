@@ -79,6 +79,8 @@ public class CompraServiceImpl implements CompraService {
                 .cuentaPago(normalizarTexto(pago == null ? null : pago.cuentaPago()))
                 .codigoPago(normalizarTexto(pago == null ? null : pago.codigoPago()))
                 .referenciaPago(normalizarTexto(pago == null ? null : pago.referenciaPago()))
+                .descuentoMonto(BigDecimal.ZERO)
+                .descuentoConcepto(normalizarTexto(pago == null ? null : pago.descuentoConcepto()))
                 .comprobantePagoUrl(normalizarTexto(pago == null ? null : pago.comprobantePagoUrl()))
                 .comprobantePagoNombre(normalizarTexto(pago == null ? null : pago.comprobantePagoNombre()))
                 .comprobantePagoTipo(normalizarTexto(pago == null ? null : pago.comprobantePagoTipo()))
@@ -129,7 +131,21 @@ public class CompraServiceImpl implements CompraService {
             totalProductos += cantidad;
         }
 
-        compra.setSubtotal(subtotal);
+        BigDecimal descuentoMonto = zeroIfNull(pago == null ? null : pago.descuentoMonto());
+        if (descuentoMonto.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("El descuento no puede ser negativo.");
+        }
+        if (descuentoMonto.compareTo(subtotal) > 0) {
+            throw new IllegalArgumentException("El descuento no puede ser mayor al total de la venta.");
+        }
+        String descuentoConcepto = normalizarTexto(pago == null ? null : pago.descuentoConcepto());
+        if (descuentoMonto.compareTo(BigDecimal.ZERO) > 0 && descuentoConcepto == null) {
+            throw new IllegalArgumentException("Debe ingresar el concepto del descuento.");
+        }
+
+        compra.setSubtotal(subtotal.subtract(descuentoMonto));
+        compra.setDescuentoMonto(descuentoMonto);
+        compra.setDescuentoConcepto(descuentoConcepto);
         compra.setTotalPv(totalPv);
         compra.setTotalQp(totalQp);
         compra.setTotalCr(totalCr);

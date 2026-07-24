@@ -39,6 +39,8 @@ const personaQuery = ref("");
 const productQuery = ref("");
 const selectedPersonaId = ref("");
 const ventaItems = ref([]);
+const discountAmount = ref("");
+const discountConcept = ref("");
 const saleModalOpen = ref(false);
 const personaSelect = ref(null);
 const periodoSelect = ref(null);
@@ -101,9 +103,20 @@ const selectedPeriodo = computed(() =>
   periodosVenta.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
 );
 
-const saleTotal = computed(() =>
+const saleSubtotal = computed(() =>
   ventaItems.value.reduce((sum, item) => sum + Number(item.precio || 0) * Number(item.cantidad || 0), 0)
 );
+
+const rawDiscountAmount = computed(() => Number(discountAmount.value || 0));
+const discountAmountNumber = computed(() => Math.max(0, rawDiscountAmount.value));
+const discountError = computed(() => {
+  if (rawDiscountAmount.value < 0) return "El descuento no puede ser negativo.";
+  if (discountAmountNumber.value <= 0) return "";
+  if (discountAmountNumber.value > saleSubtotal.value) return "El descuento no puede ser mayor al total de la venta.";
+  if (!discountConcept.value.trim()) return "Ingresa el concepto del descuento.";
+  return "";
+});
+const saleTotal = computed(() => Math.max(0, saleSubtotal.value - discountAmountNumber.value));
 
 const salePv = computed(() =>
   ventaItems.value.reduce((sum, item) => sum + Number(item.pv || 0) * Number(item.cantidad || 0), 0)
@@ -633,6 +646,14 @@ function changeQuantity(item, value) {
   item.cantidad = Math.max(1, next);
 }
 
+function incrementQuantity(item) {
+  item.cantidad = Number(item.cantidad || 1) + 1;
+}
+
+function decrementQuantity(item) {
+  item.cantidad = Math.max(1, Number(item.cantidad || 1) - 1);
+}
+
 function removeItem(item) {
   ventaItems.value = ventaItems.value.filter((current) => Number(current.id) !== Number(item.id));
 }
@@ -708,6 +729,11 @@ async function createCajaSale() {
     return;
   }
 
+  if (discountError.value) {
+    await showError("Descuento invalido", discountError.value);
+    return;
+  }
+
   saving.value = true;
   try {
     const payload = {
@@ -717,7 +743,9 @@ async function createCajaSale() {
       })),
       metodoPago: "CAJA",
       codigoPago: cajaCode.value,
-      referenciaPago: `Venta por ventanilla codigo ${cajaCode.value}`
+      referenciaPago: `Venta por ventanilla codigo ${cajaCode.value}`,
+      descuentoMonto: discountAmountNumber.value,
+      descuentoConcepto: discountConcept.value.trim() || null
     };
     const formData = new FormData();
     formData.append("compra", new Blob([JSON.stringify(payload)], { type: "application/json" }));
@@ -727,8 +755,10 @@ async function createCajaSale() {
       body: formData
     });
 
-    await showSuccess("Venta registrada", `Compra #${response.compra?.id} creada como PENDIENTE. Codigo de caja: ${cajaCode.value}.`);
+    await showSuccess("Venta registrada", `Compra #${response.compra?.id} creada como PENDIENTE.`);
     ventaItems.value = [];
+    discountAmount.value = "";
+    discountConcept.value = "";
     selectedPersonaId.value = "";
     personaQuery.value = "";
     productQuery.value = "";
@@ -1289,7 +1319,6 @@ onMounted(() => {
                     <small>{{ producto.sku }} - {{ producto.categoria || "Producto" }}</small>
                   </span>
                   <b>Bs. {{ money(producto.precio) }}</b>
-                  <Plus :size="16" />
                 </button>
               </div>
 
@@ -1299,23 +1328,42 @@ onMounted(() => {
                     <strong>{{ item.nombre }}</strong>
                     <small>Bs. {{ money(item.precio) }} - PV {{ money(item.pv) }} - QP {{ money(item.qp) }} - CR {{ money(item.cr) }}</small>
                   </div>
-                  <input :value="item.cantidad" type="number" min="1" @input="changeQuantity(item, $event.target.value)" />
+                  <div class="quantity-stepper">
+                    <button type="button" aria-label="Disminuir cantidad" @click="decrementQuantity(item)">-</button>
+                    <input :value="item.cantidad" type="number" min="1" @input="changeQuantity(item, $event.target.value)" />
+                    <button type="button" aria-label="Aumentar cantidad" @click="incrementQuantity(item)">+</button>
+                  </div>
                   <b>Bs. {{ money(item.precio * item.cantidad) }}</b>
                   <button type="button" @click="removeItem(item)"><Trash2 :size="15" /></button>
                 </div>
               </div>
 
+              <section class="discount-box">
+                <div class="discount-grid">
+                  <label class="field">
+                    <span>Monto descuento</span>
+                    <input v-model.number="discountAmount" type="number" min="0" :max="saleSubtotal" step="0.01" placeholder="0.00" />
+                  </label>
+                  <label class="field">
+                    <span>Concepto descuento</span>
+                    <input v-model.trim="discountConcept" :disabled="discountAmountNumber <= 0" placeholder="Motivo del descuento" />
+                  </label>
+                </div>
+                <p v-if="discountError" class="discount-error">{{ discountError }}</p>
+              </section>
+
               <footer class="sale-footer">
                 <div>
-                  <small>Codigo de caja</small>
-                  <strong class="cash-code">{{ cajaCode }}</strong>
+                  <small>Subtotal</small>
+                  <strong>Bs. {{ money(saleSubtotal) }}</strong>
+                  <span v-if="discountAmountNumber > 0">Descuento Bs. {{ money(discountAmountNumber) }}</span>
                 </div>
                 <div>
-                  <small>Total</small>
+                  <small>Total a pagar</small>
                   <strong>Bs. {{ money(saleTotal) }}</strong>
                   <span>PV {{ money(salePv) }} - QP {{ money(saleQp) }} - CR {{ money(saleCr) }}</span>
                 </div>
-                <button class="vy-btn vy-btn-primary" type="button" :disabled="saving" @click="createCajaSale">
+                <button class="vy-btn vy-btn-primary" type="button" :disabled="saving || !!discountError" @click="createCajaSale">
                   <ShoppingBag :size="16" /> Registrar venta
                 </button>
               </footer>
@@ -1684,13 +1732,23 @@ onMounted(() => {
 .product-picker button span { flex: 1; min-width: 0; }
 .product-picker button b { white-space: nowrap; font-size: 13px; }
 .sale-items { display: grid; gap: 8px; margin-top: 16px; }
-.sale-item { display: grid; grid-template-columns: minmax(0, 1fr) 76px 100px 34px; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--vy-line-2); }
+.sale-item { display: grid; grid-template-columns: minmax(0, 1fr) 124px 100px 34px; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--vy-line-2); }
 .sale-item strong, .sale-item small { display: block; }
 .sale-item strong { font-size: 13px; font-weight: 900; }
 .sale-item small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
-.sale-item input { width: 76px; padding: 8px; border: 1px solid var(--vy-line); border-radius: 10px; font-weight: 900; }
+.quantity-stepper { min-height: 36px; border: 1px solid var(--vy-line); border-radius: 10px; background: #fff; display: grid; grid-template-columns: 34px 1fr 34px; overflow: hidden; }
+.quantity-stepper button { width: 34px; height: 34px; border-radius: 0; background: var(--vy-surface-2); color: var(--vy-ink); font-size: 17px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; }
+.quantity-stepper button:hover { background: #fffaf0; color: var(--vy-orange-deep); }
+.quantity-stepper input { width: 100%; min-width: 0; padding: 0 4px; border: 0; border-left: 1px solid var(--vy-line); border-right: 1px solid var(--vy-line); text-align: center; font-weight: 900; outline: 0; }
 .sale-item b { text-align: right; font-size: 13px; }
-.sale-item button { width: 34px; height: 34px; border-radius: 10px; background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); display: inline-flex; align-items: center; justify-content: center; }
+.sale-item > button { width: 34px; height: 34px; border-radius: 10px; background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); display: inline-flex; align-items: center; justify-content: center; }
+.discount-box { margin-top: 16px; padding: 14px; border: 1px solid var(--vy-line); border-radius: 14px; background: #fffaf0; }
+.discount-grid { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; }
+.discount-box .field { margin-top: 0; }
+.discount-box input { width: 100%; min-height: 40px; padding: 0 11px; border: 1px solid var(--vy-line); border-radius: 11px; background: #fff; color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }
+.discount-box input:focus { border-color: var(--vy-orange); box-shadow: 0 0 0 3px rgba(242, 135, 5, .12); }
+.discount-box input:disabled { background: var(--vy-surface-2); color: var(--vy-ink-3); }
+.discount-error { margin-top: 9px; color: var(--vy-danger); font-size: 12px; font-weight: 900; }
 .sale-footer { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--vy-line); display: grid; grid-template-columns: auto 1fr auto; align-items: end; gap: 16px; }
 .sale-footer small, .sale-footer span { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .sale-footer strong { display: block; margin-top: 4px; font-size: 22px; font-weight: 900; }
@@ -1812,8 +1870,9 @@ onMounted(() => {
   .skeleton-row { grid-template-columns: 1fr; gap: 9px; min-height: 132px; padding: 14px; border: 1px solid var(--vy-line-2); border-radius: 14px; }
   .skeleton-row .skeleton-block:nth-child(n + 5) { display: none; }
   .person-list, .sale-footer, .sale-item { grid-template-columns: 1fr; }
+  .discount-grid { grid-template-columns: 1fr; }
   .sale-item b { text-align: left; }
-  .sale-item input, .sale-item button { width: 100%; }
+  .quantity-stepper, .sale-item > button { width: 100%; }
   .proof-modal { padding: 16px; }
   .proof-modal header, .proof-modal footer { align-items: stretch; flex-direction: column; }
   .proof-modal footer .vy-btn { width: 100%; }
