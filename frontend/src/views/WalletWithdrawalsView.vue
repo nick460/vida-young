@@ -126,6 +126,16 @@ function formatDateTime(value) {
   });
 }
 
+function currentUserName() {
+  try {
+    const usuario = JSON.parse(localStorage.getItem("vy_usuario") || "null");
+    const personaName = [usuario?.persona?.nombres, usuario?.persona?.apellidos].filter(Boolean).join(" ").trim();
+    return personaName || usuario?.username || "Usuario del sistema";
+  } catch {
+    return "Usuario del sistema";
+  }
+}
+
 function retiroReceipt(retiro) {
   return {
     persona: `${retiro.nombres || ""} ${retiro.apellidos || ""}`.trim(),
@@ -135,6 +145,7 @@ function retiroReceipt(retiro) {
     retiroId: retiro.id ? `#${retiro.id}` : "procesado",
     fechaRetiro: formatDateTime(retiro.fechaRetiro),
     fechaImpresion: formatDateTime(),
+    impresoPor: currentUserName(),
     detalles: [
       {
         titulo: "Saldo directo de billetera",
@@ -274,6 +285,7 @@ function buildWithdrawalReceiptHtml(receipt) {
     <div class="row"><span class="label">Mes</span><span class="value">${escapeHtml(receipt.periodo)}</span></div>
     <div class="row"><span class="label">Fecha retiro</span><span class="value">${escapeHtml(receipt.fechaRetiro)}</span></div>
     <div class="row"><span class="label">Impresion</span><span class="value">${escapeHtml(receipt.fechaImpresion)}</span></div>
+    <div class="row"><span class="label">Impreso por</span><span class="value">${escapeHtml(receipt.impresoPor)}</span></div>
     <div class="section-title">Detalle del retiro</div>
     ${detalles}
     <div class="row total"><span>Total retiro</span><span>Bs. ${escapeHtml(money(receipt.total))}</span></div>
@@ -531,6 +543,7 @@ async function registrarRetiro() {
     retiroId: "procesado",
     fechaRetiro: formatDateTime(),
     fechaImpresion: formatDateTime(),
+    impresoPor: currentUserName(),
     detalles: [
       {
         titulo: "Saldo directo de billetera",
@@ -572,6 +585,7 @@ async function registrarRetiro() {
     receipt.retiroId = retiroProcesado?.id ? `#${retiroProcesado.id}` : "procesado";
     receipt.fechaRetiro = formatDateTime(retiroProcesado?.fechaRetiro);
     receipt.fechaImpresion = formatDateTime();
+    receipt.impresoPor = currentUserName();
     const printResult = await Swal.fire({
       title: "Retiro procesado",
       text: "Los saldos de la persona fueron actualizados. Ya puedes imprimir el comprobante.",
