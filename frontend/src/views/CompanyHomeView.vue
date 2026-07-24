@@ -193,17 +193,6 @@ onBeforeUnmount(() => {
         <nav>
           <a v-for="section in navSections" :key="section.id" :href="`#${section.id}`">{{ section.label }}</a>
         </nav>
-        <div class="header-socials" aria-label="Canales oficiales Vidayoung">
-          <a href="https://www.youtube.com/@vidayoungoficial" target="_blank" rel="noreferrer" aria-label="YouTube Vidayoung">
-            <Youtube :size="16" />
-          </a>
-          <a href="https://www.tiktok.com/@vidayoung.bolivia?_r=1&_t=ZS-98JLs3EFWpb" target="_blank" rel="noreferrer" aria-label="TikTok Vidayoung">
-            <Music2 :size="16" />
-          </a>
-          <a href="https://wa.me/59168880318" target="_blank" rel="noreferrer" aria-label="WhatsApp Vidayoung">
-            <MessageCircle :size="16" />
-          </a>
-        </div>
         <RouterLink to="/login" class="login-link"><LogIn :size="17" /> Iniciar sesion</RouterLink>
       </div>
     </header>
@@ -414,7 +403,7 @@ onBeforeUnmount(() => {
 }
 
 .home-nav nav {
-  gap: 10px;
+  gap: 4px;
   justify-content: flex-end;
   flex-wrap: wrap;
   min-width: 0;
@@ -422,24 +411,23 @@ onBeforeUnmount(() => {
 
 .home-nav nav > a,
 .home-nav nav > :deep(a) {
-  transition: background-color .2s ease, color .2s ease, transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+  transition: color .2s ease, transform .2s ease, border-color .2s ease, background-color .2s ease;
 }
 
 .home-nav nav > a:not(.login-link) {
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
-  font-weight: 900;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  font-weight: 800;
 }
 
 .home-nav nav > a:not(.login-link):hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
   color: #fff;
   transform: translateY(-1px);
 }
@@ -462,58 +450,15 @@ onBeforeUnmount(() => {
   box-shadow: 0 16px 32px rgba(184, 97, 10, 0.34);
 }
 
-.header-socials {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.header-socials a {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.9);
-  transition: background-color .2s ease, color .2s ease, transform .2s ease;
-}
-
-.header-socials a:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  transform: translateY(-1px);
-}
-
 .home-nav.scrolled nav > a:not(.login-link) {
-  border-color: rgba(117, 87, 44, 0.12);
-  background: rgba(255, 255, 255, 0.78);
+  border-color: transparent;
+  background: transparent;
   color: var(--vy-ink-2);
-  box-shadow: 0 8px 20px rgba(31, 26, 20, 0.04);
 }
 
 .home-nav.scrolled nav > a:not(.login-link):hover {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(242, 135, 5, 0.18);
-  color: var(--vy-ink);
-}
-
-.home-nav.scrolled .header-socials {
-  border-color: rgba(117, 87, 44, 0.12);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 8px 20px rgba(31, 26, 20, 0.04);
-}
-
-.home-nav.scrolled .header-socials a {
-  color: var(--vy-ink-2);
-}
-
-.home-nav.scrolled .header-socials a:hover {
-  background: rgba(242, 135, 5, 0.1);
+  background: rgba(242, 135, 5, 0.08);
+  border-color: rgba(242, 135, 5, 0.12);
   color: var(--vy-ink);
 }
 
@@ -1072,15 +1017,6 @@ onBeforeUnmount(() => {
 
   .header-right {
     margin-left: auto;
-  }
-
-  .header-socials {
-    padding: 3px;
-  }
-
-  .header-socials a {
-    width: 32px;
-    height: 32px;
   }
 
   .login-link {
