@@ -268,12 +268,6 @@ onBeforeUnmount(() => {
           <VyLogo :size="24" dark />
           <p>{{ landing.description }}</p>
         </div>
-        <nav>
-          <a href="#contenido">Empresa</a>
-          <a href="#productos">Productos</a>
-          <RouterLink to="/login">Iniciar sesion</RouterLink>
-          <a href="mailto:info@vidayoung.com">Contacto</a>
-        </nav>
         <small>Vidayoung © {{ new Date().getFullYear() }}. Todos los derechos reservados.</small>
       </footer>
     </main>
