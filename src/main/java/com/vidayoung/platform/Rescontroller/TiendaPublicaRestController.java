@@ -203,6 +203,8 @@ public class TiendaPublicaRestController {
             Long personaId,
             String nombres,
             String apellidos,
+            String telefono,
+            String email,
             String fotoPerfil
     ) {
         static TiendaDistribuidorResponse from(Usuario usuario) {
@@ -211,6 +213,8 @@ public class TiendaPublicaRestController {
                     usuario.getPersona().getId(),
                     usuario.getPersona().getNombres(),
                     usuario.getPersona().getApellidos(),
+                    usuario.getPersona().getTelefono(),
+                    usuario.getPersona().getEmail(),
                     usuario.getFotoPerfil()
             );
         }

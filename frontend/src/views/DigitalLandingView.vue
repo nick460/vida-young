@@ -4,13 +4,20 @@ import { useRoute } from "vue-router";
 import { ExternalLink, MessageCircle } from "lucide-vue-next";
 import { VyLogo, VyProductImage } from "../components/ui.js";
 import { loadPublicDigitalLanding } from "../services/digitalLandingService.js";
-import { readReferralFromRoute } from "../services/productLandingService.js";
+import { resolveReferralFromRoute } from "../services/productLandingService.js";
 
 const route = useRoute();
 const loading = ref(false);
 const error = ref("");
 const landing = ref(null);
-const referral = computed(() => readReferralFromRoute(route));
+const referral = ref({
+  ref: "",
+  name: "Asesor Vidayoung",
+  phone: "",
+  email: "",
+  user: "",
+  photo: ""
+});
 const sections = computed(() => landing.value?.sections || []);
 const heroSection = computed(() => sections.value.find((section) => section.type === "hero"));
 const contentSections = computed(() => sections.value.filter((section) => section.type !== "hero"));
@@ -23,6 +30,7 @@ async function loadLanding() {
   loading.value = true;
   error.value = "";
   try {
+    referral.value = await resolveReferralFromRoute(route);
     landing.value = await loadPublicDigitalLanding(route.params.slug);
   } catch {
     error.value = "No se pudo cargar esta landing.";

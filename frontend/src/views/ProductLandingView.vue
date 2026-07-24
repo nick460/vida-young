@@ -5,7 +5,7 @@ import { MessageCircle } from "lucide-vue-next";
 import { VyLogo, VyProductImage } from "../components/ui.js";
 import { addCartItem } from "../services/cartService.js";
 import { loadProductCatalog } from "../services/productCatalogService.js";
-import { loadProductLandingConfig, readReferralFromRoute } from "../services/productLandingService.js";
+import { loadProductLandingConfig, resolveReferralFromRoute } from "../services/productLandingService.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -15,8 +15,15 @@ const products = ref([]);
 const landing = ref(null);
 const error = ref("");
 const carouselTimer = ref(null);
+const referral = ref({
+  ref: "",
+  name: "Asesor Vidayoung",
+  phone: "",
+  email: "",
+  user: "",
+  photo: ""
+});
 
-const referral = computed(() => readReferralFromRoute(route));
 const gallery = computed(() => landing.value?.gallery?.length ? landing.value.gallery : [product.value?.img].filter(Boolean));
 const sections = computed(() => landing.value?.sections?.length ? landing.value.sections : []);
 const heroSection = computed(() => sections.value.find((section) => section.type === "hero"));
@@ -33,6 +40,7 @@ async function loadProduct() {
   error.value = "";
 
   try {
+    referral.value = await resolveReferralFromRoute(route);
     products.value = await loadProductCatalog({ onlyAvailable: false });
     product.value = products.value.find((item) => String(item.id) === String(route.params.productId));
 

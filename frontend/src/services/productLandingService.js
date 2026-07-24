@@ -214,3 +214,26 @@ export function readReferralFromRoute(route) {
     photo: route.query.photo || ""
   };
 }
+
+export async function resolveReferralFromRoute(route) {
+  const fallback = readReferralFromRoute(route);
+  const username = String(route.params.ref || route.query.user || route.query.ref || "").trim();
+
+  if (!username || route.query.name || route.query.phone || route.query.email || route.query.photo) {
+    return fallback;
+  }
+
+  try {
+    const advisor = await apiRequest(`/api/public/tiendas/${encodeURIComponent(username)}`);
+    return {
+      ref: username,
+      user: advisor?.username || username,
+      name: [advisor?.nombres, advisor?.apellidos].filter(Boolean).join(" ").trim() || fallback.name,
+      phone: advisor?.telefono || "",
+      email: advisor?.email || "",
+      photo: advisor?.fotoPerfil || "",
+    };
+  } catch {
+    return fallback;
+  }
+}

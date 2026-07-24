@@ -10,7 +10,6 @@ import { ROLE_ADMIN, hasAnyRole } from "../navigation/menuConfig.js";
 import { loadProductCatalog } from "../services/productCatalogService.js";
 import {
   buildReferralData,
-  encodeReferralQuery,
   getDefaultShareMessage,
   loadProductLandingConfig
 } from "../services/productLandingService.js";
@@ -59,8 +58,10 @@ async function loadProducts() {
 function landingUrl(product) {
   const route = router.resolve({
     name: "producto-landing",
-    params: { productId: product.id },
-    query: Object.fromEntries(new URLSearchParams(encodeReferralQuery(referral.value)))
+    params: {
+      productId: product.id,
+      ref: referral.value.user || referral.value.ref || undefined
+    }
   });
 
   return `${window.location.origin}${route.href}`;
@@ -75,7 +76,7 @@ function topicUrl(topic) {
   const route = router.resolve({
     name: "herramienta-landing",
     params: { slug: topic.slug },
-    query: Object.fromEntries(new URLSearchParams(encodeReferralQuery(referral.value)))
+    query: referral.value.user || referral.value.ref ? { ref: referral.value.user || referral.value.ref } : {}
   });
 
   return `${window.location.origin}${route.href}`;
