@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { ChevronRight, ExternalLink, LogIn } from "lucide-vue-next";
 import { VyLogo, VyProductImage } from "../components/ui.js";
@@ -7,6 +7,7 @@ import { loadCompanyHome } from "../services/companyHomeService.js";
 
 const loading = ref(false);
 const landing = ref(null);
+const scrolled = ref(false);
 
 const sections = computed(() => landing.value?.sections || []);
 const heroSection = computed(() => sections.value.find((section) => section.type === "hero"));
@@ -112,12 +113,24 @@ function socialUrl(item) {
   return String(item || "").split("|||")[1] || "#";
 }
 
-onMounted(loadHome);
+function handleScroll() {
+  scrolled.value = window.scrollY > 24;
+}
+
+onMounted(() => {
+  loadHome();
+  handleScroll();
+  window.addEventListener("scroll", handleScroll, { passive: true });
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", handleScroll);
+});
 </script>
 
 <template>
   <div class="vy company-home">
-    <header class="home-nav">
+    <header class="home-nav" :class="{ scrolled }">
       <RouterLink to="/" class="brand-link" aria-label="Ir a la pagina principal">
         <VyLogo :size="30" tagline />
       </RouterLink>
@@ -132,8 +145,17 @@ onMounted(loadHome);
     <main v-if="loading" class="state-box">Cargando pagina principal...</main>
     <main v-else-if="landing">
       <section class="hero-shell">
-        <section class="home-hero" :class="heroSection?.layout || 'imageRight'">
-          <div class="hero-copy">
+        <section class="home-banner">
+          <div class="banner-media">
+            <VyProductImage
+              :grad="heroSection?.imageUrl || landing.imageUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 48%, #1F1A14 100%)'"
+              :h="780"
+              big
+            />
+          </div>
+          <div class="banner-overlay"></div>
+
+          <div class="banner-content">
             <span class="hero-kicker">{{ landing.category || "Empresa" }}</span>
             <h1>{{ heroSection?.title || landing.title }}</h1>
             <p>{{ heroSection?.text || landing.description }}</p>
@@ -141,24 +163,13 @@ onMounted(loadHome);
               <RouterLink to="/login" class="primary-action"><LogIn :size="18" /> Iniciar sesion</RouterLink>
               <a href="#contenido" class="secondary-action">Conocer mas <ChevronRight :size="17" /></a>
             </div>
+          </div>
+
+          <div class="banner-card">
             <div class="hero-metrics" aria-label="Resumen Vidayoung">
               <span><strong>Bienestar</strong><small>Productos funcionales para la rutina diaria.</small></span>
               <span><strong>Comunidad</strong><small>Acompanamiento cercano para crecer con claridad.</small></span>
               <span><strong>Digital</strong><small>Herramientas simples para compartir y comprar.</small></span>
-            </div>
-          </div>
-
-          <div class="hero-stage">
-            <div class="hero-visual">
-              <VyProductImage
-                :grad="heroSection?.imageUrl || landing.imageUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 48%, #1F1A14 100%)'"
-                :h="560"
-                big
-              />
-            </div>
-            <div class="hero-note">
-              <strong>{{ landing.title }}</strong>
-              <span>Productos, comunidad y una experiencia digital pensada para mostrar mejor la propuesta de Vidayoung.</span>
             </div>
           </div>
         </section>
@@ -306,12 +317,20 @@ onMounted(loadHome);
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  background: rgba(255, 255, 255, 0.88);
-  border-bottom: 1px solid rgba(233, 226, 210, 0.72);
+  background: rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   position: sticky;
   top: 0;
   z-index: 30;
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(6px);
+  transition: background-color .24s ease, border-color .24s ease, box-shadow .24s ease, backdrop-filter .24s ease;
+}
+
+.home-nav.scrolled {
+  background: rgba(255, 249, 241, 0.72);
+  border-bottom-color: rgba(194, 168, 133, 0.26);
+  box-shadow: 0 12px 34px rgba(31, 26, 20, 0.08);
+  backdrop-filter: blur(16px);
 }
 
 .brand-link {
@@ -379,34 +398,66 @@ onMounted(loadHome);
 .hero-shell {
   width: min(100% - 32px, 1280px);
   margin: 0 auto;
-  padding: 18px 0 28px;
+  padding: 14px 0 28px;
 }
 
-.home-hero {
-  min-height: calc(100vh - 156px);
-  display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(340px, 1fr);
-  gap: clamp(28px, 5vw, 68px);
-  align-items: center;
-  padding: clamp(34px, 5vw, 66px);
-  border: 1px solid rgba(117, 87, 44, 0.12);
+.home-banner {
+  min-height: calc(100vh - 118px);
+  position: relative;
+  overflow: hidden;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid rgba(117, 87, 44, 0.08);
   border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(31, 26, 20, 0.12);
+}
+
+.banner-media,
+.banner-overlay,
+.banner-content,
+.banner-card {
+  position: absolute;
+}
+
+.banner-media {
+  inset: 0;
+}
+
+.banner-media :deep(> div) {
+  height: 100%;
+  border-radius: 0 !important;
+}
+
+.banner-overlay {
+  inset: 0;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 232, 0.92)),
-    linear-gradient(180deg, rgba(242, 135, 5, 0.04), transparent);
-  box-shadow: 0 24px 80px rgba(31, 26, 20, 0.08);
+    linear-gradient(90deg, rgba(20, 15, 11, 0.82) 0%, rgba(20, 15, 11, 0.5) 42%, rgba(20, 15, 11, 0.18) 74%, rgba(20, 15, 11, 0.08) 100%),
+    linear-gradient(180deg, rgba(20, 15, 11, 0.14) 0%, rgba(20, 15, 11, 0.54) 100%);
 }
 
-.home-hero.imageLeft {
-  grid-template-columns: minmax(340px, 1fr) minmax(0, 0.92fr);
+.banner-content {
+  top: clamp(34px, 7vw, 96px);
+  left: clamp(22px, 4vw, 40px);
+  right: clamp(22px, 4vw, 40px);
+  z-index: 2;
+  max-width: min(100%, 760px);
 }
 
-.home-hero.imageLeft .hero-copy {
-  order: 2;
+.banner-card {
+  left: clamp(22px, 4vw, 40px);
+  right: clamp(22px, 4vw, 40px);
+  bottom: clamp(20px, 3vw, 34px);
+  z-index: 2;
+  width: min(100%, 980px);
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 251, 244, 0.14);
+  backdrop-filter: blur(14px);
 }
 
-.hero-copy {
-  min-width: 0;
+.banner-card .hero-metrics {
+  width: 100%;
+  margin-top: 0;
 }
 
 .hero-kicker,
@@ -415,29 +466,30 @@ onMounted(loadHome);
   align-items: center;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid rgba(242, 135, 5, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  background: rgba(242, 135, 5, 0.1);
-  color: var(--vy-orange-deep);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.hero-copy h1 {
+.banner-content h1 {
   max-width: 760px;
   margin-top: 20px;
   font-size: clamp(42px, 7vw, 84px);
   line-height: 0.96;
   font-weight: 950;
   overflow-wrap: anywhere;
+  color: #fff;
 }
 
-.hero-copy p {
+.banner-content p {
   max-width: 640px;
   margin-top: 20px;
-  color: var(--vy-ink-2);
+  color: rgba(255, 255, 255, 0.86);
   font-size: clamp(16px, 1.6vw, 20px);
   line-height: 1.68;
 }
@@ -471,9 +523,9 @@ onMounted(loadHome);
 }
 
 .secondary-action {
-  border: 1px solid rgba(31, 26, 20, 0.12);
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--vy-ink);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .hero-metrics {
@@ -487,10 +539,10 @@ onMounted(loadHome);
 .hero-metrics span {
   min-height: 92px;
   padding: 16px;
-  border: 1px solid rgba(222, 191, 146, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 14px 36px rgba(31, 26, 20, 0.06);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
 }
 
 .hero-metrics strong,
@@ -499,62 +551,19 @@ onMounted(loadHome);
 }
 
 .hero-metrics strong {
-  color: var(--vy-ink);
+  color: #fff;
   font-size: 15px;
   font-weight: 950;
 }
 
 .hero-metrics small {
   margin-top: 6px;
-  color: var(--vy-ink-3);
+  color: rgba(255, 255, 255, 0.76);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.35;
 }
 
-.hero-stage {
-  min-width: 0;
-  display: grid;
-  gap: 16px;
-}
-
-.hero-visual {
-  min-width: 0;
-  padding: clamp(10px, 2vw, 18px);
-  border: 1px solid rgba(242, 135, 5, 0.22);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 245, 232, 0.84));
-  box-shadow: 0 24px 70px rgba(31, 26, 20, 0.12);
-}
-
-.hero-visual :deep(> div) {
-  border-radius: 8px !important;
-}
-
-.hero-note {
-  padding: 18px 20px;
-  border: 1px solid rgba(117, 87, 44, 0.12);
-  border-radius: 8px;
-  background: rgba(31, 26, 20, 0.96);
-  color: #fff;
-}
-
-.hero-note strong,
-.hero-note span {
-  display: block;
-}
-
-.hero-note strong {
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.hero-note span {
-  margin-top: 8px;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 13px;
-  line-height: 1.55;
-}
 
 .hero-ribbon {
   margin-top: 14px;
@@ -841,17 +850,32 @@ onMounted(loadHome);
     width: min(100% - 24px, 720px);
   }
 
-  .home-hero,
-  .home-hero.imageLeft,
   .home-section.imageText,
   .home-section.imageText.imageLeft {
     grid-template-columns: 1fr;
-    min-height: auto;
   }
 
-  .home-hero.imageLeft .hero-copy,
   .home-section.imageText.imageLeft > div:first-child {
     order: initial;
+  }
+
+  .home-banner {
+    min-height: 86vh;
+    padding: 18px;
+  }
+
+  .banner-content {
+    top: 24px;
+    left: 18px;
+    right: 18px;
+    max-width: none;
+  }
+
+  .banner-card {
+    left: 18px;
+    right: 18px;
+    bottom: 18px;
+    padding: 12px;
   }
 
   .hero-ribbon,
@@ -896,11 +920,7 @@ onMounted(loadHome);
     padding-top: 12px;
   }
 
-  .home-hero {
-    padding: 22px 18px;
-  }
-
-  .hero-copy h1 {
+  .banner-content h1 {
     font-size: clamp(34px, 12vw, 50px);
   }
 
@@ -912,10 +932,6 @@ onMounted(loadHome);
 
   .hero-metrics {
     grid-template-columns: 1fr;
-  }
-
-  .hero-visual {
-    padding: 8px;
   }
 
   .hero-ribbon {
