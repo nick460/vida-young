@@ -170,28 +170,7 @@ onBeforeUnmount(() => {
               <a href="#contenido" class="secondary-action">Conocer mas <ChevronRight :size="17" /></a>
             </div>
           </div>
-
-          <div class="hero-metrics" aria-label="Resumen Vidayoung">
-            <span><strong>Bienestar</strong><small>Productos funcionales para la rutina diaria.</small></span>
-            <span><strong>Comunidad</strong><small>Acompanamiento cercano para crecer con claridad.</small></span>
-            <span><strong>Digital</strong><small>Herramientas simples para compartir y comprar.</small></span>
-          </div>
         </section>
-
-        <div class="hero-ribbon">
-          <div>
-            <small>Experiencia publica</small>
-            <strong>Home administrable desde el panel</strong>
-          </div>
-          <div>
-            <small>Acceso directo</small>
-            <strong>Login, productos y comunidad</strong>
-          </div>
-          <div>
-            <small>Contenido flexible</small>
-            <strong>Secciones editables por bloque</strong>
-          </div>
-        </div>
       </section>
 
       <section id="contenido" class="home-sections">
