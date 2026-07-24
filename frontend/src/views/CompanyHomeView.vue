@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { ChevronRight, ExternalLink, LogIn } from "lucide-vue-next";
+import { ExternalLink, LogIn, MessageCircle, Music2, Youtube } from "lucide-vue-next";
 import { VyLogo, VyProductImage } from "../components/ui.js";
 import { loadCompanyHome } from "../services/companyHomeService.js";
 
@@ -15,6 +15,14 @@ const scrolled = ref(false);
 const sections = computed(() => landing.value?.sections || []);
 const heroSection = computed(() => sections.value.find((section) => section.type === "hero"));
 const contentSections = computed(() => sections.value.filter((section) => section.type !== "hero"));
+const navSections = computed(() =>
+  contentSections.value
+    .map((section, index) => ({
+      id: sectionAnchorId(section, index),
+      label: navSectionLabel(section, index)
+    }))
+    .filter((section) => section.label)
+);
 
 async function loadHome() {
   loading.value = true;
@@ -116,6 +124,40 @@ function socialUrl(item) {
   return String(item || "").split("|||")[1] || "#";
 }
 
+function slugify(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function sectionAnchorId(section, index) {
+  const base = slugify(section?.title || section?.type || `seccion-${index + 1}`);
+  return base || `seccion-${index + 1}`;
+}
+
+function navSectionLabel(section, index) {
+  const title = String(section?.title || "").trim();
+  if (title) {
+    return title;
+  }
+
+  const typeLabels = {
+    text: "Informacion",
+    imageText: "Contenido",
+    benefits: "Beneficios",
+    gallery: "Galeria",
+    carousel: "Galeria",
+    preguntas: "Preguntas",
+    social: "Redes",
+    contact: "Contacto"
+  };
+
+  return typeLabels[section?.type] || `Seccion ${index + 1}`;
+}
+
 function handleScroll() {
   scrolled.value = window.scrollY > 24;
 }
@@ -138,9 +180,7 @@ onBeforeUnmount(() => {
         <VyLogo :size="30" tagline />
       </RouterLink>
       <nav>
-        <a href="#contenido">Empresa</a>
-        <a href="#productos">Productos</a>
-        <a href="#comunidad">Comunidad</a>
+        <a v-for="section in navSections" :key="section.id" :href="`#${section.id}`">{{ section.label }}</a>
         <RouterLink to="/login" class="login-link"><LogIn :size="17" /> Iniciar sesion</RouterLink>
       </nav>
     </header>
@@ -169,8 +209,14 @@ onBeforeUnmount(() => {
         </section>
       </section>
 
-      <section id="contenido" class="home-sections">
-        <article v-for="(section, index) in contentSections" :key="index" class="home-section" :class="[section.type, section.layout]">
+      <section class="home-sections">
+        <article
+          v-for="(section, index) in contentSections"
+          :id="sectionAnchorId(section, index)"
+          :key="index"
+          class="home-section"
+          :class="[section.type, section.layout]"
+        >
           <template v-if="section.type === 'text'">
             <div class="section-copy centered-copy">
               <span class="section-kicker">Empresa</span>
@@ -210,7 +256,7 @@ onBeforeUnmount(() => {
               <h2>{{ section.title }}</h2>
               <p v-if="section.text">{{ section.text }}</p>
             </header>
-            <div id="productos" class="media-grid">
+            <div class="media-grid">
               <VyProductImage
                 v-for="image in section.images"
                 :key="image"
@@ -228,7 +274,7 @@ onBeforeUnmount(() => {
           </template>
 
           <template v-else-if="section.type === 'preguntas'">
-            <div id="comunidad" class="faq-wrap">
+            <div class="faq-wrap">
               <span class="section-kicker">Ayuda</span>
               <h2>{{ section.title || "Preguntas frecuentes" }}</h2>
               <details v-for="item in section.images" :key="item">
@@ -264,9 +310,23 @@ onBeforeUnmount(() => {
       </section>
 
       <footer class="home-footer">
-        <div>
+        <div class="footer-brand">
           <VyLogo :size="24" dark />
           <p>{{ landing.description }}</p>
+          <div class="footer-socials" aria-label="Canales oficiales Vidayoung">
+            <a href="https://www.youtube.com/@vidayoungoficial" target="_blank" rel="noreferrer" aria-label="YouTube Vidayoung">
+              <Youtube :size="18" />
+              <span>YouTube</span>
+            </a>
+            <a href="https://www.tiktok.com/@vidayoung.bolivia?_r=1&_t=ZS-98JLs3EFWpb" target="_blank" rel="noreferrer" aria-label="TikTok Vidayoung">
+              <Music2 :size="18" />
+              <span>TikTok</span>
+            </a>
+            <a href="https://wa.me/59168880318" target="_blank" rel="noreferrer" aria-label="WhatsApp Vidayoung">
+              <MessageCircle :size="18" />
+              <span>WhatsApp</span>
+            </a>
+          </div>
         </div>
         <small>Vidayoung © {{ new Date().getFullYear() }}. Todos los derechos reservados.</small>
       </footer>
@@ -323,40 +383,64 @@ onBeforeUnmount(() => {
 }
 
 .home-nav nav {
-  gap: 8px;
+  gap: 10px;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
 
 .home-nav nav > a,
 .home-nav nav > :deep(a) {
-  transition: background-color .2s ease, color .2s ease, transform .2s ease;
+  transition: background-color .2s ease, color .2s ease, transform .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 
 .home-nav nav > a:not(.login-link) {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 42px;
+  padding: 0 16px;
   border-radius: 999px;
-  color: var(--vy-ink-2);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 13px;
   font-weight: 900;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 .home-nav nav > a:not(.login-link):hover {
-  background: var(--vy-surface-2);
-  color: var(--vy-ink);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 .login-link {
-  min-height: 42px;
+  min-height: 44px;
   justify-content: center;
   gap: 9px;
-  padding: 0 16px;
+  padding: 0 18px;
   border-radius: 999px;
-  background: var(--vy-ink);
+  border: 1px solid rgba(242, 135, 5, 0.34);
+  background: linear-gradient(135deg, rgba(242, 135, 5, 0.98), rgba(210, 101, 0, 0.96));
   color: #fff;
   font-weight: 900;
-  box-shadow: 0 10px 26px rgba(31, 26, 20, 0.14);
+  box-shadow: 0 12px 28px rgba(184, 97, 10, 0.3);
+}
+
+.login-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(184, 97, 10, 0.34);
+}
+
+.home-nav.scrolled nav > a:not(.login-link) {
+  border-color: rgba(117, 87, 44, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--vy-ink-2);
+  box-shadow: 0 8px 20px rgba(31, 26, 20, 0.04);
+}
+
+.home-nav.scrolled nav > a:not(.login-link):hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(242, 135, 5, 0.18);
+  color: var(--vy-ink);
 }
 
 .state-box {
@@ -776,6 +860,37 @@ onBeforeUnmount(() => {
   margin-top: 14px;
   color: rgba(255, 255, 255, 0.68);
   line-height: 1.62;
+}
+
+.footer-brand {
+  display: grid;
+  gap: 16px;
+}
+
+.footer-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.footer-socials a {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 900;
+  transition: background-color .2s ease, color .2s ease, transform .2s ease;
+}
+
+.footer-socials a:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--vy-orange);
+  transform: translateY(-1px);
 }
 
 .home-footer nav {
