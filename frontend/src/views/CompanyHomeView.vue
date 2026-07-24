@@ -887,8 +887,8 @@ onBeforeUnmount(() => {
   }
 
   .page-banner-image {
-    object-fit: contain;
-    object-position: center center;
+    object-fit: cover;
+    object-position: center top;
   }
 
   .home-hero {
