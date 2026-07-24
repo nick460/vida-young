@@ -358,24 +358,30 @@ function escapeHtml(value) {
 
 function buildReceiptHtml(compra) {
   const detalles = (compra.detalles || []).map((detalle) => `
-    <div class="detail-row">
-      <div>
-        <strong>${escapeHtml(detalle.producto?.nombre || "Producto")}</strong>
-        <span>${escapeHtml(detalle.producto?.sku || "Sin SKU")}</span>
-        <span>${Number(detalle.cantidad || 0)} x Bs. ${money(detalle.precioUnitario)}</span>
-        <span>PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)} / CR ${money(detalle.crUnitario)}</span>
+    <div class="product-block">
+      <div class="product-separator">........................................</div>
+      <div class="detail-row">
+        <span class="qty">${Number(detalle.cantidad || 0)}</span>
+        <div class="product-info">
+          <strong>${escapeHtml(detalle.producto?.nombre || "Producto")}</strong>
+          <span>PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)} / CR ${money(detalle.crUnitario)}</span>
+        </div>
+        <strong class="amount">Bs. ${money(detalle.subtotal)}</strong>
       </div>
-      <strong>Bs. ${money(detalle.subtotal)}</strong>
+      <div class="product-separator">........................................</div>
     </div>
   `).join("");
   const printedAt = formatDateTime(new Date());
   const printedBy = currentUserName();
   const discount = compraDescuento(compra);
+  const grossTotal = compraSubtotalBruto(compra);
+  const saleUser = compra.usuarioRegistro || compra.usuarioValidacion || "Sistema";
   const discountRows = discount > 0 ? `
-      <div class="row"><span>Subtotal</span><span>Bs. ${money(compraSubtotalBruto(compra))}</span></div>
       <div class="row"><span>Descuento</span><span>- Bs. ${money(discount)}</span></div>
-      <div class="discount-concept"><strong>Concepto descuento:</strong> ${escapeHtml(compra.descuentoConcepto || "Sin concepto")}</div>
-  ` : "";
+      <div class="discount-concept"><strong>Concepto:</strong> ${escapeHtml(compra.descuentoConcepto || "Sin concepto")}</div>
+  ` : `
+      <div class="row"><span>Descuento</span><span>Bs. 0.00</span></div>
+  `;
 
   return `<!doctype html>
 <html lang="es">
@@ -388,26 +394,34 @@ function buildReceiptHtml(compra) {
     body { width: 7cm; margin: 0 auto; padding: 0; background: #fff; color: #111; font-family: Arial, sans-serif; font-size: 10pt; }
     .receipt { width: 7cm; margin: 0 auto; }
     .center { text-align: center; }
-    .logo { width: 4.3cm; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto .15cm; display: block; }
-    h1 { margin: 0; font-size: 13pt; text-transform: uppercase; }
-    .receipt-id { margin-top: .06cm; font-size: 9pt; font-weight: 700; }
-    .divider { border-top: 1px dashed #111; margin: .25cm 0; }
+    .logo { width: 4.1cm; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto .14cm; display: block; }
+    .brand-name { margin: .08cm 0 0; font-size: 12pt; font-weight: 900; text-transform: uppercase; letter-spacing: .02cm; }
+    .company-meta { margin-top: .05cm; font-size: 8.4pt; line-height: 1.35; text-transform: uppercase; }
+    h1 { margin: .15cm 0 .05cm; font-size: 10.4pt; text-transform: uppercase; }
+    .receipt-id { margin-top: .04cm; font-size: 8.7pt; font-weight: 700; }
+    .divider { border-top: 1px solid #111; margin: .22cm 0; }
     .row { display: flex; justify-content: space-between; gap: .2cm; margin: .08cm 0; }
     .row span:first-child { font-weight: 700; }
     .row span:last-child { text-align: right; }
-    .section-title { margin: .18cm 0 .1cm; font-size: 9pt; font-weight: 800; text-transform: uppercase; }
-    .detail-row { display: flex; justify-content: space-between; gap: .18cm; padding: .12cm 0; border-bottom: 1px dashed #bbb; }
-    .detail-row div { min-width: 0; }
-    .detail-row strong { font-size: 9.5pt; }
-    .detail-row div strong { display: block; line-height: 1.2; }
-    .detail-row span { display: block; margin-top: .03cm; color: #333; font-size: 8.5pt; line-height: 1.25; }
-    .detail-row > strong { white-space: nowrap; text-align: right; }
+    .section-title { margin: .16cm 0 .12cm; font-size: 9pt; font-weight: 800; text-transform: uppercase; }
+    .detail-header, .detail-row { display: grid; grid-template-columns: .9cm 1fr 1.7cm; gap: .12cm; align-items: start; }
+    .detail-header { padding-bottom: .08cm; font-size: 8pt; font-weight: 800; text-transform: uppercase; border-bottom: 1px dashed #111; }
+    .product-block { margin-top: .08cm; }
+    .product-separator { overflow: hidden; white-space: nowrap; color: #555; font-size: 8pt; line-height: 1; }
+    .detail-row { padding: .12cm 0; }
+    .qty, .amount { font-weight: 800; }
+    .qty { text-align: center; }
+    .amount { white-space: nowrap; text-align: right; font-size: 9pt; }
+    .product-info { min-width: 0; }
+    .product-info strong { display: block; line-height: 1.25; font-size: 9pt; }
+    .product-info span { display: block; margin-top: .04cm; color: #333; font-size: 8.2pt; line-height: 1.25; }
     .totals { margin-top: .16cm; }
-    .discount-concept { margin: .08cm 0; color: #333; font-size: 8.5pt; line-height: 1.25; }
-    .total-pay { margin-top: .12cm; padding-top: .12cm; border-top: 1px solid #111; font-size: 11pt; font-weight: 900; }
-    .signature { margin-top: .65cm; text-align: center; }
-    .signature-line { border-top: 1px solid #111; padding-top: .08cm; }
-    footer { margin-top: .25cm; text-align: center; font-size: 8.5pt; line-height: 1.35; }
+    .discount-concept { margin: .08cm 0 .02cm; color: #333; font-size: 8.3pt; line-height: 1.25; }
+    .account-pay { margin-top: .12cm; padding-top: .12cm; border-top: 1px solid #111; font-size: 10.6pt; font-weight: 900; }
+    .signature { margin-top: .7cm; text-align: center; }
+    .signature-space { height: .95cm; }
+    .signature-line { border-top: 1px solid #111; padding-top: .08cm; font-size: 8.8pt; font-weight: 700; }
+    footer { margin-top: .28cm; text-align: center; font-size: 8.2pt; line-height: 1.35; }
     @media print {
       html, body { width: 7cm; }
     }
@@ -417,6 +431,13 @@ function buildReceiptHtml(compra) {
   <main class="receipt">
     <section class="center">
       <img class="logo" src="${logoFull}" alt="Vida Young">
+    </section>
+
+    <div class="divider"></div>
+    <section class="center">
+      <div class="brand-name">VIDAYOUNG S.R.L.</div>
+      <div class="company-meta">TELEFONO: +591 66880316</div>
+      <div class="company-meta">DISTRIBUIDOR: CASA MATRIZ</div>
       <h1>Comprobante de compra</h1>
       <div class="receipt-id">Compra #${escapeHtml(compra.id)} - ${escapeHtml(compra.estadoCompra || "Sin estado")}</div>
     </section>
@@ -425,36 +446,35 @@ function buildReceiptHtml(compra) {
     <section>
       <div class="row"><span>Cliente</span><span>${escapeHtml(fullName(compra.persona))}</span></div>
       <div class="row"><span>Documento</span><span>${escapeHtml(compra.persona?.documento || "Sin documento")}</span></div>
-      <div class="row"><span>Fecha compra</span><span>${escapeHtml(formatDateTime(compra.fechaCompra))}</span></div>
-      <div class="row"><span>Metodo</span><span>${escapeHtml(compra.metodoPago || "Sin metodo")}</span></div>
-      <div class="row"><span>Validado por</span><span>${escapeHtml(compra.usuarioValidacion || "Sin validar")}</span></div>
-      <div class="row"><span>Fecha validacion</span><span>${escapeHtml(formatDateTime(compra.fechaValidacion))}</span></div>
-      <div class="row"><span>Entregado por</span><span>${escapeHtml(compra.usuarioEntrega || "Pendiente")}</span></div>
-      <div class="row"><span>Fecha entrega</span><span>${escapeHtml(formatDateTime(compra.fechaEntrega))}</span></div>
-      <div class="row"><span>Impreso por</span><span>${escapeHtml(printedBy)}</span></div>
-      <div class="row"><span>Fecha impresion</span><span>${escapeHtml(printedAt)}</span></div>
+      <div class="row"><span>Fecha y hora compra</span><span>${escapeHtml(formatDateTime(compra.fechaCompra))}</span></div>
+      <div class="row"><span>Venta realizada por</span><span>${escapeHtml(saleUser)}</span></div>
     </section>
 
     <div class="divider"></div>
     <section>
-      <div class="section-title">Detalle</div>
-      ${detalles || '<div class="detail-row"><div><strong>Sin productos</strong></div><strong>Bs. 0.00</strong></div>'}
+      <div class="section-title">Descripcion detalle compra</div>
+      <div class="detail-header">
+        <span>Cant.</span>
+        <span>Producto</span>
+        <span style="text-align:right;">Sub total</span>
+      </div>
+      ${detalles || '<div class="product-block"><div class="product-separator">........................................</div><div class="detail-row"><span class="qty">0</span><div class="product-info"><strong>Sin productos</strong></div><strong class="amount">Bs. 0.00</strong></div><div class="product-separator">........................................</div></div>'}
     </section>
 
     <section class="totals">
-      <div class="row"><span>Total PV</span><span>${money(compra.totalPv)}</span></div>
-      <div class="row"><span>Total QP</span><span>${money(compra.totalQp)}</span></div>
-      <div class="row"><span>Total CR</span><span>${money(compra.totalCr)}</span></div>
+      <div class="row"><span>Total</span><span>Bs. ${money(grossTotal)}</span></div>
       ${discountRows}
-      <div class="row total-pay"><span>Total pagado</span><span>Bs. ${money(compra.subtotal)}</span></div>
+      <div class="row account-pay"><span>A cuenta</span><span>Bs. ${money(compra.subtotal)}</span></div>
     </section>
 
     <section class="signature">
-      <div class="signature-line">Firma / sello</div>
+      <div class="signature-space"></div>
+      <div class="signature-line">Sello de la empresa</div>
     </section>
 
     <footer>
-      Comprobante generado por Vida Young.
+      <div>Usuario que imprime: ${escapeHtml(printedBy)}</div>
+      <div>Fecha y hora de impresion: ${escapeHtml(printedAt)}</div>
     </footer>
   </main>
 </body>
