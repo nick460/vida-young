@@ -24,7 +24,6 @@ const resumen = ref({
   membresias: [],
   cierresMensuales: []
 });
-const proyeccionActivacion = ref(null);
 const movementFilter = ref("TODOS");
 const openMovementGroups = ref(new Set());
 
@@ -35,14 +34,12 @@ const selectedPeriodo = computed(() =>
 const billetera = computed(() => resumen.value.billetera || {});
 const movimientos = computed(() => resumen.value.movimientos || []);
 const membresias = computed(() => resumen.value.membresias || []);
-const cierresMensuales = computed(() => resumen.value.cierresMensuales || []);
 const efectivoMensualDisponible = computed(() =>
   Number(billetera.value.saldoDinero || 0) + Number(resumen.value.efectivoRecompensasDisponible || 0)
 );
 const efectivoNivel1Disponible = computed(() => Number(resumen.value.efectivoNivel1Disponible || 0));
 const productosNivel1Disponible = computed(() => Number(resumen.value.productosNivel1Disponible || 0));
 const totalNivel1Disponible = computed(() => efectivoNivel1Disponible.value + productosNivel1Disponible.value);
-const activationPlans = computed(() => proyeccionActivacion.value?.planes || []);
 const activeMembership = computed(() =>
   membresias.value.find((membresia) => membresia.estadoMembresia === "ACTIVA" && membershipCoversActivePeriod(membresia))
 );
@@ -210,7 +207,6 @@ async function loadWallet() {
 
     const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
     resumen.value = await apiRequest(`/api/billeteras/persona/${personaId.value}${query}`);
-    proyeccionActivacion.value = await apiRequest(`/api/planes-activacion/persona/${personaId.value}/proyeccion`);
   } catch (exception) {
     error.value = exception.message || "No se pudo cargar la billetera.";
   } finally {
@@ -376,35 +372,6 @@ onMounted(loadWallet);
       <section class="vy-card history-card membership-card">
         <header class="history-header">
           <div>
-            <h2>Proyeccion de activacion</h2>
-            <p>Con tu PV mensual actual puedes ver cuanto ganarias por cada producto comprado en tu red.</p>
-          </div>
-          <span class="pv-badge">PV actual {{ money(proyeccionActivacion?.pvMensualActual) }}</span>
-        </header>
-
-        <div class="activation-projection-grid">
-          <article v-for="plan in activationPlans" :key="plan.planActivacionId" class="activation-projection-card" :class="{ active: plan.activable }">
-            <header>
-              <span>{{ plan.activable ? "Activable" : `Faltan ${money(plan.pvFaltante)} PV` }}</span>
-              <h3>{{ plan.nombre }}</h3>
-              <p>{{ money(plan.pvMinimoMensual) }} PV · {{ plan.nivelesAlcance }} niveles</p>
-            </header>
-            <strong>Bs. {{ money(plan.gananciaMaximaPorProducto) }}</strong>
-            <small>Potencial por producto si toda la red alcanzada compra una unidad.</small>
-            <div class="projection-levels">
-              <div v-for="nivel in plan.niveles" :key="nivel.numeroNivel">
-                <span>Nivel {{ nivel.numeroNivel }}</span>
-                <b>{{ nivel.personasEnNivel }} pers. · Bs. {{ money(nivel.montoPorProducto) }}</b>
-              </div>
-            </div>
-          </article>
-          <p v-if="!activationPlans.length && !loading" class="empty-row">No hay planes de activacion configurados.</p>
-        </div>
-      </section>
-
-      <section class="vy-card history-card membership-card">
-        <header class="history-header">
-          <div>
             <h2>Historico de membresias</h2>
             <p>Afiliacion inicial y activaciones mensuales por plan.</p>
           </div>
@@ -439,50 +406,6 @@ onMounted(loadWallet);
         </div>
       </section>
 
-      <section class="vy-card history-card membership-card">
-        <header class="history-header">
-          <div>
-            <h2>Cierres mensuales</h2>
-            <p>Historico de dinero enviado a planilla y PV/QP/CR reiniciados por mes.</p>
-          </div>
-        </header>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Periodo</th>
-                <th>Fecha cierre</th>
-                <th>Dinero planilla</th>
-                <th>PV</th>
-                <th>QP</th>
-                <th>CR</th>
-                <th>Productos</th>
-                <th>Rango</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="cierre in cierresMensuales" :key="cierre.id">
-                <td>{{ cierre.periodo }}</td>
-                <td>{{ formatDate(cierre.fechaCierre) }}</td>
-                <td>Bs. {{ money(cierre.saldoDinero) }}</td>
-                <td>{{ money(cierre.saldoPv) }}</td>
-                <td>{{ money(cierre.saldoQp) }}</td>
-                <td>{{ money(cierre.saldoCr) }}</td>
-                <td>{{ money(cierre.saldoProductos) }}</td>
-                <td>
-                  <span class="rank-pill">{{ cierre.rangoNombre || cierre.rango?.nombre || "Sin rango" }}</span>
-                </td>
-                <td><span class="vy-chip vy-chip-orange">{{ cierre.estadoPlanilla }}</span></td>
-              </tr>
-              <tr v-if="!cierresMensuales.length && !loading">
-                <td colspan="9">No hay cierres mensuales registrados.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
     </main>
   </div>
 </template>
@@ -727,16 +650,6 @@ onMounted(loadWallet);
   margin-top: 18px;
 }
 
-.pv-badge {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: var(--vy-cream);
-  color: #6b4a12;
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
 .rank-pill {
   display: inline-flex;
   align-items: center;
@@ -748,79 +661,6 @@ onMounted(loadWallet);
   color: var(--vy-orange-deep);
   font-size: 12px;
   font-weight: 900;
-  white-space: nowrap;
-}
-
-.activation-projection-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.activation-projection-card {
-  padding: 16px;
-  border: 1px solid var(--vy-line);
-  border-radius: 14px;
-  background: var(--vy-surface-2);
-}
-
-.activation-projection-card.active {
-  border-color: var(--vy-orange);
-  background: rgba(242, 135, 5, 0.07);
-}
-
-.activation-projection-card header span {
-  display: inline-flex;
-  margin-bottom: 8px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--vy-orange-deep);
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.activation-projection-card h3 {
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.activation-projection-card p,
-.activation-projection-card small {
-  display: block;
-  margin-top: 4px;
-  color: var(--vy-ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.activation-projection-card > strong {
-  display: block;
-  margin-top: 14px;
-  color: var(--vy-orange-deep);
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 900;
-}
-
-.projection-levels {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.projection-levels div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: #fff;
-  font-size: 12px;
-}
-
-.projection-levels b {
-  color: var(--vy-ink);
   white-space: nowrap;
 }
 
@@ -1091,9 +931,6 @@ td:nth-child(3) {
   .wallet-overview,
   .points-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .activation-projection-grid {
-    grid-template-columns: 1fr;
   }
 
   .workspace {
