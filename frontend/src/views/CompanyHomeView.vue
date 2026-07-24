@@ -6,6 +6,7 @@ import { VyLogo, VyProductImage } from "../components/ui.js";
 import { loadCompanyHome } from "../services/companyHomeService.js";
 
 const STATIC_BANNER_URL = "/banner-principal.png";
+const STATIC_BANNER_MOBILE_URL = "/banner-principal-movil.png";
 
 const loading = ref(false);
 const landing = ref(null);
@@ -149,7 +150,10 @@ onBeforeUnmount(() => {
       <section class="page-banner-shell">
         <section class="page-banner">
           <div class="page-banner-media">
-            <img class="page-banner-image" :src="STATIC_BANNER_URL" alt="Banner principal Vidayoung" />
+            <picture>
+              <source :srcset="STATIC_BANNER_MOBILE_URL" media="(max-width: 680px)" />
+              <img class="page-banner-image" :src="STATIC_BANNER_URL" alt="Banner principal Vidayoung" />
+            </picture>
           </div>
           <div class="page-banner-overlay"></div>
         </section>
@@ -385,6 +389,12 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   background: #1a1511;
+}
+
+.page-banner-media picture {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .page-banner-image {
