@@ -5,8 +5,9 @@ import select2 from "select2";
 import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { ArrowDownToLine, CalendarClock, CheckCircle2, PackageCheck, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
+import { ArrowDownToLine, CalendarClock, CheckCircle2, Eye, PackageCheck, Printer, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
+import logoFull from "../assets/logoFull.png";
 
 select2($);
 
@@ -14,6 +15,7 @@ const loading = ref(false);
 const processing = ref(false);
 const error = ref("");
 const saldos = ref([]);
+const retirosProcesados = ref([]);
 const productos = ref([]);
 const periodos = ref([]);
 const selectedPeriodoId = ref("");
@@ -21,6 +23,7 @@ const periodoSelect = ref(null);
 const productoSelect = ref(null);
 const selectedSaldo = ref(null);
 const selectedWallet = ref(null);
+const selectedRetiroDetalle = ref(null);
 const selectedProductoId = ref("");
 const retiroModalOpen = ref(false);
 const searchTerm = ref("");
@@ -46,11 +49,40 @@ const filteredSaldos = computed(() => {
     `${saldo.nombres || ""} ${saldo.apellidos || ""} ${saldo.documento || ""}`.toLowerCase().includes(term)
   );
 });
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredSaldos.value.length / Number(pageSize.value || 10))));
-const paginatedSaldos = computed(() => {
+const retiroRows = computed(() =>
+  retirosProcesados.value.map((retiro) => ({
+    ...retiro,
+    rowType: "RETIRADO",
+    rowKey: `retiro-${retiro.id}`,
+    nombres: retiro.nombres,
+    apellidos: retiro.apellidos,
+    documento: retiro.documento,
+    saldoDinero: retiro.montoDinero,
+    efectivoRecompensasDisponible: 0,
+    saldoProductos: retiro.montoProductos,
+    saldoPv: 0,
+    saldoQp: 0,
+    saldoCr: 0,
+    origen: "RETIRO_PROCESADO"
+  }))
+);
+const allRows = computed(() => [
+  ...filteredSaldos.value.map((saldo) => ({
+    ...saldo,
+    rowType: "PENDIENTE",
+    rowKey: `saldo-${saldo.personaId}-${saldo.origen}`
+  })),
+  ...retiroRows.value.filter((retiro) => {
+    const term = searchTerm.value.trim().toLowerCase();
+    if (!term) return true;
+    return `${retiro.nombres || ""} ${retiro.apellidos || ""} ${retiro.documento || ""}`.toLowerCase().includes(term);
+  })
+]);
+const totalPages = computed(() => Math.max(1, Math.ceil(allRows.value.length / Number(pageSize.value || 10))));
+const paginatedRows = computed(() => {
   const size = Number(pageSize.value || 10);
   const start = (page.value - 1) * size;
-  return filteredSaldos.value.slice(start, start + size);
+  return allRows.value.slice(start, start + size);
 });
 const totals = computed(() =>
   filteredSaldos.value.reduce(
@@ -83,6 +115,46 @@ function money(value) {
   });
 }
 
+function formatDateTime(value) {
+  const date = value ? new Date(value) : new Date();
+  return date.toLocaleString("es-BO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function retiroReceipt(retiro) {
+  return {
+    persona: `${retiro.nombres || ""} ${retiro.apellidos || ""}`.trim(),
+    documento: retiro.documento || "Sin documento",
+    periodo: `${retiro.periodoNombre || selectedPeriodo.value?.nombre || "Periodo"}${retiro.gestionAnio ? ` - Gestion ${retiro.gestionAnio}` : ""}`,
+    total: Number(retiro.montoDinero || 0),
+    retiroId: retiro.id ? `#${retiro.id}` : "procesado",
+    fechaRetiro: formatDateTime(retiro.fechaRetiro),
+    fechaImpresion: formatDateTime(),
+    detalles: [
+      {
+        titulo: "Saldo directo de billetera",
+        descripcion: "Dinero retirado desde el saldo directo",
+        monto: Number(retiro.montoDesdeBilletera || 0)
+      },
+      {
+        titulo: "Efectivo de recompensas",
+        descripcion: "Monto retirado desde recompensas mensuales",
+        monto: Number(retiro.montoDesdeRecompensas || 0)
+      },
+      ...(retiro.detalles || []).map((item) => ({
+        titulo: item.productoNombre || "Producto",
+        descripcion: `${item.cantidad || 0} x Bs. ${money(item.precioProveedor)}${item.productoSku ? ` - ${item.productoSku}` : ""}`,
+        monto: Number(item.subtotal || 0)
+      }))
+    ].filter((item) => Number(item.monto || 0) > 0)
+  };
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -93,6 +165,18 @@ function escapeHtml(value) {
 }
 
 function buildWithdrawalReceiptHtml(receipt) {
+  const detalles = receipt.detalles.length
+    ? receipt.detalles.map((item) => `
+      <div class="detail-row">
+        <span>
+          <strong>${escapeHtml(item.titulo)}</strong>
+          <small>${escapeHtml(item.descripcion)}</small>
+        </span>
+        <b>Bs. ${escapeHtml(money(item.monto))}</b>
+      </div>
+    `).join("")
+    : `<div class="detail-row"><span><strong>Sin detalle adicional</strong></span><b>Bs. 0,00</b></div>`;
+
   return `<!doctype html>
 <html lang="es">
 <head>
@@ -111,12 +195,25 @@ function buildWithdrawalReceiptHtml(receipt) {
       line-height: 1.25;
     }
     main { width: 7cm; }
+    .logo {
+      display: block;
+      width: 4.2cm;
+      max-height: 1.4cm;
+      object-fit: contain;
+      margin: 0 auto 0.18cm;
+    }
     h1 {
-      margin: 0 0 0.25cm;
+      margin: 0 0 0.16cm;
       text-align: center;
-      font-size: 12pt;
+      font-size: 11pt;
       font-weight: 700;
       text-transform: uppercase;
+    }
+    .receipt-id {
+      margin: 0 0 0.22cm;
+      text-align: center;
+      font-size: 8.5pt;
+      font-weight: 700;
     }
     .row {
       display: flex;
@@ -127,6 +224,30 @@ function buildWithdrawalReceiptHtml(receipt) {
     }
     .label { font-weight: 700; }
     .value { text-align: right; overflow-wrap: anywhere; }
+    .section-title {
+      margin: 0.22cm 0 0.08cm;
+      padding-top: 0.12cm;
+      border-top: 1px solid #000;
+      text-align: center;
+      font-size: 9pt;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.18cm;
+      padding: 0.08cm 0;
+      border-bottom: 1px dotted #000;
+    }
+    .detail-row span { min-width: 0; }
+    .detail-row strong,
+    .detail-row small {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    .detail-row small { margin-top: 0.02cm; font-size: 8pt; }
+    .detail-row b { white-space: nowrap; }
     .total {
       margin-top: 0.25cm;
       padding-top: 0.18cm;
@@ -134,15 +255,29 @@ function buildWithdrawalReceiptHtml(receipt) {
       font-size: 12pt;
       font-weight: 700;
     }
+    .signature {
+      margin-top: 0.55cm;
+      padding-top: 0.16cm;
+      border-top: 1px solid #000;
+      text-align: center;
+      font-size: 8pt;
+    }
   </style>
 </head>
 <body>
   <main>
+    <img class="logo" src="${logoFull}" alt="Vida Young">
     <h1>Comprobante de retiro</h1>
+    <p class="receipt-id">Retiro ${escapeHtml(receipt.retiroId)}</p>
     <div class="row"><span class="label">Persona</span><span class="value">${escapeHtml(receipt.persona)}</span></div>
     <div class="row"><span class="label">Documento</span><span class="value">${escapeHtml(receipt.documento)}</span></div>
     <div class="row"><span class="label">Mes</span><span class="value">${escapeHtml(receipt.periodo)}</span></div>
+    <div class="row"><span class="label">Fecha retiro</span><span class="value">${escapeHtml(receipt.fechaRetiro)}</span></div>
+    <div class="row"><span class="label">Impresion</span><span class="value">${escapeHtml(receipt.fechaImpresion)}</span></div>
+    <div class="section-title">Detalle del retiro</div>
+    ${detalles}
     <div class="row total"><span>Total retiro</span><span>Bs. ${escapeHtml(money(receipt.total))}</span></div>
+    <div class="signature">Firma / recibido conforme</div>
   </main>
 </body>
 </html>`;
@@ -276,14 +411,30 @@ async function loadSaldos() {
       await initPeriodoSelect2();
     }
     const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
-    const data = await apiRequest(`/api/billeteras/saldos${query}`);
+    const [data, retirosData] = await Promise.all([
+      apiRequest(`/api/billeteras/saldos${query}`),
+      apiRequest(`/api/billeteras/retiros${query}`)
+    ]);
     saldos.value = Array.isArray(data) ? data : [];
+    retirosProcesados.value = Array.isArray(retirosData) ? retirosData : [];
     page.value = Math.min(page.value, totalPages.value);
   } catch (exception) {
     error.value = exception.message || "No se pudieron cargar los saldos de billeteras.";
   } finally {
     loading.value = false;
   }
+}
+
+function openRetiroDetalle(retiro) {
+  selectedRetiroDetalle.value = retiro;
+}
+
+function closeRetiroDetalle() {
+  selectedRetiroDetalle.value = null;
+}
+
+function imprimirRetiroProcesado(retiro) {
+  printWithdrawalReceipt(retiroReceipt(retiro));
 }
 
 async function loadProductos() {
@@ -370,11 +521,28 @@ async function registrarRetiro() {
   if (!selectedSaldo.value?.personaId || processing.value) return;
 
   setMaxRetiro();
+  const totalRetiro = Number(efectivoDisponibleRetiro.value || 0);
+  retiroForm.value.montoDinero = totalRetiro;
   const receipt = {
     persona: `${selectedSaldo.value.nombres || ""} ${selectedSaldo.value.apellidos || ""}`.trim(),
     documento: selectedSaldo.value.documento || "Sin documento",
     periodo: selectedPeriodo.value?.nombre || "Periodo activo",
-    total: Number(retiroForm.value.montoDinero || 0)
+    total: totalRetiro,
+    retiroId: "procesado",
+    fechaRetiro: formatDateTime(),
+    fechaImpresion: formatDateTime(),
+    detalles: [
+      {
+        titulo: "Saldo directo de billetera",
+        descripcion: "Dinero acreditado previamente a la billetera",
+        monto: Number(billeteraSeleccionada.value.saldoDinero || 0)
+      },
+      ...detalleEfectivoMensual.value.map((item) => ({
+        titulo: `Nivel ${item.nivelGenerado} - ${item.referidoNombre || "Referido"}`,
+        descripcion: `${item.planIngreso || "Plan"}${item.referidoDocumento ? ` - CI ${item.referidoDocumento}` : ""}`,
+        monto: Number(item.montoDisponible || 0)
+      }))
+    ].filter((item) => Number(item.monto || 0) > 0)
   };
 
   const result = await Swal.fire({
@@ -392,15 +560,18 @@ async function registrarRetiro() {
   processing.value = true;
   error.value = "";
   try {
-    await apiRequest(`/api/billeteras/persona/${selectedSaldo.value.personaId}/retiros`, {
+    const retiroProcesado = await apiRequest(`/api/billeteras/persona/${selectedSaldo.value.personaId}/retiros`, {
       method: "POST",
       body: JSON.stringify({
-        montoDinero: Number(retiroForm.value.montoDinero || 0),
+        montoDinero: totalRetiro,
         montoProductos: 0,
         productos: [],
         observacion: retiroForm.value.observacion || null
       })
     });
+    receipt.retiroId = retiroProcesado?.id ? `#${retiroProcesado.id}` : "procesado";
+    receipt.fechaRetiro = formatDateTime(retiroProcesado?.fechaRetiro);
+    receipt.fechaImpresion = formatDateTime();
     const printResult = await Swal.fire({
       title: "Retiro procesado",
       text: "Los saldos de la persona fueron actualizados. Ya puedes imprimir el comprobante.",
@@ -580,8 +751,8 @@ onBeforeUnmount(() => {
       <section class="vy-card table-card">
         <header class="section-header">
           <div>
-            <h2>Saldos por persona</h2>
-            <p>Gestiona retiros de efectivo mensual desde la billetera activa.</p>
+            <h2>Retiros por persona</h2>
+            <p>Consulta pendientes y retiros procesados del mes seleccionado.</p>
           </div>
           <label class="search-box">
             <Search :size="16" />
@@ -601,14 +772,18 @@ onBeforeUnmount(() => {
                 <th>PV</th>
                 <th>QP</th>
                 <th>CR</th>
+                <th>Estado</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="saldo in paginatedSaldos" :key="`${saldo.personaId}-${saldo.origen}`">
+              <tr v-for="saldo in paginatedRows" :key="saldo.rowKey">
                 <td>
                   <strong>{{ saldo.nombres }} {{ saldo.apellidos }}</strong>
-                  <small>{{ saldo.origen === "CIERRE_MENSUAL" ? "Cierre mensual" : "Billetera actual" }}</small>
+                  <small>
+                    <template v-if="saldo.rowType === 'RETIRADO'">Retiro #{{ saldo.id }} - {{ formatDateTime(saldo.fechaRetiro) }}</template>
+                    <template v-else>{{ saldo.origen === "CIERRE_MENSUAL" ? "Cierre mensual" : "Billetera actual" }}</template>
+                  </small>
                 </td>
                 <td>{{ saldo.documento || "Sin documento" }}</td>
                 <td>Bs. {{ money(Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0)) }}</td>
@@ -616,20 +791,33 @@ onBeforeUnmount(() => {
                 <td>{{ money(saldo.saldoPv) }}</td>
                 <td>{{ money(saldo.saldoQp) }}</td>
                 <td>{{ money(saldo.saldoCr) }}</td>
+                <td>
+                  <span class="withdrawal-status" :class="saldo.rowType === 'RETIRADO' ? 'processed' : 'pending'">
+                    {{ saldo.rowType === "RETIRADO" ? "Retirado" : "Pendiente" }}
+                  </span>
+                </td>
                 <td class="actions-cell">
-                  <button class="row-withdraw-button" type="button" :disabled="!isPeriodoActivo" @click="openRetiroModal(saldo)">
+                  <button v-if="saldo.rowType === 'PENDIENTE'" class="row-withdraw-button" type="button" :disabled="!isPeriodoActivo" @click="openRetiroModal(saldo)">
                     <ArrowDownToLine :size="15" /> Retiro
                   </button>
+                  <div v-else class="processed-actions">
+                    <button class="detail-button" type="button" @click="openRetiroDetalle(saldo)">
+                      <Eye :size="15" /> Detalle
+                    </button>
+                    <button class="print-button" type="button" @click="imprimirRetiroProcesado(saldo)">
+                      <Printer :size="15" /> Imprimir
+                    </button>
+                  </div>
                 </td>
               </tr>
-              <tr v-if="!filteredSaldos.length && !loading">
-                <td colspan="8">No hay personas con saldos para el mes seleccionado.</td>
+              <tr v-if="!allRows.length && !loading">
+                <td colspan="9">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <footer v-if="filteredSaldos.length" class="pagination-bar">
+        <footer v-if="allRows.length" class="pagination-bar">
           <div>
             <span>Pagina {{ page }} de {{ totalPages }}</span>
             <select v-model.number="pageSize">
@@ -647,6 +835,75 @@ onBeforeUnmount(() => {
     </main>
 
     <Teleport to="body">
+      <div v-if="selectedRetiroDetalle" class="retiro-backdrop">
+        <article class="retiro-modal">
+          <header>
+            <div>
+              <span class="vy-eyebrow">Retiro procesado</span>
+              <h2>Detalle de retiro #{{ selectedRetiroDetalle.id }}</h2>
+              <p>{{ selectedRetiroDetalle.nombres }} {{ selectedRetiroDetalle.apellidos }} - {{ selectedRetiroDetalle.periodoNombre }}</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="closeRetiroDetalle">
+              <X :size="18" />
+            </button>
+          </header>
+
+          <section class="retiro-body person-wallet-detail">
+            <div class="selected-person">
+              <small>Persona</small>
+              <strong>{{ selectedRetiroDetalle.nombres }} {{ selectedRetiroDetalle.apellidos }}</strong>
+              <span>{{ selectedRetiroDetalle.documento || "Sin documento" }}</span>
+            </div>
+            <div class="wallet-values">
+              <div>
+                <small>Total retirado</small>
+                <strong>Bs. {{ money(selectedRetiroDetalle.montoDinero) }}</strong>
+                <span>{{ formatDateTime(selectedRetiroDetalle.fechaRetiro) }}</span>
+              </div>
+              <div>
+                <small>Periodo</small>
+                <strong>{{ selectedRetiroDetalle.periodoNombre }}</strong>
+                <span>Gestion {{ selectedRetiroDetalle.gestionAnio || "" }}</span>
+              </div>
+            </div>
+            <section class="cash-breakdown">
+              <header>
+                <div>
+                  <small>Detalle del retiro</small>
+                  <strong>Origen del efectivo pagado</strong>
+                </div>
+                <b>Bs. {{ money(selectedRetiroDetalle.montoDinero) }}</b>
+              </header>
+              <div class="breakdown-row">
+                <span>
+                  <strong>Saldo directo de billetera</strong>
+                  <small>Dinero retirado desde el saldo directo.</small>
+                </span>
+                <b>Bs. {{ money(selectedRetiroDetalle.montoDesdeBilletera) }}</b>
+              </div>
+              <div class="breakdown-row">
+                <span>
+                  <strong>Efectivo de recompensas</strong>
+                  <small>Monto retirado desde recompensas mensuales.</small>
+                </span>
+                <b>Bs. {{ money(selectedRetiroDetalle.montoDesdeRecompensas) }}</b>
+              </div>
+            </section>
+            <div v-if="selectedRetiroDetalle.observacion" class="selected-person">
+              <small>Observacion</small>
+              <strong>{{ selectedRetiroDetalle.observacion }}</strong>
+            </div>
+          </section>
+
+          <footer>
+            <button class="vy-btn vy-btn-ghost" type="button" @click="closeRetiroDetalle">Cerrar</button>
+            <button class="vy-btn vy-btn-primary" type="button" @click="imprimirRetiroProcesado(selectedRetiroDetalle)">
+              <Printer :size="16" /> Imprimir comprobante
+            </button>
+          </footer>
+        </article>
+      </div>
+
       <div v-if="retiroModalOpen" class="retiro-backdrop">
         <article class="retiro-modal">
           <header>
@@ -780,6 +1037,14 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .row-withdraw-button { min-height: 36px; padding: 0 12px; border: 1px solid rgba(31, 26, 20, 0.12); border-radius: 10px; background: #1f1a14; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 950; white-space: nowrap; box-shadow: 0 8px 18px rgba(31, 26, 20, 0.16); }
 .row-withdraw-button:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
 .row-withdraw-button:disabled { cursor: not-allowed; opacity: 0.5; box-shadow: none; }
+.withdrawal-status { width: fit-content; min-height: 28px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
+.withdrawal-status.pending { background: #fff7e8; color: #9a4d00; border: 1px solid rgba(242, 135, 5, 0.24); }
+.withdrawal-status.processed { background: rgba(22, 101, 52, 0.1); color: #166534; border: 1px solid rgba(22, 101, 52, 0.2); }
+.processed-actions { display: inline-flex; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.detail-button, .print-button { min-height: 34px; padding: 0 10px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 950; white-space: nowrap; }
+.detail-button { border: 1px solid var(--vy-line); background: var(--vy-surface-2); color: var(--vy-ink); }
+.print-button { border: 1px solid rgba(242, 135, 5, 0.28); background: #fff7e8; color: #1f1a14; }
+.detail-button:hover, .print-button:hover { transform: translateY(-1px); }
 .pagination-bar { padding-top: 14px; }
 .pagination-bar > div { display: flex; align-items: center; gap: 10px; color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
 .pagination-bar select, .field select, .field input, .field textarea, .period-filter select { width: 100%; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }

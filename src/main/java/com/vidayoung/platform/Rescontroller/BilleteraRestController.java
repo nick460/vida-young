@@ -4,6 +4,8 @@ import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
+import com.vidayoung.platform.Model.Dao.RetiroBilleteraDao;
+import com.vidayoung.platform.Model.Dao.RetiroBilleteraDetalleDao;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
@@ -13,6 +15,7 @@ import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.Recompensa;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
+import com.vidayoung.platform.Model.Entity.RetiroBilleteraDetalle;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import java.math.BigDecimal;
@@ -42,6 +45,8 @@ public class BilleteraRestController {
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
     private final RecompensaDao recompensaDao;
+    private final RetiroBilleteraDao retiroBilleteraDao;
+    private final RetiroBilleteraDetalleDao retiroBilleteraDetalleDao;
     private final GestionPeriodoService gestionPeriodoService;
 
     @GetMapping("/saldos")
@@ -121,6 +126,18 @@ public class BilleteraRestController {
     @GetMapping("/persona/{personaId}/cierres")
     public ResponseEntity<List<CierreMensualBilletera>> cierresPorPersona(@PathVariable Long personaId) {
         return ResponseEntity.ok(billeteraService.listarCierresMensuales(personaId));
+    }
+
+    @GetMapping("/retiros")
+    public ResponseEntity<List<RetiroBilleteraResponse>> listarRetiros(@RequestParam(required = false) Long periodoId) {
+        PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
+        Long periodoConsultaId = periodoId == null ? (periodoActivo == null ? null : periodoActivo.getId()) : periodoId;
+        if (periodoConsultaId == null) {
+            return ResponseEntity.ok(List.of());
+        }
+        return ResponseEntity.ok(retiroBilleteraDao.findByPeriodoIdWithPersonaOrderByFechaRetiroDesc(periodoConsultaId).stream()
+                .map(this::retiroResponse)
+                .toList());
     }
 
     @PostMapping("/cierres-mensuales")
@@ -293,6 +310,60 @@ public class BilleteraRestController {
     }
 
     @Getter
+    @RequiredArgsConstructor
+    public static class RetiroBilleteraResponse {
+
+        private final Long id;
+
+        private final Long personaId;
+
+        private final String nombres;
+
+        private final String apellidos;
+
+        private final String documento;
+
+        private final BigDecimal montoDinero;
+
+        private final BigDecimal montoProductos;
+
+        private final BigDecimal montoDesdeBilletera;
+
+        private final BigDecimal montoDesdeRecompensas;
+
+        private final String estadoRetiro;
+
+        private final java.time.LocalDateTime fechaRetiro;
+
+        private final Long periodoId;
+
+        private final String periodoNombre;
+
+        private final Integer gestionAnio;
+
+        private final String observacion;
+
+        private final List<RetiroDetalleResponse> detalles;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class RetiroDetalleResponse {
+
+        private final Long productoId;
+
+        private final String productoNombre;
+
+        private final String productoSku;
+
+        private final Integer cantidad;
+
+        private final BigDecimal precioProveedor;
+
+        private final BigDecimal subtotal;
+    }
+
+    @Getter
     @Setter
     public static class ActivacionRequest {
 
@@ -436,5 +507,52 @@ public class BilleteraRestController {
 
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private RetiroBilleteraResponse retiroResponse(RetiroBilletera retiro) {
+        Persona persona = retiro.getPersona();
+        PeriodoGestion periodo = retiro.getPeriodo();
+        BigDecimal desdeBilletera = movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaIdAndTipo("RETIRO_BILLETERA", retiro.getId(), MovimientoBilletera.TIPO_DINERO)
+                .stream()
+                .map(MovimientoBilletera::getMonto)
+                .map(this::zeroIfNull)
+                .map(BigDecimal::abs)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal montoDinero = zeroIfNull(retiro.getMontoDinero());
+        BigDecimal desdeRecompensas = montoDinero.subtract(desdeBilletera).max(BigDecimal.ZERO);
+        List<RetiroDetalleResponse> detalles = retiroBilleteraDetalleDao.findByRetiroId(retiro.getId()).stream()
+                .map(this::retiroDetalleResponse)
+                .toList();
+
+        return new RetiroBilleteraResponse(
+                retiro.getId(),
+                persona == null ? null : persona.getId(),
+                persona == null ? null : persona.getNombres(),
+                persona == null ? null : persona.getApellidos(),
+                persona == null ? null : persona.getDocumento(),
+                montoDinero,
+                zeroIfNull(retiro.getMontoProductos()),
+                desdeBilletera,
+                desdeRecompensas,
+                retiro.getEstadoRetiro(),
+                retiro.getFechaRetiro(),
+                periodo == null ? null : periodo.getId(),
+                periodo == null ? null : periodo.getNombre(),
+                periodo == null || periodo.getGestion() == null ? null : periodo.getGestion().getAnio(),
+                retiro.getObservacion(),
+                detalles
+        );
+    }
+
+    private RetiroDetalleResponse retiroDetalleResponse(RetiroBilleteraDetalle detalle) {
+        return new RetiroDetalleResponse(
+                detalle.getProducto() == null ? null : detalle.getProducto().getId(),
+                detalle.getProducto() == null ? null : detalle.getProducto().getNombre(),
+                detalle.getProducto() == null ? null : detalle.getProducto().getSku(),
+                detalle.getCantidad(),
+                zeroIfNull(detalle.getPrecioProveedor()),
+                zeroIfNull(detalle.getSubtotal())
+        );
     }
 }
