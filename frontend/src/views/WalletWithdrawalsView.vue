@@ -610,6 +610,7 @@ async function registrarRetiro() {
       confirmButtonText: "Cerrar",
       confirmButtonColor: "#F28705"
     });
+    processing.value = false;
     closeRetiroModal();
     await loadSaldos();
   } catch (exception) {
