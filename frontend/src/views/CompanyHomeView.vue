@@ -144,18 +144,22 @@ onBeforeUnmount(() => {
 
     <main v-if="loading" class="state-box">Cargando pagina principal...</main>
     <main v-else-if="landing">
-      <section class="hero-shell">
-        <section class="home-banner">
-          <div class="banner-media">
+      <section class="page-banner-shell">
+        <section class="page-banner">
+          <div class="page-banner-media">
             <VyProductImage
               :grad="heroSection?.imageUrl || landing.imageUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 48%, #1F1A14 100%)'"
-              :h="780"
+              :h="720"
               big
             />
           </div>
-          <div class="banner-overlay"></div>
+          <div class="page-banner-overlay"></div>
+        </section>
+      </section>
 
-          <div class="banner-content">
+      <section class="hero-shell">
+        <section class="home-hero">
+          <div class="hero-copy">
             <span class="hero-kicker">{{ landing.category || "Empresa" }}</span>
             <h1>{{ heroSection?.title || landing.title }}</h1>
             <p>{{ heroSection?.text || landing.description }}</p>
@@ -165,12 +169,10 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="banner-card">
-            <div class="hero-metrics" aria-label="Resumen Vidayoung">
-              <span><strong>Bienestar</strong><small>Productos funcionales para la rutina diaria.</small></span>
-              <span><strong>Comunidad</strong><small>Acompanamiento cercano para crecer con claridad.</small></span>
-              <span><strong>Digital</strong><small>Herramientas simples para compartir y comprar.</small></span>
-            </div>
+          <div class="hero-metrics" aria-label="Resumen Vidayoung">
+            <span><strong>Bienestar</strong><small>Productos funcionales para la rutina diaria.</small></span>
+            <span><strong>Comunidad</strong><small>Acompanamiento cercano para crecer con claridad.</small></span>
+            <span><strong>Digital</strong><small>Herramientas simples para compartir y comprar.</small></span>
           </div>
         </section>
 
@@ -395,69 +397,54 @@ onBeforeUnmount(() => {
   color: var(--vy-ink-2);
 }
 
-.hero-shell {
-  width: min(100% - 32px, 1280px);
-  margin: 0 auto;
-  padding: 14px 0 28px;
+.page-banner-shell {
+  width: 100%;
+  margin: 0;
 }
 
-.home-banner {
-  min-height: calc(100vh - 118px);
+.page-banner {
+  min-height: min(70vh, 720px);
   position: relative;
   overflow: hidden;
-  padding: clamp(24px, 4vw, 40px);
-  border: 1px solid rgba(117, 87, 44, 0.08);
-  border-radius: 8px;
-  box-shadow: 0 24px 80px rgba(31, 26, 20, 0.12);
 }
 
-.banner-media,
-.banner-overlay,
-.banner-content,
-.banner-card {
+.page-banner-media {
   position: absolute;
-}
-
-.banner-media {
   inset: 0;
 }
 
-.banner-media :deep(> div) {
+.page-banner-media :deep(> div) {
   height: 100%;
   border-radius: 0 !important;
 }
 
-.banner-overlay {
+.page-banner-overlay {
+  position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(20, 15, 11, 0.82) 0%, rgba(20, 15, 11, 0.5) 42%, rgba(20, 15, 11, 0.18) 74%, rgba(20, 15, 11, 0.08) 100%),
-    linear-gradient(180deg, rgba(20, 15, 11, 0.14) 0%, rgba(20, 15, 11, 0.54) 100%);
+    linear-gradient(180deg, rgba(20, 15, 11, 0.1) 0%, rgba(20, 15, 11, 0.34) 72%, rgba(20, 15, 11, 0.54) 100%);
 }
 
-.banner-content {
-  top: clamp(34px, 7vw, 96px);
-  left: clamp(22px, 4vw, 40px);
-  right: clamp(22px, 4vw, 40px);
-  z-index: 2;
-  max-width: min(100%, 760px);
+.hero-shell {
+  width: min(100% - 32px, 1280px);
+  margin: 0 auto;
+  padding: 0 0 28px;
 }
 
-.banner-card {
-  left: clamp(22px, 4vw, 40px);
-  right: clamp(22px, 4vw, 40px);
-  bottom: clamp(20px, 3vw, 34px);
+.home-hero {
+  width: min(100%, 1100px);
+  margin: -88px auto 0;
+  position: relative;
   z-index: 2;
-  width: min(100%, 980px);
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: clamp(28px, 4vw, 42px);
+  border: 1px solid rgba(117, 87, 44, 0.12);
   border-radius: 8px;
-  background: rgba(255, 251, 244, 0.14);
-  backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 247, 236, 0.95));
+  box-shadow: 0 24px 64px rgba(31, 26, 20, 0.12);
 }
 
-.banner-card .hero-metrics {
-  width: 100%;
-  margin-top: 0;
+.hero-copy {
+  min-width: 0;
 }
 
 .hero-kicker,
@@ -466,30 +453,29 @@ onBeforeUnmount(() => {
   align-items: center;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(242, 135, 5, 0.22);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: rgba(242, 135, 5, 0.1);
+  color: var(--vy-orange-deep);
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.banner-content h1 {
+.hero-copy h1 {
   max-width: 760px;
   margin-top: 20px;
   font-size: clamp(42px, 7vw, 84px);
   line-height: 0.96;
   font-weight: 950;
   overflow-wrap: anywhere;
-  color: #fff;
 }
 
-.banner-content p {
-  max-width: 640px;
+.hero-copy p {
+  max-width: 700px;
   margin-top: 20px;
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--vy-ink-2);
   font-size: clamp(16px, 1.6vw, 20px);
   line-height: 1.68;
 }
@@ -523,13 +509,13 @@ onBeforeUnmount(() => {
 }
 
 .secondary-action {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  border: 1px solid rgba(31, 26, 20, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--vy-ink);
 }
 
 .hero-metrics {
-  width: min(100%, 700px);
+  width: 100%;
   margin-top: 34px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -539,10 +525,10 @@ onBeforeUnmount(() => {
 .hero-metrics span {
   min-height: 92px;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(222, 191, 146, 0.5);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 14px 36px rgba(31, 26, 20, 0.06);
 }
 
 .hero-metrics strong,
@@ -551,22 +537,21 @@ onBeforeUnmount(() => {
 }
 
 .hero-metrics strong {
-  color: #fff;
+  color: var(--vy-ink);
   font-size: 15px;
   font-weight: 950;
 }
 
 .hero-metrics small {
   margin-top: 6px;
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--vy-ink-3);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.35;
 }
 
-
 .hero-ribbon {
-  margin-top: 14px;
+  margin-top: 18px;
   gap: 12px;
   padding: 18px 22px;
   border: 1px solid rgba(117, 87, 44, 0.12);
@@ -850,6 +835,15 @@ onBeforeUnmount(() => {
     width: min(100% - 24px, 720px);
   }
 
+  .page-banner {
+    min-height: 52vh;
+  }
+
+  .home-hero {
+    margin-top: -58px;
+    width: min(100% - 24px, 680px);
+  }
+
   .home-section.imageText,
   .home-section.imageText.imageLeft {
     grid-template-columns: 1fr;
@@ -857,25 +851,6 @@ onBeforeUnmount(() => {
 
   .home-section.imageText.imageLeft > div:first-child {
     order: initial;
-  }
-
-  .home-banner {
-    min-height: 86vh;
-    padding: 18px;
-  }
-
-  .banner-content {
-    top: 24px;
-    left: 18px;
-    right: 18px;
-    max-width: none;
-  }
-
-  .banner-card {
-    left: 18px;
-    right: 18px;
-    bottom: 18px;
-    padding: 12px;
   }
 
   .hero-ribbon,
@@ -911,16 +886,22 @@ onBeforeUnmount(() => {
     font-size: 13px;
   }
 
-  .home-hero,
+  .hero-shell,
   .home-sections {
     width: min(100% - 24px, 520px);
   }
 
-  .hero-shell {
-    padding-top: 12px;
+  .page-banner {
+    min-height: 40vh;
   }
 
-  .banner-content h1 {
+  .home-hero {
+    width: min(100% - 18px, 520px);
+    margin-top: -36px;
+    padding: 22px 18px;
+  }
+
+  .hero-copy h1 {
     font-size: clamp(34px, 12vw, 50px);
   }
 
