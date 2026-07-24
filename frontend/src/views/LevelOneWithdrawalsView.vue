@@ -5,8 +5,9 @@ import select2 from "select2";
 import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { ArrowDownToLine, Gift, PackageCheck, Plus, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
+import { ArrowDownToLine, CalendarClock, Gift, PackageCheck, Plus, Printer, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
+import logoFull from "../assets/logoFull.png";
 
 select2($);
 
@@ -15,9 +16,12 @@ const processing = ref(false);
 const error = ref("");
 const recompensas = ref([]);
 const productos = ref([]);
+const periodos = ref([]);
+const selectedPeriodoId = ref("");
 const searchTerm = ref("");
 const selected = ref(null);
 const selectedProductoId = ref("");
+const periodoSelect = ref(null);
 const productoSelect = ref(null);
 const page = ref(1);
 const pageSize = ref(10);
@@ -55,6 +59,9 @@ const retiroProductosTotal = computed(() =>
 const selectedProducto = computed(() =>
   productos.value.find((producto) => Number(producto.id) === Number(selectedProductoId.value)) || null
 );
+const selectedPeriodo = computed(() =>
+  periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
+);
 const efectivoSeleccionadoDisponible = computed(() => efectivoDisponible(selected.value));
 const productosSeleccionadoDisponible = computed(() => productosDisponible(selected.value));
 const retiroExcedeEfectivo = computed(() => Number(form.value.montoDinero || 0) > efectivoSeleccionadoDisponible.value);
@@ -77,6 +84,36 @@ function money(value) {
   });
 }
 
+function formatDateTime(value) {
+  const date = value ? new Date(value) : new Date();
+  return date.toLocaleString("es-BO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function currentUserName() {
+  try {
+    const usuario = JSON.parse(localStorage.getItem("vy_usuario") || "null");
+    const personaName = [usuario?.persona?.nombres, usuario?.persona?.apellidos].filter(Boolean).join(" ").trim();
+    return personaName || usuario?.username || "Usuario del sistema";
+  } catch {
+    return "Usuario del sistema";
+  }
+}
+
 function fullName(persona) {
   return `${persona?.nombres || ""} ${persona?.apellidos || ""}`.trim() || "Persona";
 }
@@ -89,20 +126,176 @@ function productosDisponible(recompensa) {
   return Math.max(0, Number(recompensa?.valorProductos || 0) - Number(recompensa?.valorProductosRetirado || 0));
 }
 
+function buildLevelOneReceipt(retiro) {
+  const productosDetalle = retiro.productos.length
+    ? retiro.productos.map((item) => `
+      <div class="detail-row">
+        <span>
+          <strong>${escapeHtml(item.nombre)}</strong>
+          <small>${escapeHtml(item.cantidad)} x Bs. ${escapeHtml(money(item.precio))}${item.sku ? ` - ${escapeHtml(item.sku)}` : ""}</small>
+        </span>
+        <b>Bs. ${escapeHtml(money(Number(item.precio || 0) * Number(item.cantidad || 0)))}</b>
+      </div>
+    `).join("")
+    : `<div class="detail-row"><span><strong>Sin productos entregados</strong></span><b>Bs. 0,00</b></div>`;
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Comprobante nivel 1</title>
+  <style>
+    @page { size: 8cm auto; margin: 0.5cm; }
+    * { box-sizing: border-box; }
+    body { width: 7cm; margin: 0; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.25; }
+    main { width: 7cm; }
+    .logo { display: block; width: 4.2cm; max-height: 1.4cm; object-fit: contain; margin: 0 auto 0.18cm; }
+    h1 { margin: 0 0 0.16cm; text-align: center; font-size: 11pt; font-weight: 700; text-transform: uppercase; }
+    .receipt-id { margin: 0 0 0.22cm; text-align: center; font-size: 8.5pt; font-weight: 700; }
+    .row, .detail-row { display: flex; justify-content: space-between; gap: 0.2cm; padding: 0.08cm 0; border-bottom: 1px dashed #000; }
+    .label, .detail-row strong, .total { font-weight: 700; }
+    .value { text-align: right; overflow-wrap: anywhere; }
+    .section-title { margin: 0.22cm 0 0.08cm; padding-top: 0.12cm; border-top: 1px solid #000; text-align: center; font-size: 9pt; font-weight: 700; text-transform: uppercase; }
+    .detail-row span { min-width: 0; }
+    .detail-row strong, .detail-row small { display: block; overflow-wrap: anywhere; }
+    .detail-row small { margin-top: 0.02cm; font-size: 8pt; }
+    .detail-row b { white-space: nowrap; }
+    .total { margin-top: 0.25cm; padding-top: 0.18cm; border-top: 2px solid #000; font-size: 12pt; }
+    .signature { margin-top: 0.55cm; padding-top: 0.16cm; border-top: 1px solid #000; text-align: center; font-size: 8pt; }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="${logoFull}" alt="Vida Young">
+    <h1>Comprobante nivel 1</h1>
+    <p class="receipt-id">Retiro ${escapeHtml(retiro.retiroId)}</p>
+    <div class="row"><span class="label">Beneficiario</span><span class="value">${escapeHtml(retiro.beneficiario)}</span></div>
+    <div class="row"><span class="label">Documento</span><span class="value">${escapeHtml(retiro.documento)}</span></div>
+    <div class="row"><span class="label">Mes</span><span class="value">${escapeHtml(retiro.periodo)}</span></div>
+    <div class="row"><span class="label">Referido</span><span class="value">${escapeHtml(retiro.referido)}</span></div>
+    <div class="row"><span class="label">Plan</span><span class="value">${escapeHtml(retiro.plan)}</span></div>
+    <div class="row"><span class="label">Fecha retiro</span><span class="value">${escapeHtml(retiro.fechaRetiro)}</span></div>
+    <div class="row"><span class="label">Impreso por</span><span class="value">${escapeHtml(retiro.impresoPor)}</span></div>
+    <div class="section-title">Detalle</div>
+    <div class="row"><span class="label">Efectivo</span><span class="value">Bs. ${escapeHtml(money(retiro.montoDinero))}</span></div>
+    ${productosDetalle}
+    <div class="row total"><span>Total retiro</span><span>Bs. ${escapeHtml(money(retiro.total))}</span></div>
+    <div class="signature">Firma / recibido conforme</div>
+  </main>
+</body>
+</html>`;
+}
+
+function printLevelOneReceipt(retiro) {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "Comprobante nivel 1");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  document.body.appendChild(iframe);
+
+  const printDocument = iframe.contentWindow?.document;
+  if (!printDocument || !iframe.contentWindow) {
+    iframe.remove();
+    Swal.fire("No se pudo imprimir", "El navegador bloqueo la preparacion del comprobante.", "error");
+    return;
+  }
+
+  printDocument.open();
+  printDocument.write(buildLevelOneReceipt(retiro));
+  printDocument.close();
+  iframe.contentWindow.onafterprint = () => iframe.remove();
+  iframe.contentWindow.setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    iframe.contentWindow.setTimeout(() => iframe.remove(), 1200);
+  }, 400);
+}
+
 async function loadAll() {
   loading.value = true;
   error.value = "";
   try {
+    if (!periodos.value.length) {
+      await loadPeriodoOptions();
+    }
+    const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
     const [recompensasData, productosData] = await Promise.all([
-      apiRequest("/api/recompensas/nivel-1"),
+      apiRequest(`/api/recompensas/nivel-1${query}`),
       apiRequest("/api/productos")
     ]);
     recompensas.value = Array.isArray(recompensasData) ? recompensasData : [];
     productos.value = Array.isArray(productosData) ? productosData : [];
+    await initPeriodoSelect2();
   } catch (exception) {
     error.value = exception.message || "No se pudieron cargar los retiros de nivel 1.";
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadPeriodoOptions() {
+  const [activePeriodo, gestionesData] = await Promise.all([
+    apiRequest("/api/gestiones/periodos/activo"),
+    apiRequest("/api/gestiones")
+  ]);
+  const periodosPorGestion = await Promise.all(
+    (Array.isArray(gestionesData) ? gestionesData : []).map(async (gestion) => {
+      const items = await apiRequest(`/api/gestiones/${gestion.id}/periodos`);
+      return items.map((periodo) => ({ ...periodo, gestion: periodo.gestion || gestion }));
+    })
+  );
+
+  periodos.value = periodosPorGestion
+    .flat()
+    .sort((left, right) => {
+      const leftYear = Number(left.gestion?.anio || 0);
+      const rightYear = Number(right.gestion?.anio || 0);
+      if (leftYear !== rightYear) return rightYear - leftYear;
+      return Number(right.mes || 0) - Number(left.mes || 0);
+    });
+
+  if (!selectedPeriodoId.value) {
+    selectedPeriodoId.value = String(activePeriodo?.id || periodos.value[0]?.id || "");
+  }
+}
+
+async function initPeriodoSelect2() {
+  await nextTick();
+  if (!periodoSelect.value) return;
+
+  destroyPeriodoSelect2();
+  const element = $(periodoSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona un mes",
+      allowClear: false,
+      dropdownParent: $(".level-one-withdrawals-view"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedPeriodoId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.retiros-nivel-1-periodo", async () => {
+    selectedPeriodoId.value = element.val() || "";
+    await loadAll();
+  });
+}
+
+function destroyPeriodoSelect2() {
+  if (!periodoSelect.value) return;
+  const element = $(periodoSelect.value);
+  element.off("change.retiros-nivel-1-periodo");
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.select2("destroy");
   }
 }
 
@@ -219,10 +412,23 @@ async function registrarRetiro() {
     error.value = "Revisa los montos: no pueden superar el efectivo o credito disponible.";
     return;
   }
+  const receipt = {
+    beneficiario: fullName(selected.value.beneficiario),
+    documento: selected.value.beneficiario?.documento || "Sin documento",
+    periodo: selectedPeriodo.value ? `${selectedPeriodo.value.nombre} - Gestion ${selectedPeriodo.value.gestion?.anio || ""}` : "Periodo seleccionado",
+    referido: fullName(selected.value.referido?.persona),
+    plan: selected.value.planIngreso?.nombre || "Plan",
+    montoDinero: Number(form.value.montoDinero || 0),
+    productos: form.value.productos.map((item) => ({ ...item })),
+    total: Number(form.value.montoDinero || 0) + retiroProductosTotal.value,
+    retiroId: "procesado",
+    fechaRetiro: formatDateTime(),
+    impresoPor: currentUserName()
+  };
   processing.value = true;
   error.value = "";
   try {
-    await apiRequest(`/api/recompensas/nivel-1/${selected.value.id}/retiro`, {
+    const retiroProcesado = await apiRequest(`/api/recompensas/nivel-1/${selected.value.id}/retiro`, {
       method: "POST",
       body: JSON.stringify({
         montoDinero: Number(form.value.montoDinero || 0),
@@ -234,12 +440,16 @@ async function registrarRetiro() {
         observacion: form.value.observacion || null
       })
     });
+    receipt.retiroId = retiroProcesado?.id ? `#${retiroProcesado.id}` : "procesado";
+    receipt.fechaRetiro = formatDateTime(retiroProcesado?.fechaRetiro);
     await Swal.fire({
       title: "Retiro procesado",
       text: "La recompensa de nivel 1 fue actualizada.",
       icon: "success",
       confirmButtonColor: "#F28705"
     });
+    printLevelOneReceipt(receipt);
+    processing.value = false;
     closeModal();
     await loadAll();
   } catch (exception) {
@@ -261,6 +471,18 @@ watch(productos, () => {
   initProductoSelect2();
 });
 
+watch(periodos, () => {
+  initPeriodoSelect2();
+});
+
+watch(selectedPeriodoId, (value) => {
+  if (!periodoSelect.value) return;
+  const element = $(periodoSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
 watch(searchTerm, () => {
   page.value = 1;
 });
@@ -276,6 +498,7 @@ watch(filteredRecompensas, () => {
 onMounted(loadAll);
 
 onBeforeUnmount(() => {
+  destroyPeriodoSelect2();
   destroyProductoSelect2();
   unlockPageScroll();
 });
@@ -288,11 +511,25 @@ onBeforeUnmount(() => {
         <div>
           <div class="vy-eyebrow">Recompensas inmediatas</div>
           <h1>Retiros nivel 1</h1>
-          <p>Retiros individuales de efectivo inmediato y credito en producto del patrocinador directo.</p>
+          <p>
+            Retiros individuales de efectivo inmediato y credito en producto del patrocinador directo.
+            <strong v-if="selectedPeriodo">Mostrando {{ selectedPeriodo.nombre }}.</strong>
+          </p>
         </div>
-        <button class="refresh-action" type="button" :disabled="loading" @click="loadAll">
-          <RefreshCw :size="16" /> Actualizar
-        </button>
+        <div class="header-actions">
+          <label class="period-filter">
+            <span>Mes</span>
+            <select ref="periodoSelect" v-model="selectedPeriodoId">
+              <option value="" disabled>Selecciona un mes</option>
+              <option v-for="periodo in periodos" :key="periodo.id" :value="periodo.id">
+                {{ periodo.nombre }} - Gestion {{ periodo.gestion?.anio || "" }}
+              </option>
+            </select>
+          </label>
+          <button class="refresh-action" type="button" :disabled="loading" @click="loadAll">
+            <RefreshCw :size="16" /> Actualizar
+          </button>
+        </div>
       </header>
 
       <div v-if="error" class="error-box">{{ error }}</div>
@@ -491,6 +728,9 @@ onBeforeUnmount(() => {
 .page-header { margin-bottom: 18px; }
 .page-header h1 { margin-top: 6px; font-size: 34px; font-weight: 900; }
 .page-header p, .section-header p { margin-top: 5px; color: var(--vy-ink-3); font-weight: 700; }
+.header-actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.period-filter { min-width: 260px; display: grid; gap: 7px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.period-filter select { width: 100%; min-height: 42px; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; padding: 0 12px; }
 .refresh-action { min-height: 42px; padding: 0 16px; border: 1px solid rgba(242, 135, 5, 0.32); border-radius: 8px; background: #fff7e8; color: #1f1a14; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 950; box-shadow: 0 10px 24px rgba(242, 135, 5, 0.14); }
 .refresh-action:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
 .refresh-action:disabled { cursor: not-allowed; opacity: 0.55; box-shadow: none; }
@@ -551,6 +791,9 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 :deep(.select2-container--default .select2-search--dropdown .select2-search__field) { min-height: 36px; border: 1px solid var(--vy-line); border-radius: 8px; padding: 7px 9px; outline: 0; }
 :deep(.select2-results__option) { padding: 9px 12px; font-size: 13px; font-weight: 800; }
 :deep(.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable) { background: #f28705; color: #1f1a14; }
+:deep(.period-filter .select2-container--default .select2-selection--single) { min-height: 42px; border: 1px solid var(--vy-line); border-radius: 8px; background: var(--vy-surface-2); display: flex; align-items: center; }
+:deep(.period-filter .select2-container--default .select2-selection--single .select2-selection__rendered) { padding-left: 12px; padding-right: 34px; color: var(--vy-ink); font-size: 13px; font-weight: 800; line-height: 42px; text-transform: none; }
+:deep(.period-filter .select2-container--default .select2-selection--single .select2-selection__arrow) { height: 42px; right: 8px; }
 .credit-meter { padding: 11px 12px; border: 1px solid var(--vy-line); border-radius: 8px; background: #fff; }
 .credit-meter span { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .credit-meter strong { display: block; margin-top: 5px; color: var(--vy-ink); font-size: 14px; font-weight: 900; }
@@ -565,7 +808,8 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 12px; font-weight
 .withdraw-submit:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
 @media (max-width: 760px) {
   .summary-grid, .modal-context, .wallet-values, .withdraw-grid, .product-select-panel, .select-action { grid-template-columns: 1fr; }
-  .page-header, .section-header, .retiro-modal > header, .retiro-modal > footer { align-items: stretch; flex-direction: column; }
+  .page-header, .section-header, .header-actions, .retiro-modal > header, .retiro-modal > footer { align-items: stretch; flex-direction: column; }
+  .period-filter { width: 100%; }
   .search-box, .retiro-modal footer .vy-btn, .withdraw-submit { width: 100%; }
   .pagination-bar, .pagination-bar > div, .pagination-actions, .pagination-actions button { width: 100%; }
   .pagination-bar { align-items: stretch; flex-direction: column; }
