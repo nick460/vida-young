@@ -118,71 +118,105 @@ onMounted(loadHome);
 <template>
   <div class="vy company-home">
     <header class="home-nav">
-      <VyLogo :size="28" tagline />
+      <RouterLink to="/" class="brand-link" aria-label="Ir a la pagina principal">
+        <VyLogo :size="30" tagline />
+      </RouterLink>
       <nav>
         <a href="#contenido">Empresa</a>
         <a href="#productos">Productos</a>
+        <a href="#comunidad">Comunidad</a>
         <RouterLink to="/login" class="login-link"><LogIn :size="17" /> Iniciar sesion</RouterLink>
       </nav>
     </header>
 
     <main v-if="loading" class="state-box">Cargando pagina principal...</main>
     <main v-else-if="landing">
-      <section class="home-hero" :class="heroSection?.layout || 'imageRight'">
-        <div class="hero-copy">
-          <span class="vy-chip vy-chip-orange">{{ landing.category || "Empresa" }}</span>
-          <h1>{{ heroSection?.title || landing.title }}</h1>
-          <p>{{ heroSection?.text || landing.description }}</p>
-          <div class="hero-actions">
-            <RouterLink to="/login" class="primary-action"><LogIn :size="18" /> Iniciar sesion</RouterLink>
-            <a href="#contenido" class="secondary-action">Conocer mas <ChevronRight :size="17" /></a>
+      <section class="hero-shell">
+        <section class="home-hero" :class="heroSection?.layout || 'imageRight'">
+          <div class="hero-copy">
+            <span class="hero-kicker">{{ landing.category || "Empresa" }}</span>
+            <h1>{{ heroSection?.title || landing.title }}</h1>
+            <p>{{ heroSection?.text || landing.description }}</p>
+            <div class="hero-actions">
+              <RouterLink to="/login" class="primary-action"><LogIn :size="18" /> Iniciar sesion</RouterLink>
+              <a href="#contenido" class="secondary-action">Conocer mas <ChevronRight :size="17" /></a>
+            </div>
+            <div class="hero-metrics" aria-label="Resumen Vidayoung">
+              <span><strong>Bienestar</strong><small>Productos funcionales para la rutina diaria.</small></span>
+              <span><strong>Comunidad</strong><small>Acompanamiento cercano para crecer con claridad.</small></span>
+              <span><strong>Digital</strong><small>Herramientas simples para compartir y comprar.</small></span>
+            </div>
           </div>
-          <div class="hero-metrics" aria-label="Resumen Vidayoung">
-            <span><strong>Bienestar</strong><small>Productos funcionales</small></span>
-            <span><strong>Comunidad</strong><small>Acompanamiento cercano</small></span>
-            <span><strong>Digital</strong><small>Herramientas simples</small></span>
+
+          <div class="hero-stage">
+            <div class="hero-visual">
+              <VyProductImage
+                :grad="heroSection?.imageUrl || landing.imageUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 48%, #1F1A14 100%)'"
+                :h="560"
+                big
+              />
+            </div>
+            <div class="hero-note">
+              <strong>{{ landing.title }}</strong>
+              <span>Productos, comunidad y una experiencia digital pensada para mostrar mejor la propuesta de Vidayoung.</span>
+            </div>
           </div>
-        </div>
-        <div class="hero-visual">
-          <VyProductImage
-            :grad="heroSection?.imageUrl || landing.imageUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 48%, #1F1A14 100%)'"
-            :h="500"
-            big
-          />
+        </section>
+
+        <div class="hero-ribbon">
+          <div>
+            <small>Experiencia publica</small>
+            <strong>Home administrable desde el panel</strong>
+          </div>
+          <div>
+            <small>Acceso directo</small>
+            <strong>Login, productos y comunidad</strong>
+          </div>
+          <div>
+            <small>Contenido flexible</small>
+            <strong>Secciones editables por bloque</strong>
+          </div>
         </div>
       </section>
 
       <section id="contenido" class="home-sections">
         <article v-for="(section, index) in contentSections" :key="index" class="home-section" :class="[section.type, section.layout]">
           <template v-if="section.type === 'text'">
-            <span class="vy-eyebrow">Empresa</span>
-            <h2>{{ section.title }}</h2>
-            <p>{{ section.text }}</p>
-          </template>
-
-          <template v-else-if="section.type === 'imageText'">
-            <div>
-              <span class="vy-eyebrow">Vidayoung</span>
+            <div class="section-copy centered-copy">
+              <span class="section-kicker">Empresa</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
             </div>
-            <VyProductImage :grad="section.imageUrl || landing.imageUrl" :h="330" />
+          </template>
+
+          <template v-else-if="section.type === 'imageText'">
+            <div class="section-copy">
+              <span class="section-kicker">Vidayoung</span>
+              <h2>{{ section.title }}</h2>
+              <p>{{ section.text }}</p>
+            </div>
+            <div class="section-visual">
+              <VyProductImage :grad="section.imageUrl || landing.imageUrl" :h="360" />
+            </div>
           </template>
 
           <template v-else-if="section.type === 'benefits'">
-            <header>
-              <span class="vy-eyebrow">Diferenciales</span>
+            <header class="section-copy">
+              <span class="section-kicker">Diferenciales</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
             </header>
-            <div class="card-grid">
-              <div v-for="item in section.images" :key="item" class="info-card">{{ item }}</div>
+            <div class="benefits-grid">
+              <div v-for="item in section.images" :key="item" class="benefit-item">
+                <strong>{{ item }}</strong>
+                <span>Una propuesta clara, orientada a resultados y mejor experiencia para el usuario.</span>
+              </div>
             </div>
           </template>
 
           <template v-else-if="['gallery', 'carousel'].includes(section.type)">
-            <header>
-              <span class="vy-eyebrow">Productos</span>
+            <header class="section-copy">
+              <span class="section-kicker">Productos</span>
               <h2>{{ section.title }}</h2>
               <p v-if="section.text">{{ section.text }}</p>
             </header>
@@ -204,8 +238,8 @@ onMounted(loadHome);
           </template>
 
           <template v-else-if="section.type === 'preguntas'">
-            <div class="faq-wrap">
-              <span class="vy-eyebrow">Ayuda</span>
+            <div id="comunidad" class="faq-wrap">
+              <span class="section-kicker">Ayuda</span>
               <h2>{{ section.title || "Preguntas frecuentes" }}</h2>
               <details v-for="item in section.images" :key="item">
                 <summary>{{ faqQuestion(item) }}</summary>
@@ -215,8 +249,8 @@ onMounted(loadHome);
           </template>
 
           <template v-else-if="section.type === 'social'">
-            <header>
-              <span class="vy-eyebrow">Comunidad</span>
+            <header class="section-copy">
+              <span class="section-kicker">Comunidad</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
             </header>
@@ -230,6 +264,7 @@ onMounted(loadHome);
 
           <template v-else-if="section.type === 'contact'">
             <div class="contact-block">
+              <span class="section-kicker">Acceso</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
               <RouterLink to="/login" class="primary-action"><LogIn :size="18" /> Iniciar sesion</RouterLink>
@@ -259,7 +294,8 @@ onMounted(loadHome);
 .company-home {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, #fffaf2 0%, var(--vy-bg) 42%, #fff 100%);
+    radial-gradient(circle at top left, rgba(242, 135, 5, 0.14), transparent 24%),
+    linear-gradient(180deg, #fffaf3 0%, #f7efe2 20%, #fff 54%, #fff9f0 100%);
   color: var(--vy-ink);
 }
 
@@ -278,7 +314,13 @@ onMounted(loadHome);
   backdrop-filter: blur(18px);
 }
 
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+}
+
 .home-nav nav,
+.hero-ribbon,
 .hero-actions,
 .login-link,
 .primary-action,
@@ -292,6 +334,11 @@ onMounted(loadHome);
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+.home-nav nav > a,
+.home-nav nav > :deep(a) {
+  transition: background-color .2s ease, color .2s ease, transform .2s ease;
 }
 
 .home-nav nav > a:not(.login-link) {
@@ -329,19 +376,29 @@ onMounted(loadHome);
   color: var(--vy-ink-2);
 }
 
-.home-hero {
-  width: min(100% - 32px, 1240px);
-  min-height: calc(100vh - 104px);
+.hero-shell {
+  width: min(100% - 32px, 1280px);
   margin: 0 auto;
+  padding: 18px 0 28px;
+}
+
+.home-hero {
+  min-height: calc(100vh - 156px);
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(330px, 1fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(340px, 1fr);
   gap: clamp(28px, 5vw, 68px);
   align-items: center;
-  padding: clamp(34px, 6vw, 76px) 0 clamp(28px, 5vw, 56px);
+  padding: clamp(34px, 5vw, 66px);
+  border: 1px solid rgba(117, 87, 44, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 232, 0.92)),
+    linear-gradient(180deg, rgba(242, 135, 5, 0.04), transparent);
+  box-shadow: 0 24px 80px rgba(31, 26, 20, 0.08);
 }
 
 .home-hero.imageLeft {
-  grid-template-columns: minmax(330px, 1fr) minmax(0, 0.92fr);
+  grid-template-columns: minmax(340px, 1fr) minmax(0, 0.92fr);
 }
 
 .home-hero.imageLeft .hero-copy {
@@ -352,21 +409,37 @@ onMounted(loadHome);
   min-width: 0;
 }
 
+.hero-kicker,
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(242, 135, 5, 0.22);
+  border-radius: 999px;
+  background: rgba(242, 135, 5, 0.1);
+  color: var(--vy-orange-deep);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .hero-copy h1 {
-  max-width: 800px;
-  margin-top: 18px;
-  font-size: clamp(44px, 7.6vw, 92px);
-  line-height: 0.94;
+  max-width: 760px;
+  margin-top: 20px;
+  font-size: clamp(42px, 7vw, 84px);
+  line-height: 0.96;
   font-weight: 950;
   overflow-wrap: anywhere;
 }
 
 .hero-copy p {
-  max-width: 690px;
-  margin-top: 22px;
+  max-width: 640px;
+  margin-top: 20px;
   color: var(--vy-ink-2);
-  font-size: clamp(16px, 1.7vw, 21px);
-  line-height: 1.62;
+  font-size: clamp(16px, 1.6vw, 20px);
+  line-height: 1.68;
 }
 
 .hero-actions {
@@ -383,6 +456,7 @@ onMounted(loadHome);
   padding: 0 24px;
   border-radius: 999px;
   font-weight: 950;
+  transition: transform .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease;
 }
 
 .primary-action {
@@ -411,9 +485,9 @@ onMounted(loadHome);
 }
 
 .hero-metrics span {
-  min-height: 82px;
-  padding: 14px;
-  border: 1px solid rgba(242, 135, 5, 0.18);
+  min-height: 92px;
+  padding: 16px;
+  border: 1px solid rgba(222, 191, 146, 0.5);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 14px 36px rgba(31, 26, 20, 0.06);
@@ -438,12 +512,18 @@ onMounted(loadHome);
   line-height: 1.35;
 }
 
+.hero-stage {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
 .hero-visual {
   min-width: 0;
   padding: clamp(10px, 2vw, 18px);
-  border: 1px solid rgba(242, 135, 5, 0.2);
+  border: 1px solid rgba(242, 135, 5, 0.22);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(250, 245, 232, 0.84));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 245, 232, 0.84));
   box-shadow: 0 24px 70px rgba(31, 26, 20, 0.12);
 }
 
@@ -451,77 +531,137 @@ onMounted(loadHome);
   border-radius: 8px !important;
 }
 
+.hero-note {
+  padding: 18px 20px;
+  border: 1px solid rgba(117, 87, 44, 0.12);
+  border-radius: 8px;
+  background: rgba(31, 26, 20, 0.96);
+  color: #fff;
+}
+
+.hero-note strong,
+.hero-note span {
+  display: block;
+}
+
+.hero-note strong {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.hero-note span {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.hero-ribbon {
+  margin-top: 14px;
+  gap: 12px;
+  padding: 18px 22px;
+  border: 1px solid rgba(117, 87, 44, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.hero-ribbon > div {
+  min-width: 180px;
+  flex: 1 1 0;
+}
+
+.hero-ribbon small,
+.hero-ribbon strong {
+  display: block;
+}
+
+.hero-ribbon small {
+  color: var(--vy-ink-3);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.hero-ribbon strong {
+  margin-top: 6px;
+  color: var(--vy-ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+
 .home-sections {
-  width: min(100% - 32px, 1240px);
+  width: min(100% - 32px, 1280px);
   margin: 0 auto;
-  padding: clamp(8px, 2vw, 18px) 0 clamp(54px, 7vw, 92px);
+  padding: 0 0 clamp(54px, 7vw, 92px);
   display: grid;
-  gap: clamp(18px, 2.5vw, 28px);
+  gap: 18px;
 }
 
 .home-section {
   min-width: 0;
-  padding: clamp(24px, 4vw, 46px);
-  border: 1px solid rgba(31, 26, 20, 0.1);
+  padding: clamp(26px, 4vw, 48px);
+  border: 1px solid rgba(31, 26, 20, 0.08);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 54px rgba(31, 26, 20, 0.08);
+  box-shadow: 0 16px 50px rgba(31, 26, 20, 0.06);
   overflow: hidden;
 }
 
-.home-section.text.centered {
+.section-copy {
+  min-width: 0;
+}
+
+.centered-copy {
   width: min(100%, 900px);
   margin: 0 auto;
   text-align: center;
-  background: var(--vy-ink);
+}
+
+.home-section.text.centered {
+  background: linear-gradient(180deg, #211b16 0%, #17130f 100%);
   color: #fff;
-}
-
-.home-section.text.centered .vy-eyebrow {
-  color: var(--vy-orange);
-}
-
-.home-section.text.centered p {
-  color: rgba(255, 255, 255, 0.78);
 }
 
 .home-section.imageText {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.82fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.84fr);
   gap: clamp(20px, 4vw, 42px);
   align-items: center;
 }
 
 .home-section.imageText.imageLeft {
-  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 0.84fr) minmax(0, 1fr);
 }
 
 .home-section.imageText.imageLeft > div:first-child {
   order: 2;
 }
 
-.home-section.imageText :deep(> div:last-child),
+.section-visual :deep(> div),
 .media-grid :deep(> div) {
   border-radius: 8px !important;
 }
 
 .home-section h2 {
   margin-top: 10px;
-  font-size: clamp(30px, 4.2vw, 54px);
-  line-height: 1.02;
+  font-size: clamp(30px, 4.2vw, 56px);
+  line-height: 1.03;
   font-weight: 950;
   overflow-wrap: anywhere;
 }
 
 .home-section p {
-  max-width: 760px;
+  max-width: 780px;
   margin-top: 14px;
   color: var(--vy-ink-2);
   font-size: 16px;
   line-height: 1.72;
 }
 
-.card-grid,
+.benefits-grid,
 .media-grid,
 .social-grid {
   display: grid;
@@ -530,28 +670,45 @@ onMounted(loadHome);
   margin-top: 24px;
 }
 
-.info-card {
-  min-height: 128px;
-  padding: 20px;
-  border: 1px solid rgba(242, 135, 5, 0.18);
+.benefit-item {
+  min-height: 144px;
+  padding: 22px;
+  border: 1px solid rgba(242, 135, 5, 0.14);
   border-radius: 8px;
-  background: linear-gradient(180deg, #fff, var(--vy-surface-2));
-  color: var(--vy-ink-2);
-  font-weight: 850;
-  line-height: 1.55;
+  background: linear-gradient(180deg, #fff, #fbf4e7);
   box-shadow: 0 12px 30px rgba(31, 26, 20, 0.05);
+}
+
+.benefit-item strong,
+.benefit-item span {
+  display: block;
+}
+
+.benefit-item strong {
+  color: var(--vy-ink);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.benefit-item span {
+  margin-top: 10px;
+  color: var(--vy-ink-2);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
 }
 
 .home-section.carousel .media-grid {
   grid-auto-flow: column;
-  grid-auto-columns: minmax(250px, 32%);
+  grid-auto-columns: minmax(260px, 32%);
   grid-template-columns: none;
   overflow-x: auto;
   padding-bottom: 8px;
 }
 
 .home-section.preguntas {
-  background: #17130f;
+  background: linear-gradient(180deg, #1d1711 0%, #14100d 100%);
   color: #fff;
 }
 
@@ -602,18 +759,21 @@ onMounted(loadHome);
 }
 
 .social-grid a {
-  min-height: 82px;
+  min-height: 88px;
   justify-content: space-between;
   gap: 14px;
   padding: 0 20px;
   border-radius: 8px;
-  background: var(--vy-ink);
+  background: linear-gradient(180deg, #211b16, #16120f);
   color: #fff;
   font-weight: 950;
+  border: 1px solid rgba(242, 135, 5, 0.12);
+  transition: transform .2s ease, background-color .2s ease;
 }
 
 .social-grid a:hover {
   background: var(--vy-orange);
+  transform: translateY(-1px);
 }
 
 .contact-block {
@@ -676,6 +836,11 @@ onMounted(loadHome);
 }
 
 @media (max-width: 920px) {
+  .hero-shell,
+  .home-sections {
+    width: min(100% - 24px, 720px);
+  }
+
   .home-hero,
   .home-hero.imageLeft,
   .home-section.imageText,
@@ -689,7 +854,8 @@ onMounted(loadHome);
     order: initial;
   }
 
-  .card-grid,
+  .hero-ribbon,
+  .benefits-grid,
   .media-grid,
   .social-grid {
     grid-template-columns: 1fr;
@@ -726,6 +892,14 @@ onMounted(loadHome);
     width: min(100% - 24px, 520px);
   }
 
+  .hero-shell {
+    padding-top: 12px;
+  }
+
+  .home-hero {
+    padding: 22px 18px;
+  }
+
   .hero-copy h1 {
     font-size: clamp(34px, 12vw, 50px);
   }
@@ -742,6 +916,10 @@ onMounted(loadHome);
 
   .hero-visual {
     padding: 8px;
+  }
+
+  .hero-ribbon {
+    padding: 16px;
   }
 
   .home-section {
