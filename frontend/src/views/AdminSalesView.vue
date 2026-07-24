@@ -122,6 +122,19 @@ function fullName(persona) {
   return `${persona?.nombres || ""} ${persona?.apellidos || ""}`.trim() || "Sin nombre";
 }
 
+function currentUserName() {
+  try {
+    const usuario = JSON.parse(localStorage.getItem("vy_usuario") || "null");
+    const personaName = [usuario?.persona?.nombres, usuario?.persona?.apellidos]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return personaName || usuario?.username || "Usuario del sistema";
+  } catch {
+    return "Usuario del sistema";
+  }
+}
+
 function isImageProof(compra) {
   return String(compra?.comprobantePagoTipo || "").startsWith("image/");
 }
@@ -249,15 +262,18 @@ function escapeHtml(value) {
 
 function buildReceiptHtml(compra) {
   const detalles = (compra.detalles || []).map((detalle) => `
-    <tr>
-      <td>${escapeHtml(detalle.producto?.nombre || "Producto")}</td>
-      <td>${escapeHtml(detalle.producto?.sku || "")}</td>
-      <td class="num">${Number(detalle.cantidad || 0)}</td>
-      <td class="num">Bs. ${money(detalle.precioUnitario)}</td>
-      <td class="num">PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)} / CR ${money(detalle.crUnitario)}</td>
-      <td class="num">Bs. ${money(detalle.subtotal)}</td>
-    </tr>
+    <div class="detail-row">
+      <div>
+        <strong>${escapeHtml(detalle.producto?.nombre || "Producto")}</strong>
+        <span>${escapeHtml(detalle.producto?.sku || "Sin SKU")}</span>
+        <span>${Number(detalle.cantidad || 0)} x Bs. ${money(detalle.precioUnitario)}</span>
+        <span>PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)} / CR ${money(detalle.crUnitario)}</span>
+      </div>
+      <strong>Bs. ${money(detalle.subtotal)}</strong>
+    </div>
   `).join("");
+  const printedAt = formatDateTime(new Date());
+  const printedBy = currentUserName();
 
   return `<!doctype html>
 <html lang="es">
@@ -266,70 +282,75 @@ function buildReceiptHtml(compra) {
   <title>Comprobante Compra #${escapeHtml(compra.id)}</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 34px; background: #f6f2e9; color: #1f1a14; font-family: Arial, sans-serif; }
-    .receipt { max-width: 920px; margin: 0 auto; padding: 34px; background: #fff; border: 1px solid #eadfca; border-radius: 24px; box-shadow: 0 18px 48px rgba(31, 26, 20, .1); }
-    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 22px; border-bottom: 3px solid #f28705; }
-    .logo { width: 180px; object-fit: contain; }
-    h1 { margin: 0; font-size: 28px; letter-spacing: -.03em; }
-    .badge { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 999px; background: #fff3df; color: #f27405; font-weight: 800; font-size: 12px; }
-    .meta { text-align: right; color: #4a4135; font-size: 13px; line-height: 1.5; }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 24px; }
-    .box { padding: 16px; border: 1px solid #eadfca; border-radius: 16px; background: #fffaf0; }
-    .box span { display: block; color: #897f70; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
-    .box strong { display: block; margin-top: 6px; font-size: 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 13px; }
-    th { padding: 11px 9px; background: #1f1a14; color: #fff; text-align: left; font-size: 11px; text-transform: uppercase; }
-    td { padding: 12px 9px; border-bottom: 1px solid #f0eadb; color: #4a4135; }
-    .num { text-align: right; white-space: nowrap; }
-    .totals { margin-top: 22px; margin-left: auto; width: min(360px, 100%); border: 1px solid #eadfca; border-radius: 16px; overflow: hidden; }
-    .totals div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #f0eadb; }
-    .totals div:last-child { border-bottom: 0; background: #f28705; color: #fff; font-size: 18px; font-weight: 900; }
-    footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid #f0eadb; color: #897f70; font-size: 12px; line-height: 1.55; }
+    @page { size: 8cm auto; margin: .5cm; }
+    body { width: 7cm; margin: 0 auto; padding: 0; background: #fff; color: #111; font-family: Arial, sans-serif; font-size: 10pt; }
+    .receipt { width: 7cm; margin: 0 auto; }
+    .center { text-align: center; }
+    .logo { width: 4.3cm; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto .15cm; display: block; }
+    h1 { margin: 0; font-size: 13pt; text-transform: uppercase; }
+    .receipt-id { margin-top: .06cm; font-size: 9pt; font-weight: 700; }
+    .divider { border-top: 1px dashed #111; margin: .25cm 0; }
+    .row { display: flex; justify-content: space-between; gap: .2cm; margin: .08cm 0; }
+    .row span:first-child { font-weight: 700; }
+    .row span:last-child { text-align: right; }
+    .section-title { margin: .18cm 0 .1cm; font-size: 9pt; font-weight: 800; text-transform: uppercase; }
+    .detail-row { display: flex; justify-content: space-between; gap: .18cm; padding: .12cm 0; border-bottom: 1px dashed #bbb; }
+    .detail-row div { min-width: 0; }
+    .detail-row strong { font-size: 9.5pt; }
+    .detail-row div strong { display: block; line-height: 1.2; }
+    .detail-row span { display: block; margin-top: .03cm; color: #333; font-size: 8.5pt; line-height: 1.25; }
+    .detail-row > strong { white-space: nowrap; text-align: right; }
+    .totals { margin-top: .16cm; }
+    .total-pay { margin-top: .12cm; padding-top: .12cm; border-top: 1px solid #111; font-size: 11pt; font-weight: 900; }
+    .signature { margin-top: .65cm; text-align: center; }
+    .signature-line { border-top: 1px solid #111; padding-top: .08cm; }
+    footer { margin-top: .25cm; text-align: center; font-size: 8.5pt; line-height: 1.35; }
     @media print {
-      body { padding: 0; background: #fff; }
-      .receipt { box-shadow: none; border-radius: 0; border: 0; }
+      html, body { width: 7cm; }
     }
   </style>
 </head>
 <body>
   <main class="receipt">
-    <header>
-      <div>
-        <img class="logo" src="${logoFull}" alt="Vida Young">
-        <h1>Comprobante de compra</h1>
-        <span class="badge">Compra #${escapeHtml(compra.id)} · ${escapeHtml(compra.estadoCompra)}</span>
-      </div>
-      <div class="meta">
-        <strong>Fecha de compra</strong><br>${escapeHtml(formatDateTime(compra.fechaCompra))}<br>
-        <strong>Metodo</strong><br>${escapeHtml(compra.metodoPago || "Sin metodo")}
-      </div>
-    </header>
-
-    <section class="grid">
-      <div class="box"><span>Cliente</span><strong>${escapeHtml(fullName(compra.persona))}</strong></div>
-      <div class="box"><span>Documento</span><strong>${escapeHtml(compra.persona?.documento || "Sin documento")}</strong></div>
-      <div class="box"><span>Validado por</span><strong>${escapeHtml(compra.usuarioValidacion || "Sin validar")}</strong></div>
-      <div class="box"><span>Fecha y hora validacion</span><strong>${escapeHtml(formatDateTime(compra.fechaValidacion))}</strong></div>
-      <div class="box"><span>Entregado por</span><strong>${escapeHtml(compra.usuarioEntrega || "Pendiente")}</strong></div>
-      <div class="box"><span>Fecha y hora entrega</span><strong>${escapeHtml(formatDateTime(compra.fechaEntrega))}</strong></div>
+    <section class="center">
+      <img class="logo" src="${logoFull}" alt="Vida Young">
+      <h1>Comprobante de compra</h1>
+      <div class="receipt-id">Compra #${escapeHtml(compra.id)} - ${escapeHtml(compra.estadoCompra || "Sin estado")}</div>
     </section>
 
-    <table>
-      <thead>
-        <tr><th>Producto</th><th>SKU</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Volumen</th><th class="num">Subtotal</th></tr>
-      </thead>
-      <tbody>${detalles}</tbody>
-    </table>
+    <div class="divider"></div>
+    <section>
+      <div class="row"><span>Cliente</span><span>${escapeHtml(fullName(compra.persona))}</span></div>
+      <div class="row"><span>Documento</span><span>${escapeHtml(compra.persona?.documento || "Sin documento")}</span></div>
+      <div class="row"><span>Fecha compra</span><span>${escapeHtml(formatDateTime(compra.fechaCompra))}</span></div>
+      <div class="row"><span>Metodo</span><span>${escapeHtml(compra.metodoPago || "Sin metodo")}</span></div>
+      <div class="row"><span>Validado por</span><span>${escapeHtml(compra.usuarioValidacion || "Sin validar")}</span></div>
+      <div class="row"><span>Fecha validacion</span><span>${escapeHtml(formatDateTime(compra.fechaValidacion))}</span></div>
+      <div class="row"><span>Entregado por</span><span>${escapeHtml(compra.usuarioEntrega || "Pendiente")}</span></div>
+      <div class="row"><span>Fecha entrega</span><span>${escapeHtml(formatDateTime(compra.fechaEntrega))}</span></div>
+      <div class="row"><span>Impreso por</span><span>${escapeHtml(printedBy)}</span></div>
+      <div class="row"><span>Fecha impresion</span><span>${escapeHtml(printedAt)}</span></div>
+    </section>
+
+    <div class="divider"></div>
+    <section>
+      <div class="section-title">Detalle</div>
+      ${detalles || '<div class="detail-row"><div><strong>Sin productos</strong></div><strong>Bs. 0.00</strong></div>'}
+    </section>
 
     <section class="totals">
-      <div><span>Total PV</span><strong>${money(compra.totalPv)}</strong></div>
-      <div><span>Total QP</span><strong>${money(compra.totalQp)}</strong></div>
-      <div><span>Total CR</span><strong>${money(compra.totalCr)}</strong></div>
-      <div><span>Total pagado</span><strong>Bs. ${money(compra.subtotal)}</strong></div>
+      <div class="row"><span>Total PV</span><span>${money(compra.totalPv)}</span></div>
+      <div class="row"><span>Total QP</span><span>${money(compra.totalQp)}</span></div>
+      <div class="row"><span>Total CR</span><span>${money(compra.totalCr)}</span></div>
+      <div class="row total-pay"><span>Total pagado</span><span>Bs. ${money(compra.subtotal)}</span></div>
+    </section>
+
+    <section class="signature">
+      <div class="signature-line">Firma / sello</div>
     </section>
 
     <footer>
-      Comprobante generado por el sistema Vida Young. Documento valido como respaldo interno de compra, validacion y entrega en ventanilla.
+      Comprobante generado por Vida Young.
     </footer>
   </main>
 </body>
@@ -482,18 +503,33 @@ async function downloadReceiptPdf(compra) {
 }
 
 function printReceipt(compra) {
-  const printWindow = window.open("", "_blank", "width=980,height=720");
-  if (!printWindow) {
-    showError("No se pudo imprimir", "El navegador bloqueo la ventana de impresion.");
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "Comprobante de compra");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  document.body.appendChild(iframe);
+
+  const printWindow = iframe.contentWindow;
+  const printDocument = printWindow?.document;
+  if (!printWindow || !printDocument) {
+    iframe.remove();
+    showError("No se pudo imprimir", "El navegador bloqueo la preparacion del comprobante.");
     return;
   }
 
-  printWindow.document.open();
-  printWindow.document.write(buildReceiptHtml(compra));
-  printWindow.document.close();
-  printWindow.focus();
+  printDocument.open();
+  printDocument.write(buildReceiptHtml(compra));
+  printDocument.close();
+  printWindow.onafterprint = () => iframe.remove();
   printWindow.setTimeout(() => {
+    printWindow.focus();
     printWindow.print();
+    printWindow.setTimeout(() => iframe.remove(), 1200);
   }, 400);
 }
 
