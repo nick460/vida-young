@@ -83,6 +83,92 @@ function money(value) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function buildWithdrawalReceiptHtml(receipt) {
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Comprobante de retiro</title>
+  <style>
+    @page { size: 8cm auto; margin: 0.5cm; }
+    * { box-sizing: border-box; }
+    body {
+      width: 7cm;
+      margin: 0;
+      color: #000;
+      background: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      line-height: 1.25;
+    }
+    main { width: 7cm; }
+    h1 {
+      margin: 0 0 0.25cm;
+      text-align: center;
+      font-size: 12pt;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.25cm;
+      padding: 0.08cm 0;
+      border-bottom: 1px dashed #000;
+    }
+    .label { font-weight: 700; }
+    .value { text-align: right; overflow-wrap: anywhere; }
+    .total {
+      margin-top: 0.25cm;
+      padding-top: 0.18cm;
+      border-top: 2px solid #000;
+      font-size: 12pt;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Comprobante de retiro</h1>
+    <div class="row"><span class="label">Persona</span><span class="value">${escapeHtml(receipt.persona)}</span></div>
+    <div class="row"><span class="label">Documento</span><span class="value">${escapeHtml(receipt.documento)}</span></div>
+    <div class="row"><span class="label">Mes</span><span class="value">${escapeHtml(receipt.periodo)}</span></div>
+    <div class="row total"><span>Total retiro</span><span>Bs. ${escapeHtml(money(receipt.total))}</span></div>
+  </main>
+</body>
+</html>`;
+}
+
+function printWithdrawalReceipt(receipt) {
+  const printWindow = window.open("", "_blank", "width=320,height=640");
+  if (!printWindow) {
+    Swal.fire({
+      title: "No se pudo imprimir",
+      text: "El navegador bloqueo la ventana de impresion.",
+      icon: "error",
+      confirmButtonColor: "#F28705"
+    });
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(buildWithdrawalReceiptHtml(receipt));
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.setTimeout(() => {
+    printWindow.print();
+  }, 400);
+}
+
 function destroyPeriodoSelect2() {
   if (!periodoSelect.value) return;
   const element = $(periodoSelect.value);
@@ -283,10 +369,29 @@ function updateRetiroProductoCantidad(item, value) {
 async function registrarRetiro() {
   if (!selectedSaldo.value?.personaId || processing.value) return;
 
+  setMaxRetiro();
+  const receipt = {
+    persona: `${selectedSaldo.value.nombres || ""} ${selectedSaldo.value.apellidos || ""}`.trim(),
+    documento: selectedSaldo.value.documento || "Sin documento",
+    periodo: selectedPeriodo.value?.nombre || "Periodo activo",
+    total: Number(retiroForm.value.montoDinero || 0)
+  };
+
+  const result = await Swal.fire({
+    title: "Registrar retiro",
+    text: `Se registrara el retiro total de Bs. ${money(receipt.total)} para ${receipt.persona}.`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Si, registrar",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#F28705"
+  });
+
+  if (!result.isConfirmed) return;
+
   processing.value = true;
   error.value = "";
   try {
-    setMaxRetiro();
     await apiRequest(`/api/billeteras/persona/${selectedSaldo.value.personaId}/retiros`, {
       method: "POST",
       body: JSON.stringify({
@@ -296,12 +401,18 @@ async function registrarRetiro() {
         observacion: retiroForm.value.observacion || null
       })
     });
-    await Swal.fire({
+    const printResult = await Swal.fire({
       title: "Retiro procesado",
-      text: "Los saldos de la persona fueron actualizados.",
+      text: "Los saldos de la persona fueron actualizados. Ya puedes imprimir el comprobante.",
       icon: "success",
+      showCancelButton: true,
+      confirmButtonText: "Imprimir comprobante",
+      cancelButtonText: "Cerrar",
       confirmButtonColor: "#F28705"
     });
+    if (printResult.isConfirmed) {
+      printWithdrawalReceipt(receipt);
+    }
     closeRetiroModal();
     await loadSaldos();
   } catch (exception) {
