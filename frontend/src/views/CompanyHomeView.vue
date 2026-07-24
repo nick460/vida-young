@@ -934,5 +934,18 @@ onBeforeUnmount(() => {
   .home-section {
     padding: 20px;
   }
+
+  .section-visual :deep(> div),
+  .media-grid :deep(> div) {
+    background: #fff !important;
+  }
+
+  .section-visual :deep(img),
+  .media-grid :deep(img) {
+    object-fit: contain !important;
+    object-position: center center !important;
+    padding: 6px;
+    background: #fff;
+  }
 }
 </style>
