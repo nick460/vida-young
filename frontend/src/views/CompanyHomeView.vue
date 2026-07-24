@@ -5,6 +5,8 @@ import { ChevronRight, ExternalLink, LogIn } from "lucide-vue-next";
 import { VyLogo, VyProductImage } from "../components/ui.js";
 import { loadCompanyHome } from "../services/companyHomeService.js";
 
+const STATIC_BANNER_URL = "/banner-principal.png";
+
 const loading = ref(false);
 const landing = ref(null);
 const scrolled = ref(false);
@@ -148,7 +150,7 @@ onBeforeUnmount(() => {
         <section class="page-banner">
           <div class="page-banner-media">
             <VyProductImage
-              :grad="heroSection?.imageUrl || landing.imageUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 48%, #1F1A14 100%)'"
+              :grad="STATIC_BANNER_URL"
               :h="720"
               big
             />
