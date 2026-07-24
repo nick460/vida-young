@@ -1,14 +1,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { MessageCircle } from "lucide-vue-next";
 import { VyLogo, VyProductImage } from "../components/ui.js";
-import { addCartItem } from "../services/cartService.js";
 import { loadProductCatalog } from "../services/productCatalogService.js";
 import { loadProductLandingConfig, resolveReferralFromRoute } from "../services/productLandingService.js";
 
 const route = useRoute();
-const router = useRouter();
 const loading = ref(false);
 const product = ref(null);
 const products = ref([]);
@@ -110,13 +108,21 @@ function scrollCarouselFromButton(event, direction) {
   scrollCarousel(row, direction, { wrap: true });
 }
 
-function addToCart() {
-  if (!product.value) {
+const distributorStoreHref = computed(() => {
+  const username = String(referral.value.user || referral.value.ref || "").trim();
+  if (!username) {
+    return "";
+  }
+
+  return `https://www.vidayoung.online/tienda/${encodeURIComponent(username)}`;
+});
+
+function goToDistributorStore() {
+  if (!distributorStoreHref.value) {
     return;
   }
 
-  addCartItem(product.value);
-  router.push({ name: "cart" });
+  window.location.href = distributorStoreHref.value;
 }
 
 function boliviaWhatsappNumber() {
@@ -202,7 +208,7 @@ onBeforeUnmount(() => window.clearInterval(carouselTimer.value));
               <MessageCircle :size="17" />
               Consultar por WhatsApp
             </a>
-            <button class="vy-btn vy-btn-dark" type="button" @click="addToCart">
+            <button class="vy-btn vy-btn-dark" type="button" :disabled="!distributorStoreHref" @click="goToDistributorStore">
               {{ heroSection.buttonText || "Comprar ahora" }}
             </button>
           </div>
