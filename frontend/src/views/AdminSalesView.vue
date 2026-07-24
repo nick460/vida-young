@@ -90,11 +90,11 @@ const selectedPersona = computed(() =>
 );
 
 const visibleCompras = computed(() =>
-  compras.value.filter((compra) => ["PENDIENTE", "VALIDADA", "ENTREGADA"].includes(compra.estadoCompra))
+  compras.value.filter((compra) => ["PENDIENTE", "VALIDADA"].includes(compra.estadoCompra))
 );
 
 const visibleComprasPublicas = computed(() =>
-  comprasPublicas.value.filter((compra) => ["PENDIENTE", "VALIDADA", "ENTREGADA"].includes(compra.estadoCompra))
+  comprasPublicas.value.filter((compra) => ["PENDIENTE", "VALIDADA"].includes(compra.estadoCompra))
 );
 
 const ventasTotalPages = computed(() => totalPages(visibleCompras.value.length));
@@ -547,9 +547,7 @@ async function downloadReceiptPdf(compra) {
     ["Cliente", fullName(compra.persona)],
     ["Documento", compra.persona?.documento || "Sin documento"],
     ["Validado por", compra.usuarioValidacion || "Sin validar"],
-    ["Fecha y hora validacion", formatDateTime(compra.fechaValidacion)],
-    ["Entregado por", compra.usuarioEntrega || "Pendiente"],
-    ["Fecha y hora entrega", formatDateTime(compra.fechaEntrega)]
+    ["Fecha y hora validacion", formatDateTime(compra.fechaValidacion)]
   ];
 
   boxes.forEach(([label, value], index) => {
@@ -958,7 +956,7 @@ onMounted(() => {
           <div class="vy-eyebrow">Ventanilla</div>
           <h1>Ventas y validacion de pedidos</h1>
           <p>
-            Registra compras presenciales, valida pagos pendientes y marca entregas en caja.
+            Registra compras presenciales y valida pagos pendientes en caja.
             <strong v-if="selectedPeriodo">Mostrando {{ selectedPeriodo.nombre }}.</strong>
           </p>
         </div>
@@ -1006,7 +1004,7 @@ onMounted(() => {
             <span class="icon-box"><ClipboardCheck :size="18" /></span>
             <div>
               <h2>Ventas realizadas</h2>
-              <p>Compras registradas por tienda o ventanilla, con control de validacion y entrega.</p>
+              <p>Compras registradas por tienda o ventanilla, con control de validacion.</p>
             </div>
           </div>
 
@@ -1058,14 +1056,11 @@ onMounted(() => {
                         <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
                           <CheckCircle2 :size="15" /> Validar
                         </button>
-                        <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'ENTREGADA')">
-                          <PackageCheck :size="15" /> Entregar
-                        </button>
-                        <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
+                        <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
                           <CircleX :size="15" /> Rechazar
                         </button>
                         <button
-                          v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
+                          v-if="compra.estadoCompra === 'VALIDADA'"
                           type="button"
                           @click="closeActionMenu(); openReceiptModal(compra)"
                         >
@@ -1153,10 +1148,7 @@ onMounted(() => {
                         <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); openPublicReviewModal(compra)">
                           <CheckCircle2 :size="15" /> Revisar
                         </button>
-                        <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'ENTREGADA')">
-                          <PackageCheck :size="15" /> Entregar
-                        </button>
-                        <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'RECHAZADA')">
+                        <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'RECHAZADA')">
                           <CircleX :size="15" /> Rechazar
                         </button>
                       </div>
@@ -1325,14 +1317,11 @@ onMounted(() => {
                     <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
                       <CheckCircle2 :size="15" /> Validar
                     </button>
-                    <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'ENTREGADA')">
-                      <PackageCheck :size="15" /> Entregar
-                    </button>
-                    <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
+                    <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
                       <CircleX :size="15" /> Rechazar
                     </button>
                     <button
-                      v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
+                      v-if="compra.estadoCompra === 'VALIDADA'"
                       type="button"
                       @click="closeActionMenu(); openReceiptModal(compra)"
                     >
@@ -1619,8 +1608,6 @@ onMounted(() => {
                 <div><small>Documento</small><strong>{{ receiptModalCompra.persona?.documento || "Sin documento" }}</strong></div>
                 <div><small>Validado por</small><strong>{{ receiptModalCompra.usuarioValidacion || "Sin validar" }}</strong></div>
                 <div><small>Fecha y hora validacion</small><strong>{{ formatDateTime(receiptModalCompra.fechaValidacion) }}</strong></div>
-                <div><small>Entregado por</small><strong>{{ receiptModalCompra.usuarioEntrega || "Pendiente" }}</strong></div>
-                <div><small>Fecha y hora entrega</small><strong>{{ formatDateTime(receiptModalCompra.fechaEntrega) }}</strong></div>
                 <div v-if="compraTieneDescuento(receiptModalCompra)"><small>Descuento</small><strong>Bs. {{ money(compraDescuento(receiptModalCompra)) }}</strong></div>
                 <div v-if="compraTieneDescuento(receiptModalCompra)"><small>Concepto descuento</small><strong>{{ receiptModalCompra.descuentoConcepto || "Sin concepto" }}</strong></div>
               </div>

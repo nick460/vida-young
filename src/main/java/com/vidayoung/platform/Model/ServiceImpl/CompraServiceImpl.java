@@ -40,7 +40,6 @@ public class CompraServiceImpl implements CompraService {
     private static final Set<String> ESTADOS_COMPRA_VALIDOS = Set.of(
             Compra.ESTADO_COMPRA_PENDIENTE,
             Compra.ESTADO_COMPRA_VALIDADA,
-            Compra.ESTADO_COMPRA_ENTREGADA,
             Compra.ESTADO_COMPRA_RECHAZADA,
             Compra.ESTADO_COMPRA_CONFIRMADA
     );
@@ -208,6 +207,7 @@ public class CompraServiceImpl implements CompraService {
                 .orElseThrow(() -> new IllegalArgumentException("Compra no encontrada."));
         String estadoAnterior = compra.getEstadoCompra();
         String estadoNuevo = estado.toUpperCase();
+        validarCambioEstado(estadoAnterior, estadoNuevo);
         compra.setEstadoCompra(estadoNuevo);
         registrarAuditoriaEstado(compra, estadoNuevo, usuarioOperacion);
         compra = compraDao.save(compra);
@@ -228,25 +228,29 @@ public class CompraServiceImpl implements CompraService {
             compra.setUsuarioValidacion(operador);
             compra.setFechaValidacion(ahora);
         }
-
-        if (Compra.ESTADO_COMPRA_ENTREGADA.equals(estadoNuevo)) {
-            if (compra.getFechaValidacion() == null) {
-                compra.setUsuarioValidacion(operador);
-                compra.setFechaValidacion(ahora);
-            }
-            compra.setUsuarioEntrega(operador);
-            compra.setFechaEntrega(ahora);
-        }
     }
 
     private boolean debeProcesarValidacion(String estadoAnterior, String estadoNuevo) {
         boolean antesProcesada = Compra.ESTADO_COMPRA_VALIDADA.equals(estadoAnterior)
-                || Compra.ESTADO_COMPRA_ENTREGADA.equals(estadoAnterior)
                 || Compra.ESTADO_COMPRA_CONFIRMADA.equals(estadoAnterior);
         boolean ahoraProcesada = Compra.ESTADO_COMPRA_VALIDADA.equals(estadoNuevo)
-                || Compra.ESTADO_COMPRA_ENTREGADA.equals(estadoNuevo)
                 || Compra.ESTADO_COMPRA_CONFIRMADA.equals(estadoNuevo);
         return !antesProcesada && ahoraProcesada;
+    }
+
+    private void validarCambioEstado(String estadoAnterior, String estadoNuevo) {
+        if (Compra.ESTADO_COMPRA_ENTREGADA.equals(estadoNuevo)) {
+            throw new IllegalArgumentException("La etapa de entrega ya no esta disponible.");
+        }
+        if (Compra.ESTADO_COMPRA_RECHAZADA.equals(estadoNuevo)
+                && !Compra.ESTADO_COMPRA_PENDIENTE.equals(estadoAnterior)) {
+            throw new IllegalArgumentException("Solo se pueden rechazar compras pendientes.");
+        }
+        if (Compra.ESTADO_COMPRA_VALIDADA.equals(estadoNuevo)
+                && !Compra.ESTADO_COMPRA_PENDIENTE.equals(estadoAnterior)
+                && !Compra.ESTADO_COMPRA_VALIDADA.equals(estadoAnterior)) {
+            throw new IllegalArgumentException("Solo se pueden validar compras pendientes.");
+        }
     }
 
     private void procesarCompraValidada(Compra compra) {

@@ -42,7 +42,6 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
     private static final Set<String> ESTADOS_VALIDOS = Set.of(
             CompraPublica.ESTADO_PENDIENTE,
             CompraPublica.ESTADO_VALIDADA,
-            CompraPublica.ESTADO_ENTREGADA,
             CompraPublica.ESTADO_RECHAZADA
     );
 
@@ -312,6 +311,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 .orElseThrow(() -> new IllegalArgumentException("Compra publica no encontrada."));
         String anterior = compra.getEstadoCompra();
         String nuevo = estado.toUpperCase();
+        validarCambioEstado(anterior, nuevo);
         compra.setEstadoCompra(nuevo);
         registrarAuditoriaEstado(compra, nuevo, usuarioOperacion);
         compra = compraPublicaDao.save(compra);
@@ -461,18 +461,25 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
             compra.setUsuarioValidacion(operador);
             compra.setFechaValidacion(ahora);
         }
-        if (CompraPublica.ESTADO_ENTREGADA.equals(estadoNuevo)) {
-            if (compra.getFechaValidacion() == null) {
-                compra.setUsuarioValidacion(operador);
-                compra.setFechaValidacion(ahora);
-            }
-            compra.setUsuarioEntrega(operador);
-            compra.setFechaEntrega(ahora);
-        }
     }
 
     private boolean esEstadoPagado(String estado) {
-        return CompraPublica.ESTADO_VALIDADA.equals(estado) || CompraPublica.ESTADO_ENTREGADA.equals(estado);
+        return CompraPublica.ESTADO_VALIDADA.equals(estado);
+    }
+
+    private void validarCambioEstado(String estadoAnterior, String estadoNuevo) {
+        if (CompraPublica.ESTADO_ENTREGADA.equals(estadoNuevo)) {
+            throw new IllegalArgumentException("La etapa de entrega ya no esta disponible.");
+        }
+        if (CompraPublica.ESTADO_RECHAZADA.equals(estadoNuevo)
+                && !CompraPublica.ESTADO_PENDIENTE.equals(estadoAnterior)) {
+            throw new IllegalArgumentException("Solo se pueden rechazar pedidos pendientes.");
+        }
+        if (CompraPublica.ESTADO_VALIDADA.equals(estadoNuevo)
+                && !CompraPublica.ESTADO_PENDIENTE.equals(estadoAnterior)
+                && !CompraPublica.ESTADO_VALIDADA.equals(estadoAnterior)) {
+            throw new IllegalArgumentException("Solo se pueden validar pedidos pendientes.");
+        }
     }
 
     private void acreditarGananciaDistribuidor(CompraPublica compra) {
