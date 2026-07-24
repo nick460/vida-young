@@ -360,7 +360,6 @@ function escapeHtml(value) {
 function buildReceiptHtml(compra) {
   const detalles = (compra.detalles || []).map((detalle) => `
     <div class="product-block">
-      <div class="product-separator"></div>
       <div class="detail-row">
         <span class="qty">${Number(detalle.cantidad || 0)}</span>
         <div class="product-info">
@@ -457,7 +456,7 @@ function buildReceiptHtml(compra) {
         <span>Producto</span>
         <span style="text-align:right;">Sub total</span>
       </div>
-      ${detalles || '<div class="product-block"><div class="product-separator"></div><div class="detail-row"><span class="qty">0</span><div class="product-info"><strong>Sin productos</strong></div><strong class="amount">Bs. 0.00</strong></div><div class="product-separator"></div></div>'}
+      ${detalles || '<div class="product-block"><div class="detail-row"><span class="qty">0</span><div class="product-info"><strong>Sin productos</strong></div><strong class="amount">Bs. 0.00</strong></div><div class="product-separator"></div></div>'}
     </section>
 
     <section class="totals">
