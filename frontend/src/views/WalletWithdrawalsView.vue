@@ -296,23 +296,40 @@ function buildWithdrawalReceiptHtml(receipt) {
 }
 
 function printWithdrawalReceipt(receipt) {
-  const printWindow = window.open("", "_blank", "width=320,height=640");
-  if (!printWindow) {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "Comprobante de retiro");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  document.body.appendChild(iframe);
+
+  const printDocument = iframe.contentWindow?.document;
+  if (!printDocument || !iframe.contentWindow) {
+    iframe.remove();
     Swal.fire({
       title: "No se pudo imprimir",
-      text: "El navegador bloqueo la ventana de impresion.",
+      text: "El navegador bloqueo la preparacion del comprobante.",
       icon: "error",
       confirmButtonColor: "#F28705"
     });
     return;
   }
 
-  printWindow.document.open();
-  printWindow.document.write(buildWithdrawalReceiptHtml(receipt));
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.setTimeout(() => {
-    printWindow.print();
+  printDocument.open();
+  printDocument.write(buildWithdrawalReceiptHtml(receipt));
+  printDocument.close();
+
+  iframe.contentWindow.onafterprint = () => {
+    iframe.remove();
+  };
+  iframe.contentWindow.setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    iframe.contentWindow.setTimeout(() => iframe.remove(), 1200);
   }, 400);
 }
 
