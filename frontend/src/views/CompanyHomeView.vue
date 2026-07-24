@@ -419,7 +419,7 @@ onBeforeUnmount(() => {
 }
 
 .home-hero {
-  width: min(100%, 1100px);
+  width: 100%;
   margin: -88px auto 0;
   position: relative;
   z-index: 2;
@@ -453,7 +453,7 @@ onBeforeUnmount(() => {
 .hero-copy h1 {
   max-width: 760px;
   margin-top: 20px;
-  font-size: clamp(42px, 7vw, 84px);
+  font-size: clamp(40px, 6vw, 78px);
   line-height: 0.96;
   font-weight: 950;
   overflow-wrap: anywhere;
@@ -832,7 +832,18 @@ onBeforeUnmount(() => {
 
   .home-hero {
     margin-top: -58px;
-    width: min(100% - 24px, 680px);
+    width: 100%;
+    padding: 26px 24px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(38px, 7vw, 62px);
+  }
+
+  .hero-copy p {
+    max-width: 100%;
+    font-size: 15px;
+    line-height: 1.58;
   }
 
   .home-section.imageText,
@@ -892,13 +903,18 @@ onBeforeUnmount(() => {
   }
 
   .home-hero {
-    width: min(100% - 18px, 520px);
+    width: 100%;
     margin-top: -36px;
     padding: 22px 18px;
   }
 
   .hero-copy h1 {
-    font-size: clamp(34px, 12vw, 50px);
+    font-size: clamp(32px, 11vw, 44px);
+  }
+
+  .hero-copy p {
+    font-size: 14px;
+    line-height: 1.54;
   }
 
   .hero-actions,
