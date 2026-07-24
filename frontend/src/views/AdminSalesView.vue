@@ -53,6 +53,8 @@ const publicVentasPage = ref(1);
 const pageSize = 8;
 
 const cajaCode = ref(generateCajaCode());
+let bodyOverflowBeforeModal = "";
+let pageScrollLocked = false;
 const alertClasses = {
   popup: "vy-swal-popup",
   title: "vy-swal-title",
@@ -101,6 +103,13 @@ const paginatedComprasPublicas = computed(() => paginateItems(visibleComprasPubl
 
 const selectedPeriodo = computed(() =>
   periodosVenta.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
+);
+
+const modalOpen = computed(() =>
+  saleModalOpen.value
+  || Boolean(proofModalCompra.value)
+  || Boolean(receiptModalCompra.value)
+  || Boolean(publicReviewModalCompra.value)
 );
 
 const saleSubtotal = computed(() =>
@@ -184,6 +193,20 @@ function toggleActionMenu(key) {
 
 function closeActionMenu() {
   activeActionMenu.value = "";
+}
+
+function lockPageScroll() {
+  if (pageScrollLocked) return;
+  bodyOverflowBeforeModal = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  pageScrollLocked = true;
+}
+
+function unlockPageScroll() {
+  if (!pageScrollLocked) return;
+  document.body.style.overflow = bodyOverflowBeforeModal;
+  bodyOverflowBeforeModal = "";
+  pageScrollLocked = false;
 }
 
 function totalPages(totalItems) {
@@ -835,6 +858,14 @@ watch(visibleComprasPublicas, () => {
   }
 });
 
+watch(modalOpen, (isOpen) => {
+  if (isOpen) {
+    lockPageScroll();
+  } else {
+    unlockPageScroll();
+  }
+});
+
 watch(selectedPersonaId, (value) => {
   if (!personaSelect.value) return;
   const element = $(personaSelect.value);
@@ -855,6 +886,7 @@ watch(selectedPeriodoId, (value) => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleActionMenuDocumentClick);
+  unlockPageScroll();
   destroyPersonaSelect2();
   destroyPeriodoSelect2();
 });
@@ -1732,14 +1764,18 @@ onMounted(() => {
 .product-picker button span { flex: 1; min-width: 0; }
 .product-picker button b { white-space: nowrap; font-size: 13px; }
 .sale-items { display: grid; gap: 8px; margin-top: 16px; }
-.sale-item { display: grid; grid-template-columns: minmax(0, 1fr) 124px 100px 34px; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--vy-line-2); }
+.sale-item { display: grid; grid-template-columns: minmax(0, 1fr) 136px 100px 34px; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--vy-line-2); }
 .sale-item strong, .sale-item small { display: block; }
 .sale-item strong { font-size: 13px; font-weight: 900; }
 .sale-item small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
-.quantity-stepper { min-height: 36px; border: 1px solid var(--vy-line); border-radius: 10px; background: #fff; display: grid; grid-template-columns: 34px 1fr 34px; overflow: hidden; }
-.quantity-stepper button { width: 34px; height: 34px; border-radius: 0; background: var(--vy-surface-2); color: var(--vy-ink); font-size: 17px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; }
-.quantity-stepper button:hover { background: #fffaf0; color: var(--vy-orange-deep); }
-.quantity-stepper input { width: 100%; min-width: 0; padding: 0 4px; border: 0; border-left: 1px solid var(--vy-line); border-right: 1px solid var(--vy-line); text-align: center; font-weight: 900; outline: 0; }
+.quantity-stepper { min-height: 38px; padding: 3px; border: 1px solid var(--vy-line); border-radius: 999px; background: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.8); display: grid; grid-template-columns: 32px minmax(34px, 1fr) 32px; align-items: center; gap: 3px; }
+.quantity-stepper button { width: 32px; height: 32px; border-radius: 50%; background: var(--vy-surface-2); color: var(--vy-ink-2); border: 1px solid transparent; font-size: 18px; line-height: 1; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; transition: background .15s ease, color .15s ease, border-color .15s ease, transform .15s ease; }
+.quantity-stepper button:hover { background: #fff3df; border-color: rgba(242, 135, 5, .35); color: var(--vy-orange-deep); transform: translateY(-1px); }
+.quantity-stepper button:active { transform: translateY(0); }
+.quantity-stepper input { width: 100%; min-width: 0; height: 32px; padding: 0 2px; border: 0; border-radius: 999px; background: transparent; color: var(--vy-ink); text-align: center; font-size: 13px; font-weight: 900; outline: 0; }
+.quantity-stepper input:focus { background: #fffaf0; box-shadow: 0 0 0 2px rgba(242, 135, 5, .12); }
+.quantity-stepper input::-webkit-outer-spin-button,
+.quantity-stepper input::-webkit-inner-spin-button { margin: 0; appearance: none; }
 .sale-item b { text-align: right; font-size: 13px; }
 .sale-item > button { width: 34px; height: 34px; border-radius: 10px; background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); display: inline-flex; align-items: center; justify-content: center; }
 .discount-box { margin-top: 16px; padding: 14px; border: 1px solid var(--vy-line); border-radius: 14px; background: #fffaf0; }
