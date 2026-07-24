@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
         <section class="page-banner">
           <div class="page-banner-media">
             <picture>
-              <source :srcset="STATIC_BANNER_MOBILE_URL" media="(max-width: 680px)" />
+              <source :srcset="STATIC_BANNER_MOBILE_URL" media="(max-width: 920px)" />
               <img class="page-banner-image" :src="STATIC_BANNER_URL" alt="Banner principal Vidayoung" />
             </picture>
           </div>
@@ -827,7 +827,7 @@ onBeforeUnmount(() => {
   }
 
   .page-banner-image {
-    object-position: center 18%;
+    object-position: center top;
   }
 
   .home-hero {
