@@ -23,6 +23,7 @@ import {
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import logoFull from "../assets/logoFull.png";
+import logoMark from "../assets/logoMark.png";
 
 select2($);
 
@@ -430,10 +431,8 @@ function buildReceiptHtml(compra) {
 <body>
   <main class="receipt">
     <section class="center">
-      <img class="logo" src="${logoFull}" alt="Vida Young">
+      <img class="logo" src="${logoMark}" alt="Vida Young">
     </section>
-
-    <div class="divider"></div>
     <section class="center">
       <div class="brand-name">VIDAYOUNG S.R.L.</div>
       <div class="company-meta">TELEFONO: +591 66880316</div>
