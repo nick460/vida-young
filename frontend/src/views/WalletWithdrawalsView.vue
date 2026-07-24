@@ -477,7 +477,8 @@ async function loadProductos() {
 
 async function loadSelectedWallet() {
   if (!selectedSaldo.value?.personaId) return;
-  selectedWallet.value = await apiRequest(`/api/billeteras/persona/${selectedSaldo.value.personaId}`);
+  const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
+  selectedWallet.value = await apiRequest(`/api/billeteras/persona/${selectedSaldo.value.personaId}${query}`);
 }
 
 async function openRetiroModal(saldo) {
@@ -595,6 +596,7 @@ async function registrarRetiro() {
       body: JSON.stringify({
         montoDinero: totalRetiro,
         montoProductos: 0,
+        periodoId: selectedPeriodoId.value ? Number(selectedPeriodoId.value) : null,
         productos: [],
         observacion: retiroForm.value.observacion || null
       })

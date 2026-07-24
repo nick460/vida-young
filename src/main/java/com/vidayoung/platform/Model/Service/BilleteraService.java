@@ -36,6 +36,8 @@ public interface BilleteraService {
 
     RetiroBilletera registrarRetiro(Long personaId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);
 
+    RetiroBilletera registrarRetiro(Long personaId, Long periodoId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);
+
     void sincronizarSaldoProductosRecompensa(Long recompensaId);
 
     int vencerHistorialMembresiasExpiradas();

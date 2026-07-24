@@ -321,11 +321,26 @@ public class BilleteraServiceImpl implements BilleteraService {
             List<ProductoRetiroRequest> productosRetiro,
             String observacion
     ) {
+        return registrarRetiro(personaId, null, montoDinero, montoProductos, productosRetiro, observacion);
+    }
+
+    @Override
+    @Transactional
+    public RetiroBilletera registrarRetiro(
+            Long personaId,
+            Long periodoId,
+            BigDecimal montoDinero,
+            BigDecimal montoProductos,
+            List<ProductoRetiroRequest> productosRetiro,
+            String observacion
+    ) {
         Persona persona = personaDao.findById(personaId)
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
                 .orElseThrow(() -> new IllegalArgumentException("Persona no encontrada."));
         Billetera billetera = asegurarBilletera(persona);
-        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
+        PeriodoGestion periodoRetiro = periodoId == null
+                ? gestionPeriodoService.obtenerPeriodoActivo()
+                : gestionPeriodoService.buscarPorId(periodoId);
         BigDecimal dinero = zeroIfNull(montoDinero);
         List<RetiroProductoCalculado> productosCalculados = calcularProductosRetiro(productosRetiro);
         BigDecimal productos = productosCalculados.isEmpty()
@@ -333,9 +348,10 @@ public class BilleteraServiceImpl implements BilleteraService {
                 : productosCalculados.stream()
                         .map(RetiroProductoCalculado::subtotal)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal efectivoRecompensasDisponible = efectivoRecompensasMensualesDisponible(personaId);
+        BigDecimal efectivoRecompensasDisponible = efectivoRecompensasMensualesDisponible(personaId, periodoRetiro);
         BigDecimal productosRecompensasDisponible = BigDecimal.ZERO;
-        BigDecimal efectivoTotalDisponible = zeroIfNull(billetera.getSaldoDinero()).add(efectivoRecompensasDisponible);
+        BigDecimal efectivoBilleteraPeriodo = efectivoBilleteraDisponiblePeriodo(personaId, periodoRetiro);
+        BigDecimal efectivoTotalDisponible = efectivoBilleteraPeriodo.add(efectivoRecompensasDisponible);
 
         if (dinero.compareTo(BigDecimal.ZERO) < 0 || productos.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Los montos de retiro no pueden ser negativos.");
@@ -353,7 +369,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             throw new IllegalArgumentException("La persona no tiene productos canjeables suficientes para retirar.");
         }
 
-        CierreMensualBilletera cierrePersonal = registrarCierrePersonalPagado(persona, billetera, periodoActivo);
+        CierreMensualBilletera cierrePersonal = registrarCierrePersonalPagado(persona, billetera, periodoRetiro);
 
         RetiroBilletera retiro = retiroBilleteraDao.save(RetiroBilletera.builder()
                 .persona(persona)
@@ -362,7 +378,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .estadoRetiro(RetiroBilletera.ESTADO_PROCESADO)
                 .fechaRetiro(LocalDateTime.now())
                 .observacion(normalizarTexto(observacion))
-                .periodo(periodoActivo)
+                .periodo(periodoRetiro)
                 .build());
 
         for (RetiroProductoCalculado item : productosCalculados) {
@@ -377,7 +393,7 @@ public class BilleteraServiceImpl implements BilleteraService {
         }
 
         if (dinero.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal desdeBilletera = dinero.min(zeroIfNull(billetera.getSaldoDinero()));
+            BigDecimal desdeBilletera = dinero.min(efectivoBilleteraPeriodo).min(zeroIfNull(billetera.getSaldoDinero()));
             BigDecimal desdeRecompensas = dinero.subtract(desdeBilletera);
             if (desdeBilletera.compareTo(BigDecimal.ZERO) > 0) {
                 billetera.setSaldoDinero(zeroIfNull(billetera.getSaldoDinero()).subtract(desdeBilletera));
@@ -390,10 +406,10 @@ public class BilleteraServiceImpl implements BilleteraService {
                         .referenciaId(retiro.getId())
                         .monto(desdeBilletera.negate())
                         .saldoResultado(billetera.getSaldoDinero())
-                        .periodo(periodoActivo)
+                        .periodo(periodoRetiro)
                         .build());
             }
-            retirarEfectivoRecompensas(personaId, desdeRecompensas);
+            retirarEfectivoRecompensas(personaId, periodoRetiro, desdeRecompensas);
             carteraEmpresaService.registrarEgreso(
                     "RETIRO_BILLETERA",
                     retiro.getId(),
@@ -406,18 +422,23 @@ public class BilleteraServiceImpl implements BilleteraService {
             retirarProductosRecompensas(personaId, productos);
         }
 
-        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_PV, zeroIfNull(billetera.getSaldoPv()), periodoActivo);
-        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_QP, zeroIfNull(billetera.getSaldoQp()), periodoActivo);
-        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_CR, zeroIfNull(billetera.getSaldoCr()), periodoActivo);
-        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_PRODUCTOS, zeroIfNull(billetera.getSaldoProductos()), periodoActivo);
+        BigDecimal saldoPvPeriodo = saldoPeriodo(personaId, periodoRetiro, MovimientoBilletera.TIPO_PV);
+        BigDecimal saldoQpPeriodo = saldoPeriodo(personaId, periodoRetiro, MovimientoBilletera.TIPO_QP);
+        BigDecimal saldoCrPeriodo = saldoPeriodo(personaId, periodoRetiro, MovimientoBilletera.TIPO_CR);
+        BigDecimal saldoProductosPeriodo = saldoPeriodo(personaId, periodoRetiro, MovimientoBilletera.TIPO_PRODUCTOS);
 
-        billetera.setSaldoDinero(BigDecimal.ZERO);
-        billetera.setSaldoPv(BigDecimal.ZERO);
-        billetera.setSaldoQp(BigDecimal.ZERO);
-        billetera.setSaldoCr(BigDecimal.ZERO);
-        billetera.setSaldoProductos(BigDecimal.ZERO);
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_PV, saldoPvPeriodo, periodoRetiro);
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_QP, saldoQpPeriodo, periodoRetiro);
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_CR, saldoCrPeriodo, periodoRetiro);
+        registrarMovimientoCierreSiAplica(billetera, cierrePersonal, MovimientoBilletera.TIPO_PRODUCTOS, saldoProductosPeriodo, periodoRetiro);
+
+        billetera.setSaldoDinero(zeroIfNull(billetera.getSaldoDinero()).max(BigDecimal.ZERO));
+        billetera.setSaldoPv(zeroIfNull(billetera.getSaldoPv()).subtract(saldoPvPeriodo).max(BigDecimal.ZERO));
+        billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).subtract(saldoQpPeriodo).max(BigDecimal.ZERO));
+        billetera.setSaldoCr(zeroIfNull(billetera.getSaldoCr()).subtract(saldoCrPeriodo).max(BigDecimal.ZERO));
+        billetera.setSaldoProductos(zeroIfNull(billetera.getSaldoProductos()).subtract(saldoProductosPeriodo).max(BigDecimal.ZERO));
         billeteraDao.save(billetera);
-        actualizarRangoActual(persona, BigDecimal.ZERO);
+        actualizarRangoActual(persona, billetera.getSaldoQp());
 
         return retiro;
     }
@@ -431,16 +452,20 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .orElseThrow(() -> new IllegalArgumentException("El cierre personal no pudo ser encontrado."));
         }
 
-        BigDecimal saldoQp = zeroIfNull(billetera.getSaldoQp());
+        BigDecimal saldoDinero = efectivoBilleteraDisponiblePeriodo(persona.getId(), periodoActivo);
+        BigDecimal saldoPv = saldoPeriodo(persona.getId(), periodoActivo, MovimientoBilletera.TIPO_PV);
+        BigDecimal saldoQp = saldoPeriodo(persona.getId(), periodoActivo, MovimientoBilletera.TIPO_QP);
+        BigDecimal saldoCr = saldoPeriodo(persona.getId(), periodoActivo, MovimientoBilletera.TIPO_CR);
+        BigDecimal saldoProductos = saldoPeriodo(persona.getId(), periodoActivo, MovimientoBilletera.TIPO_PRODUCTOS);
         Rango rango = rangoAlcanzadoPorQp(saldoQp).orElse(null);
         return cierreMensualBilleteraDao.save(CierreMensualBilletera.builder()
                 .persona(persona)
                 .periodo(periodo)
-                .saldoDinero(zeroIfNull(billetera.getSaldoDinero()))
-                .saldoPv(zeroIfNull(billetera.getSaldoPv()))
+                .saldoDinero(saldoDinero)
+                .saldoPv(saldoPv)
                 .saldoQp(saldoQp)
-                .saldoCr(zeroIfNull(billetera.getSaldoCr()))
-                .saldoProductos(zeroIfNull(billetera.getSaldoProductos()))
+                .saldoCr(saldoCr)
+                .saldoProductos(saldoProductos)
                 .rango(rango)
                 .rangoNombre(rango == null ? null : rango.getNombre())
                 .rangoQpMinimo(rango == null ? null : zeroIfNull(rango.getQpMinimo()))
@@ -667,9 +692,14 @@ public class BilleteraServiceImpl implements BilleteraService {
     }
 
     private BigDecimal efectivoRecompensasMensualesDisponible(Long personaId) {
+        return efectivoRecompensasMensualesDisponible(personaId, null);
+    }
+
+    private BigDecimal efectivoRecompensasMensualesDisponible(Long personaId, PeriodoGestion periodo) {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> periodo == null || recompensa.getPeriodo() != null && periodo.getId().equals(recompensa.getPeriodo().getId()))
                 .filter(recompensa -> Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
                 .map(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado())).max(BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -684,12 +714,16 @@ public class BilleteraServiceImpl implements BilleteraService {
     }
 
     private void retirarEfectivoRecompensas(Long personaId, BigDecimal monto) {
+        retirarEfectivoRecompensas(personaId, null, monto);
+    }
+
+    private void retirarEfectivoRecompensas(Long personaId, PeriodoGestion periodo, BigDecimal monto) {
         BigDecimal pendiente = zeroIfNull(monto);
         if (pendiente.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
 
-        for (Recompensa recompensa : recompensasMensualesCobrables(personaId)) {
+        for (Recompensa recompensa : recompensasMensualesCobrables(personaId, periodo)) {
             BigDecimal disponible = zeroIfNull(recompensa.getMontoEfectivo())
                     .subtract(zeroIfNull(recompensa.getMontoEfectivoRetirado()))
                     .max(BigDecimal.ZERO);
@@ -775,11 +809,32 @@ public class BilleteraServiceImpl implements BilleteraService {
     }
 
     private List<Recompensa> recompensasMensualesCobrables(Long personaId) {
+        return recompensasMensualesCobrables(personaId, null);
+    }
+
+    private List<Recompensa> recompensasMensualesCobrables(Long personaId, PeriodoGestion periodo) {
         return recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> periodo == null || recompensa.getPeriodo() != null && periodo.getId().equals(recompensa.getPeriodo().getId()))
                 .filter(recompensa -> Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
                 .toList();
+    }
+
+    private BigDecimal efectivoBilleteraDisponiblePeriodo(Long personaId, PeriodoGestion periodo) {
+        return saldoPeriodo(personaId, periodo, MovimientoBilletera.TIPO_DINERO);
+    }
+
+    private BigDecimal saldoPeriodo(Long personaId, PeriodoGestion periodo, String tipo) {
+        if (periodo == null || periodo.getId() == null) {
+            return BigDecimal.ZERO;
+        }
+        return movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodo.getId()).stream()
+                .filter(movimiento -> tipo.equals(movimiento.getTipo()))
+                .map(MovimientoBilletera::getMonto)
+                .map(this::zeroIfNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .max(BigDecimal.ZERO);
     }
 
     private BigDecimal zeroIfNull(BigDecimal value) {

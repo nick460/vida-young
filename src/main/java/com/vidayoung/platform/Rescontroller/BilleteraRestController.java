@@ -56,58 +56,64 @@ public class BilleteraRestController {
         if (periodoConsultaId == null) {
             return ResponseEntity.ok(List.of());
         }
+        PeriodoGestion periodoConsulta = gestionPeriodoService.buscarPorId(periodoConsultaId);
         boolean periodoActivoSeleccionado = periodoActivo != null && periodoConsultaId.equals(periodoActivo.getId());
+        Map<Long, PeriodoSaldo> saldosPeriodo = new LinkedHashMap<>();
 
-        if (periodoActivoSeleccionado) {
-            Map<Long, Billetera> billeterasConSaldo = new LinkedHashMap<>();
-            billeteraService.listarBilleterasConSaldos().forEach(billetera ->
-                    billeterasConSaldo.put(billetera.getPersona().getId(), billetera)
-            );
-            recompensaDao.findAll().stream()
-                    .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
-                    .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
-                    .filter(recompensa -> recompensa.getBeneficiario() != null && recompensa.getBeneficiario().getId() != null)
-                    .filter(recompensa -> efectivoMensualDisponible(recompensa.getBeneficiario().getId(), periodoActivo).compareTo(BigDecimal.ZERO) > 0)
-                    .forEach(recompensa -> billeterasConSaldo.computeIfAbsent(
-                            recompensa.getBeneficiario().getId(),
-                            id -> billeteraService.asegurarBilletera(recompensa.getBeneficiario())
-                    ));
+        movimientoBilleteraDao.findByPeriodoIdWithPersona(periodoConsultaId).forEach(movimiento -> {
+            Billetera billetera = movimiento.getBilletera();
+            Persona persona = billetera.getPersona();
+            if (persona == null || persona.getId() == null || retiroBilleteraDao.existsByPersonaIdAndPeriodoId(persona.getId(), periodoConsultaId)) {
+                return;
+            }
+            PeriodoSaldo saldo = saldosPeriodo.computeIfAbsent(persona.getId(), id -> new PeriodoSaldo(persona, billetera.getId()));
+            saldo.agregar(movimiento.getTipo(), zeroIfNull(movimiento.getMonto()));
+        });
 
-            return ResponseEntity.ok(billeterasConSaldo.values().stream()
-                    .map(billetera -> BilleteraSaldoResponse.desdeBilletera(
-                            billetera,
-                            efectivoRecompensasDisponible(billetera.getPersona().getId(), periodoActivo),
-                            BigDecimal.ZERO,
-                            true
-                    ))
-                    .toList());
-        }
+        recompensaDao.findAll().stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> Boolean.TRUE.equals(recompensa.getCobrable()))
+                .filter(recompensa -> recompensa.getBeneficiario() != null && recompensa.getBeneficiario().getId() != null)
+                .filter(recompensa -> recompensa.getPeriodo() != null && periodoConsultaId.equals(recompensa.getPeriodo().getId()))
+                .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
+                .filter(recompensa -> !retiroBilleteraDao.existsByPersonaIdAndPeriodoId(recompensa.getBeneficiario().getId(), periodoConsultaId))
+                .forEach(recompensa -> {
+                    Billetera billetera = billeteraService.asegurarBilletera(recompensa.getBeneficiario());
+                    PeriodoSaldo saldo = saldosPeriodo.computeIfAbsent(recompensa.getBeneficiario().getId(), id -> new PeriodoSaldo(recompensa.getBeneficiario(), billetera.getId()));
+                    saldo.efectivoRecompensas = saldo.efectivoRecompensas.add(efectivoDisponible(recompensa));
+                });
 
-        return ResponseEntity.ok(cierreMensualBilleteraDao.findConSaldosByPeriodoGestionId(periodoConsultaId).stream()
-                .map(cierre -> BilleteraSaldoResponse.desdeCierre(cierre, false))
+        return ResponseEntity.ok(saldosPeriodo.values().stream()
+                .filter(PeriodoSaldo::tieneSaldo)
+                .map(saldo -> BilleteraSaldoResponse.desdePeriodo(saldo, periodoActivoSeleccionado))
                 .toList());
     }
 
     @GetMapping("/persona/{personaId}")
-    public ResponseEntity<BilleteraResumenResponse> resumenPorPersona(@PathVariable Long personaId) {
+    public ResponseEntity<BilleteraResumenResponse> resumenPorPersona(
+            @PathVariable Long personaId,
+            @RequestParam(required = false) Long periodoId
+    ) {
         return personaDao.findById(personaId)
                 .map(persona -> {
                     Billetera billetera = billeteraService.asegurarBilletera(persona);
-                    PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
-                    List<MovimientoBilletera> movimientos = periodoActivo == null
+                    PeriodoGestion periodoConsulta = periodoId == null
+                            ? gestionPeriodoService.buscarPeriodoActivo().orElse(null)
+                            : gestionPeriodoService.buscarPorId(periodoId);
+                    List<MovimientoBilletera> movimientos = periodoConsulta == null
                             ? List.of()
-                            : movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodoActivo.getId());
+                            : movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodoConsulta.getId());
                     return ResponseEntity.ok(new BilleteraResumenResponse(
                             billeteraDesdeMovimientos(billetera, movimientos),
                             movimientos,
                             billeteraService.listarHistorialMembresias(personaId),
                             billeteraService.listarCierresMensuales(personaId),
-                            efectivoRecompensasDisponible(personaId, periodoActivo),
+                            efectivoRecompensasDisponible(personaId, periodoConsulta),
                             BigDecimal.ZERO,
-                            detalleEfectivoMensual(personaId, periodoActivo),
-                            efectivoNivel1Disponible(personaId, periodoActivo),
-                            productosNivel1Disponible(personaId, periodoActivo),
-                            periodoActivo
+                            detalleEfectivoMensual(personaId, periodoConsulta),
+                            efectivoNivel1Disponible(personaId, periodoConsulta),
+                            productosNivel1Disponible(personaId, periodoConsulta),
+                            periodoConsulta
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -157,6 +163,7 @@ public class BilleteraRestController {
     ) {
         return ResponseEntity.ok(billeteraService.registrarRetiro(
                 personaId,
+                request.getPeriodoId(),
                 request.getMontoDinero(),
                 request.getMontoProductos(),
                 (request.getProductos() == null ? List.<ProductoRetiroRequest>of() : request.getProductos()).stream()
@@ -304,8 +311,77 @@ public class BilleteraRestController {
             );
         }
 
+        public static BilleteraSaldoResponse desdePeriodo(PeriodoSaldo saldo, boolean periodoActivo) {
+            Persona persona = saldo.persona;
+            return new BilleteraSaldoResponse(
+                    persona.getId(),
+                    persona.getNombres(),
+                    persona.getApellidos(),
+                    persona.getDocumento(),
+                    saldo.billeteraId,
+                    null,
+                    zeroIfNullStatic(saldo.saldoDinero).max(BigDecimal.ZERO),
+                    zeroIfNullStatic(saldo.saldoPv).max(BigDecimal.ZERO),
+                    zeroIfNullStatic(saldo.saldoQp).max(BigDecimal.ZERO),
+                    zeroIfNullStatic(saldo.saldoCr).max(BigDecimal.ZERO),
+                    zeroIfNullStatic(saldo.saldoProductos).max(BigDecimal.ZERO),
+                    zeroIfNullStatic(saldo.efectivoRecompensas).max(BigDecimal.ZERO),
+                    BigDecimal.ZERO,
+                    periodoActivo,
+                    "PERIODO_SELECCIONADO"
+            );
+        }
+
         private static BigDecimal zeroIfNullStatic(BigDecimal value) {
             return value == null ? BigDecimal.ZERO : value;
+        }
+    }
+
+    private static class PeriodoSaldo {
+
+        private final Persona persona;
+
+        private final Long billeteraId;
+
+        private BigDecimal saldoDinero = BigDecimal.ZERO;
+
+        private BigDecimal saldoPv = BigDecimal.ZERO;
+
+        private BigDecimal saldoQp = BigDecimal.ZERO;
+
+        private BigDecimal saldoCr = BigDecimal.ZERO;
+
+        private BigDecimal saldoProductos = BigDecimal.ZERO;
+
+        private BigDecimal efectivoRecompensas = BigDecimal.ZERO;
+
+        private PeriodoSaldo(Persona persona, Long billeteraId) {
+            this.persona = persona;
+            this.billeteraId = billeteraId;
+        }
+
+        private void agregar(String tipo, BigDecimal monto) {
+            BigDecimal valor = monto == null ? BigDecimal.ZERO : monto;
+            if (MovimientoBilletera.TIPO_DINERO.equals(tipo)) {
+                saldoDinero = saldoDinero.add(valor);
+            } else if (MovimientoBilletera.TIPO_PV.equals(tipo)) {
+                saldoPv = saldoPv.add(valor);
+            } else if (MovimientoBilletera.TIPO_QP.equals(tipo)) {
+                saldoQp = saldoQp.add(valor);
+            } else if (MovimientoBilletera.TIPO_CR.equals(tipo)) {
+                saldoCr = saldoCr.add(valor);
+            } else if (MovimientoBilletera.TIPO_PRODUCTOS.equals(tipo)) {
+                saldoProductos = saldoProductos.add(valor);
+            }
+        }
+
+        private boolean tieneSaldo() {
+            return saldoDinero.max(BigDecimal.ZERO).compareTo(BigDecimal.ZERO) > 0
+                    || saldoPv.max(BigDecimal.ZERO).compareTo(BigDecimal.ZERO) > 0
+                    || saldoQp.max(BigDecimal.ZERO).compareTo(BigDecimal.ZERO) > 0
+                    || saldoCr.max(BigDecimal.ZERO).compareTo(BigDecimal.ZERO) > 0
+                    || saldoProductos.max(BigDecimal.ZERO).compareTo(BigDecimal.ZERO) > 0
+                    || efectivoRecompensas.max(BigDecimal.ZERO).compareTo(BigDecimal.ZERO) > 0;
         }
     }
 
@@ -377,6 +453,8 @@ public class BilleteraRestController {
         private BigDecimal montoDinero;
 
         private BigDecimal montoProductos;
+
+        private Long periodoId;
 
         private List<ProductoRetiroRequest> productos = List.of();
 

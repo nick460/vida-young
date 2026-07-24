@@ -12,6 +12,8 @@ public interface RetiroBilleteraDao extends JpaRepository<RetiroBilletera, Long>
 
     List<RetiroBilletera> findByPersonaIdOrderByFechaRetiroDesc(Long personaId);
 
+    boolean existsByPersonaIdAndPeriodoId(Long personaId, Long periodoId);
+
     @Query("""
             select r from RetiroBilletera r
             join fetch r.persona p
