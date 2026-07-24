@@ -41,6 +41,7 @@ const selectedPeriodo = computed(() =>
   periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
 );
 const isPeriodoActivo = computed(() => selectedPeriodo.value?.estadoPeriodo === "ACTIVO");
+const canRegisterWithdrawals = computed(() => selectedPeriodo.value?.estadoPeriodo !== "CERRADO");
 const canCloseMonth = computed(() => isPeriodoActivo.value && !loading.value && saldos.value.length === 0);
 const filteredSaldos = computed(() => {
   const term = searchTerm.value.trim().toLowerCase();
@@ -482,7 +483,7 @@ async function loadSelectedWallet() {
 }
 
 async function openRetiroModal(saldo) {
-  if (!isPeriodoActivo.value) return;
+  if (!canRegisterWithdrawals.value) return;
   selectedSaldo.value = saldo;
   selectedWallet.value = null;
   selectedProductoId.value = "";
@@ -740,8 +741,11 @@ onBeforeUnmount(() => {
       </header>
 
       <div v-if="error" class="error-box">{{ error }}</div>
-      <div v-if="!isPeriodoActivo" class="info-box">
-        El mes seleccionado no esta activo. Puedes consultar saldos cerrados, pero los retiros solo se registran en el mes activo.
+      <div v-if="selectedPeriodo?.estadoPeriodo === 'CERRADO'" class="info-box">
+        El mes seleccionado esta cerrado. Puedes consultar saldos y comprobantes, pero ya no registrar retiros.
+      </div>
+      <div v-else-if="!isPeriodoActivo" class="info-box">
+        El mes seleccionado esta pendiente de cierre. Puedes registrar retiros pendientes de ese mes.
       </div>
       <div v-else-if="canCloseMonth" class="success-box">
         Todas las personas con saldo mensual fueron cerradas. Ya puedes cerrar el mes de forma definitiva.
@@ -826,7 +830,7 @@ onBeforeUnmount(() => {
                   </span>
                 </td>
                 <td class="actions-cell">
-                  <button v-if="saldo.rowType === 'PENDIENTE'" class="row-withdraw-button" type="button" :disabled="!isPeriodoActivo" @click="openRetiroModal(saldo)">
+                  <button v-if="saldo.rowType === 'PENDIENTE'" class="row-withdraw-button" type="button" :disabled="!canRegisterWithdrawals" @click="openRetiroModal(saldo)">
                     <ArrowDownToLine :size="15" /> Retiro
                   </button>
                   <div v-else class="processed-actions">
