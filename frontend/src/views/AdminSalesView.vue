@@ -11,6 +11,7 @@ import {
   CircleX,
   ClipboardCheck,
   FileText,
+  MoreVertical,
   PackageCheck,
   Plus,
   RefreshCw,
@@ -44,6 +45,7 @@ const periodoSelect = ref(null);
 const proofModalCompra = ref(null);
 const receiptModalCompra = ref(null);
 const publicReviewModalCompra = ref(null);
+const activeActionMenu = ref("");
 
 const cajaCode = ref(generateCajaCode());
 const alertClasses = {
@@ -153,6 +155,18 @@ function openReceiptModal(compra) {
 
 function closeReceiptModal() {
   receiptModalCompra.value = null;
+}
+
+function toggleActionMenu(key) {
+  activeActionMenu.value = activeActionMenu.value === key ? "" : key;
+}
+
+function closeActionMenu() {
+  activeActionMenu.value = "";
+}
+
+function handleActionMenuDocumentClick() {
+  closeActionMenu();
 }
 
 function openPublicReviewModal(compra) {
@@ -762,11 +776,15 @@ watch(selectedPeriodoId, (value) => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener("click", handleActionMenuDocumentClick);
   destroyPersonaSelect2();
   destroyPeriodoSelect2();
 });
 
-onMounted(loadAll);
+onMounted(() => {
+  document.addEventListener("click", handleActionMenuDocumentClick);
+  loadAll();
+});
 </script>
 
 <template>
@@ -846,27 +864,31 @@ onMounted(loadAll);
                 <td><strong>Bs. {{ money(compra.subtotal) }}</strong></td>
                 <td>{{ formatDateTime(compra.fechaCompra) }}</td>
                 <td>
-                  <div class="table-actions">
-                    <button v-if="compra.comprobantePagoUrl" type="button" title="Ver comprobante" @click="openProofModal(compra)">
-                      <FileText :size="15" />
+                  <div class="action-menu" @click.stop>
+                    <button class="action-menu-toggle" type="button" title="Acciones" @click="toggleActionMenu(`venta-${compra.id}`)">
+                      <MoreVertical :size="17" />
                     </button>
-                    <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" title="Validar" @click="updateCompraEstado(compra, 'VALIDADA')">
-                      <CheckCircle2 :size="15" />
-                    </button>
-                    <button type="button" title="Entregar" @click="updateCompraEstado(compra, 'ENTREGADA')">
-                      <PackageCheck :size="15" />
-                    </button>
-                    <button type="button" title="Rechazar" @click="updateCompraEstado(compra, 'RECHAZADA')">
-                      <CircleX :size="15" />
-                    </button>
-                    <button
-                      v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
-                      type="button"
-                      title="Comprobante"
-                      @click="openReceiptModal(compra)"
-                    >
-                      <ClipboardCheck :size="15" />
-                    </button>
+                    <div v-if="activeActionMenu === `venta-${compra.id}`" class="action-menu-panel">
+                      <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
+                        <FileText :size="15" /> Ver pago
+                      </button>
+                      <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
+                        <CheckCircle2 :size="15" /> Validar
+                      </button>
+                      <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'ENTREGADA')">
+                        <PackageCheck :size="15" /> Entregar
+                      </button>
+                      <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
+                        <CircleX :size="15" /> Rechazar
+                      </button>
+                      <button
+                        v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
+                        type="button"
+                        @click="closeActionMenu(); openReceiptModal(compra)"
+                      >
+                        <ClipboardCheck :size="15" /> Comprobante
+                      </button>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -925,19 +947,24 @@ onMounted(loadAll);
                 </td>
                 <td><span class="status-pill">{{ compra.estadoCompra }}</span></td>
                 <td>
-                  <div class="table-actions">
-                    <button v-if="compra.comprobantePagoUrl" type="button" title="Ver comprobante" @click="openProofModal(compra)">
-                      <FileText :size="15" />
+                  <div class="action-menu" @click.stop>
+                    <button class="action-menu-toggle" type="button" title="Acciones" @click="toggleActionMenu(`publica-${compra.id}`)">
+                      <MoreVertical :size="17" />
                     </button>
-                    <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" title="Revisar y validar" @click="openPublicReviewModal(compra)">
-                      <CheckCircle2 :size="15" />
-                    </button>
-                    <button type="button" title="Entregar" @click="updateCompraPublicaEstado(compra, 'ENTREGADA')">
-                      <PackageCheck :size="15" />
-                    </button>
-                    <button type="button" title="Rechazar" @click="updateCompraPublicaEstado(compra, 'RECHAZADA')">
-                      <CircleX :size="15" />
-                    </button>
+                    <div v-if="activeActionMenu === `publica-${compra.id}`" class="action-menu-panel">
+                      <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
+                        <FileText :size="15" /> Ver pago
+                      </button>
+                      <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); openPublicReviewModal(compra)">
+                        <CheckCircle2 :size="15" /> Revisar
+                      </button>
+                      <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'ENTREGADA')">
+                        <PackageCheck :size="15" /> Entregar
+                      </button>
+                      <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'RECHAZADA')">
+                        <CircleX :size="15" /> Rechazar
+                      </button>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -1077,28 +1104,33 @@ onMounted(loadAll);
                 </div>
               </div>
 
-              <button v-if="compra.comprobantePagoUrl" class="proof-link" type="button" @click="openProofModal(compra)">
-                <FileText :size="15" /> Ver comprobante
-              </button>
-
               <footer>
-                <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" class="validate" @click="updateCompraEstado(compra, 'VALIDADA')">
-                  <CheckCircle2 :size="15" /> Validar
-                </button>
-                <button type="button" class="deliver" @click="updateCompraEstado(compra, 'ENTREGADA')">
-                  <PackageCheck :size="15" /> Entregar
-                </button>
-                <button type="button" class="reject" @click="updateCompraEstado(compra, 'RECHAZADA')">
-                  <CircleX :size="15" /> Rechazar
-                </button>
-                <button
-                  v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
-                  type="button"
-                  class="receipt"
-                  @click="openReceiptModal(compra)"
-                >
-                  <FileText :size="15" /> Comprobante
-                </button>
+                <div class="action-menu action-menu-card" @click.stop>
+                  <button class="action-menu-trigger" type="button" @click="toggleActionMenu(`card-${compra.id}`)">
+                    <MoreVertical :size="16" /> Acciones
+                  </button>
+                  <div v-if="activeActionMenu === `card-${compra.id}`" class="action-menu-panel">
+                    <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
+                      <FileText :size="15" /> Ver pago
+                    </button>
+                    <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
+                      <CheckCircle2 :size="15" /> Validar
+                    </button>
+                    <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'ENTREGADA')">
+                      <PackageCheck :size="15" /> Entregar
+                    </button>
+                    <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
+                      <CircleX :size="15" /> Rechazar
+                    </button>
+                    <button
+                      v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
+                      type="button"
+                      @click="closeActionMenu(); openReceiptModal(compra)"
+                    >
+                      <FileText :size="15" /> Comprobante
+                    </button>
+                  </div>
+                </div>
               </footer>
             </section>
 
@@ -1414,7 +1446,7 @@ onMounted(loadAll);
 .period-filter select { width: 100%; }
 .sales-table-card { padding: 20px; }
 .public-sales-card { margin-top: 18px; }
-.sales-table-wrap { overflow-x: auto; }
+.sales-table-wrap { overflow-x: auto; padding-bottom: 76px; }
 .sales-table { width: 100%; border-collapse: collapse; min-width: 980px; font-size: 13px; }
 .sales-table th { padding: 12px 10px; background: var(--vy-ink); color: #fff; text-align: left; font-size: 11px; font-weight: 900; text-transform: uppercase; white-space: nowrap; }
 .sales-table td { padding: 13px 10px; border-bottom: 1px solid var(--vy-line-2); color: var(--vy-ink-2); vertical-align: middle; }
@@ -1422,9 +1454,14 @@ onMounted(loadAll);
 .sales-table td strong { color: var(--vy-ink); font-weight: 900; }
 .sales-table td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; white-space: nowrap; }
 .status-pill { display: inline-flex; align-items: center; min-height: 26px; padding: 0 9px; border-radius: 999px; background: #fff3df; color: var(--vy-orange-deep); font-size: 11px; font-weight: 900; }
-.table-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.table-actions button { width: 32px; height: 32px; border-radius: 9px; background: var(--vy-surface-2); color: var(--vy-ink-2); border: 1px solid var(--vy-line); display: inline-flex; align-items: center; justify-content: center; }
-.table-actions button:hover { border-color: var(--vy-orange); color: var(--vy-orange-deep); background: #fffaf0; }
+.action-menu { position: relative; display: inline-flex; justify-content: flex-end; }
+.action-menu-toggle { width: 34px; height: 34px; border-radius: 9px; background: var(--vy-surface-2); color: var(--vy-ink-2); border: 1px solid var(--vy-line); display: inline-flex; align-items: center; justify-content: center; }
+.action-menu-toggle:hover, .action-menu-trigger:hover { border-color: var(--vy-orange); color: var(--vy-orange-deep); background: #fffaf0; }
+.action-menu-trigger { min-height: 36px; padding: 0 12px; border-radius: 10px; background: var(--vy-surface-2); color: var(--vy-ink-2); border: 1px solid var(--vy-line); display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 900; }
+.action-menu-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; min-width: 170px; padding: 6px; border: 1px solid var(--vy-line); border-radius: 12px; background: #fff; box-shadow: var(--vy-shadow-lg); }
+.action-menu-panel button { width: 100%; min-height: 34px; padding: 0 9px; border-radius: 8px; background: transparent; color: var(--vy-ink-2); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 900; text-align: left; }
+.action-menu-panel button:hover { background: #fffaf0; color: var(--vy-orange-deep); }
+.sales-table td:last-child { text-align: right; }
 .shell-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr); gap: 18px; align-items: start; }
 .sale-card, .pending-card { padding: 20px; }
 .card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
@@ -1480,8 +1517,7 @@ onMounted(loadAll);
 .details-list { display: grid; gap: 4px; margin-top: 10px; }
 .details-list div { display: flex; justify-content: space-between; gap: 10px; color: var(--vy-ink-2); font-size: 12px; font-weight: 800; }
 .proof-link { width: fit-content; margin-top: 12px; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--vy-line); color: var(--vy-orange-deep); display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 900; }
-.order-card footer { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.order-card footer button { min-height: 36px; padding: 0 11px; border-radius: 10px; display: inline-flex; align-items: center; gap: 7px; color: #fff; font-size: 12px; font-weight: 900; }
+.order-card footer { display: flex; justify-content: flex-end; margin-top: 12px; }
 .validate { background: var(--vy-orange); }
 .deliver { background: var(--vy-success); }
 .reject { background: var(--vy-danger); }

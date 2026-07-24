@@ -769,9 +769,14 @@ public class BilleteraServiceImpl implements BilleteraService {
             return;
         }
 
-        BigDecimal objetivo = BigDecimal.ZERO;
-        BigDecimal registrado = movimientoBilleteraDao
-                .findByReferenciaTipoAndReferenciaIdAndTipo("RECOMPENSA_PRODUCTOS", recompensa.getId(), MovimientoBilletera.TIPO_PRODUCTOS)
+        BigDecimal objetivo = Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()) && Boolean.TRUE.equals(recompensa.getCobrable())
+                ? zeroIfNull(recompensa.getValorProductos())
+                        .subtract(zeroIfNull(recompensa.getValorProductosRetirado()))
+                        .max(BigDecimal.ZERO)
+                : BigDecimal.ZERO;
+        List<MovimientoBilletera> movimientosReferencia = movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaIdAndTipo("RECOMPENSA_PRODUCTOS", recompensa.getId(), MovimientoBilletera.TIPO_PRODUCTOS);
+        BigDecimal registrado = movimientosReferencia
                 .stream()
                 .map(MovimientoBilletera::getMonto)
                 .map(this::zeroIfNull)
@@ -787,18 +792,29 @@ public class BilleteraServiceImpl implements BilleteraService {
                 : recompensa.getPeriodo();
         billetera.setSaldoProductos(zeroIfNull(billetera.getSaldoProductos()).add(diferencia));
         billetera = billeteraDao.save(billetera);
-        movimientoBilleteraDao.save(MovimientoBilletera.builder()
-                .billetera(billetera)
-                .tipo(MovimientoBilletera.TIPO_PRODUCTOS)
-                .concepto(diferencia.compareTo(BigDecimal.ZERO) > 0
-                        ? "Productos canjeables por recompensa #" + recompensa.getId()
-                        : "Ajuste de productos por recompensa #" + recompensa.getId())
-                .referenciaTipo("RECOMPENSA_PRODUCTOS")
-                .referenciaId(recompensa.getId())
-                .monto(diferencia)
-                .saldoResultado(billetera.getSaldoProductos())
-                .periodo(periodoActivo)
-                .build());
+        if (movimientosReferencia.isEmpty()) {
+            movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                    .billetera(billetera)
+                    .tipo(MovimientoBilletera.TIPO_PRODUCTOS)
+                    .concepto("Productos canjeables por recompensa #" + recompensa.getId())
+                    .referenciaTipo("RECOMPENSA_PRODUCTOS")
+                    .referenciaId(recompensa.getId())
+                    .monto(objetivo)
+                    .saldoResultado(billetera.getSaldoProductos())
+                    .periodo(periodoActivo)
+                    .build());
+            return;
+        }
+
+        MovimientoBilletera movimiento = movimientosReferencia.get(0);
+        movimiento.setBilletera(billetera);
+        movimiento.setConcepto(objetivo.compareTo(BigDecimal.ZERO) > 0
+                ? "Productos canjeables por recompensa #" + recompensa.getId()
+                : "Productos no disponibles por recompensa #" + recompensa.getId());
+        movimiento.setMonto(objetivo);
+        movimiento.setSaldoResultado(billetera.getSaldoProductos());
+        movimiento.setPeriodo(periodoActivo);
+        movimientoBilleteraDao.save(movimiento);
     }
 
     private List<Recompensa> recompensasCobrables(Long personaId) {
