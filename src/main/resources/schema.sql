@@ -130,7 +130,7 @@ VALUES
     ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 180),
     ('retiros-billeteras', 'Retiros billeteras', 'ArrowDownToLine', FALSE, 190),
     ('retiros-nivel-1', 'Retiros nivel 1', 'Gift', FALSE, 200),
-    ('wallet', 'Finanzas', 'Wallet', FALSE, 210),
+    ('wallet', 'Billetera', 'Wallet', FALSE, 210),
     ('shop', 'Tienda', 'ShoppingBag', FALSE, 220),
     ('network', 'Mi red', 'Users', FALSE, 230),
     ('rewards', 'Recompensas', 'Gift', FALSE, 240),

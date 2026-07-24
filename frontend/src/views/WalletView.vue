@@ -15,6 +15,8 @@ import { useAuthStore } from "../stores/authStore.js";
 const auth = useAuthStore();
 const loading = ref(false);
 const error = ref("");
+const periodos = ref([]);
+const selectedPeriodoId = ref("");
 const resumen = ref({
   billetera: null,
   movimientos: [],
@@ -25,6 +27,9 @@ const proyeccionActivacion = ref(null);
 const movementFilter = ref("TODOS");
 
 const personaId = computed(() => auth.usuario?.persona?.id || "");
+const selectedPeriodo = computed(() =>
+  periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
+);
 const billetera = computed(() => resumen.value.billetera || {});
 const movimientos = computed(() => resumen.value.movimientos || []);
 const membresias = computed(() => resumen.value.membresias || []);
@@ -42,6 +47,27 @@ const activeMembership = computed(() =>
 const filteredMovimientos = computed(() => {
   if (movementFilter.value === "TODOS") return movimientos.value;
   return movimientos.value.filter((movimiento) => movimiento.tipo === movementFilter.value);
+});
+const groupedMovimientos = computed(() => {
+  const groups = new Map();
+
+  filteredMovimientos.value.forEach((movimiento) => {
+    const isCompra = movimiento.referenciaTipo === "COMPRA" && movimiento.referenciaId;
+    const key = isCompra ? `COMPRA-${movimiento.referenciaId}` : `MOV-${movimiento.id}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        compra: movimiento.compra || null,
+        referenciaTipo: movimiento.referenciaTipo,
+        referenciaId: movimiento.referenciaId,
+        fecha: movimiento.compra?.fechaCompra || movimiento.fechaRegistro,
+        movimientos: []
+      });
+    }
+    groups.get(key).movimientos.push(movimiento);
+  });
+
+  return Array.from(groups.values());
 });
 const movementFilters = [
   { id: "TODOS", label: "Todos" },
@@ -100,8 +126,46 @@ function movementAmount(movimiento) {
   return `${prefix}${money(movimiento.monto)}`;
 }
 
+function groupTitle(group) {
+  if (group.compra) return `Compra #${group.compra.id}`;
+  return group.movimientos[0]?.concepto || "Movimiento";
+}
+
+function groupSubtitle(group) {
+  if (group.compra) {
+    return `${group.compra.metodoPago || "Sin metodo"} - ${group.compra.estadoCompra || "Sin estado"}`;
+  }
+  return group.movimientos[0]?.referenciaTipo || "Movimiento de billetera";
+}
+
 function membershipName(membership) {
   return membership?.nombreActivacion || membership?.plan?.nombre || "Plan";
+}
+
+async function loadPeriodos() {
+  const [activePeriodo, gestiones] = await Promise.all([
+    apiRequest("/api/gestiones/periodos/activo"),
+    apiRequest("/api/gestiones")
+  ]);
+  const periodosPorGestion = await Promise.all(
+    gestiones.map(async (gestion) => {
+      const items = await apiRequest(`/api/gestiones/${gestion.id}/periodos`);
+      return items.map((periodo) => ({ ...periodo, gestion: periodo.gestion || gestion }));
+    })
+  );
+
+  periodos.value = periodosPorGestion
+    .flat()
+    .sort((a, b) => {
+      const gestionA = Number(a.gestion?.anio || 0);
+      const gestionB = Number(b.gestion?.anio || 0);
+      if (gestionA !== gestionB) return gestionB - gestionA;
+      return Number(b.mes || 0) - Number(a.mes || 0);
+    });
+
+  if (!selectedPeriodoId.value) {
+    selectedPeriodoId.value = String(activePeriodo?.id || periodos.value[0]?.id || "");
+  }
 }
 
 async function loadWallet() {
@@ -109,6 +173,10 @@ async function loadWallet() {
   error.value = "";
 
   try {
+    if (!periodos.value.length) {
+      await loadPeriodos();
+    }
+
     if (!personaId.value) {
       await auth.cargarPerfil();
     }
@@ -118,7 +186,8 @@ async function loadWallet() {
       return;
     }
 
-    resumen.value = await apiRequest(`/api/billeteras/persona/${personaId.value}`);
+    const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
+    resumen.value = await apiRequest(`/api/billeteras/persona/${personaId.value}${query}`);
     proyeccionActivacion.value = await apiRequest(`/api/planes-activacion/persona/${personaId.value}/proyeccion`);
   } catch (exception) {
     error.value = exception.message || "No se pudo cargar la billetera.";
@@ -135,14 +204,26 @@ onMounted(loadWallet);
     <main class="workspace">
       <header class="page-header">
         <div>
-          <div class="vy-eyebrow">Finanzas</div>
-          <h1>Mi cartera</h1>
+          <div class="vy-eyebrow">Billetera</div>
+          <h1>Mi billetera</h1>
           <p>Consulta saldos disponibles, puntos de red, membresia y movimientos de tu cuenta.</p>
+          <strong v-if="selectedPeriodo">Mostrando {{ selectedPeriodo.nombre }}.</strong>
         </div>
-        <button class="vy-btn vy-btn-primary" type="button" :disabled="loading" @click="loadWallet">
-          <RefreshCw :size="16" stroke-width="2" />
-          Actualizar
-        </button>
+        <div class="header-actions">
+          <label class="period-filter">
+            <span>Mes</span>
+            <select v-model="selectedPeriodoId" @change="loadWallet">
+              <option value="" disabled>Selecciona un mes</option>
+              <option v-for="periodo in periodos" :key="periodo.id" :value="periodo.id">
+                {{ periodo.nombre }} - Gestion {{ periodo.gestion?.anio || "" }}
+              </option>
+            </select>
+          </label>
+          <button class="vy-btn vy-btn-primary" type="button" :disabled="loading" @click="loadWallet">
+            <RefreshCw :size="16" stroke-width="2" />
+            Actualizar
+          </button>
+        </div>
       </header>
 
       <section class="wallet-overview">
@@ -223,30 +304,49 @@ onMounted(loadWallet);
           </div>
         </header>
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Concepto</th>
-                <th>Fecha</th>
-                <th>Tipo</th>
-                <th>Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="movimiento in filteredMovimientos" :key="movimiento.id">
-                <td>#{{ movimiento.id }}</td>
-                <td>{{ movimiento.concepto }}</td>
-                <td>{{ formatDate(movimiento.fechaRegistro) }}</td>
-                <td><span class="vy-chip vy-chip-success">{{ movimiento.tipo }}</span></td>
-                <td>{{ movementAmount(movimiento) }}</td>
-              </tr>
-              <tr v-if="!filteredMovimientos.length && !loading">
-                <td colspan="5">No hay movimientos registrados.</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="movement-groups">
+          <article v-for="group in groupedMovimientos" :key="group.key" class="movement-group">
+            <header>
+              <div>
+                <h3>{{ groupTitle(group) }}</h3>
+                <p>{{ groupSubtitle(group) }}</p>
+              </div>
+              <div class="movement-date">
+                <span>{{ formatDate(group.fecha) }}</span>
+                <strong v-if="group.compra">Bs. {{ money(group.compra.subtotal) }}</strong>
+              </div>
+            </header>
+
+            <div class="movement-lines">
+              <div v-for="movimiento in group.movimientos" :key="movimiento.id" class="movement-line">
+                <span class="vy-chip vy-chip-success">{{ movimiento.tipo }}</span>
+                <strong>{{ movementAmount(movimiento) }}</strong>
+                <small>{{ movimiento.concepto }}</small>
+              </div>
+            </div>
+
+            <section v-if="group.compra" class="purchase-detail">
+              <div class="purchase-totals">
+                <span>PV {{ money(group.compra.totalPv) }}</span>
+                <span>QP {{ money(group.compra.totalQp) }}</span>
+                <span>CR {{ money(group.compra.totalCr) }}</span>
+              </div>
+              <div v-if="group.compra.detalles?.length" class="purchase-products">
+                <div v-for="detalle in group.compra.detalles" :key="detalle.productoId || detalle.productoNombre" class="purchase-product">
+                  <div>
+                    <strong>{{ detalle.productoNombre || "Producto" }}</strong>
+                    <small>{{ detalle.productoSku || "Sin SKU" }} - {{ detalle.cantidad }} x Bs. {{ money(detalle.precioUnitario) }}</small>
+                    <small>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</small>
+                  </div>
+                  <b>Bs. {{ money(detalle.subtotal) }}</b>
+                </div>
+              </div>
+            </section>
+          </article>
+
+          <div v-if="!groupedMovimientos.length && !loading" class="empty-movements">
+            No hay movimientos registrados.
+          </div>
         </div>
       </section>
 
@@ -390,10 +490,55 @@ onMounted(loadWallet);
   margin-top: 4px;
 }
 
+.page-header strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--vy-orange-deep);
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .page-header .vy-btn,
 .methods-card button {
   border-radius: 12px;
   font-weight: 800;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.period-filter {
+  min-width: 230px;
+  display: grid;
+  gap: 6px;
+}
+
+.period-filter span {
+  color: var(--vy-ink-3);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.period-filter select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--vy-line);
+  border-radius: 12px;
+  background: var(--vy-surface);
+  color: var(--vy-ink);
+  font-weight: 800;
+  outline: none;
+}
+
+.period-filter select:focus {
+  border-color: var(--vy-orange);
+  box-shadow: 0 0 0 3px rgba(242, 135, 5, 0.14);
 }
 
 .wallet-overview {
@@ -720,6 +865,139 @@ onMounted(loadWallet);
   color: #6b4a12;
 }
 
+.movement-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.movement-group {
+  padding: 14px;
+  border: 1px solid var(--vy-line);
+  border-radius: 14px;
+  background: var(--vy-surface-2);
+}
+
+.movement-group > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--vy-line-2);
+}
+
+.movement-group h3 {
+  color: var(--vy-ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.movement-group p {
+  margin-top: 3px;
+  color: var(--vy-ink-3);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.movement-date {
+  text-align: right;
+}
+
+.movement-date span,
+.movement-line small,
+.purchase-product small {
+  display: block;
+  color: var(--vy-ink-3);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.movement-date strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--vy-ink);
+  font-size: 16px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.movement-lines {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.movement-line {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.movement-line strong {
+  color: var(--vy-ink);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.purchase-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--vy-line);
+}
+
+.purchase-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.purchase-totals span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--vy-ink-2);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.purchase-products {
+  display: grid;
+  gap: 8px;
+}
+
+.purchase-product {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.purchase-product strong,
+.purchase-product b {
+  color: var(--vy-ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.purchase-product b {
+  white-space: nowrap;
+}
+
+.empty-movements {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--vy-surface-2);
+  color: var(--vy-ink-3);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -797,8 +1075,32 @@ td:nth-child(3) {
     grid-template-columns: 1fr;
   }
 
+  .header-actions,
+  .period-filter,
+  .header-actions .vy-btn {
+    width: 100%;
+  }
+
   table {
     min-width: 760px;
+  }
+
+  .movement-group > header,
+  .purchase-product {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .movement-date {
+    text-align: left;
+  }
+
+  .movement-line {
+    grid-template-columns: auto 1fr;
+  }
+
+  .movement-line small {
+    grid-column: 1 / -1;
   }
 }
 </style>

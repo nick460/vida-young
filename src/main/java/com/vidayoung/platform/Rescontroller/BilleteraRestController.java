@@ -2,12 +2,15 @@ package com.vidayoung.platform.Rescontroller;
 
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
+import com.vidayoung.platform.Model.Dao.CompraDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDetalleDao;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
+import com.vidayoung.platform.Model.Entity.Compra;
+import com.vidayoung.platform.Model.Entity.CompraDetalle;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Auditoria;
@@ -22,6 +25,8 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -42,6 +47,7 @@ public class BilleteraRestController {
 
     private final BilleteraService billeteraService;
     private final PersonaDao personaDao;
+    private final CompraDao compraDao;
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
     private final RecompensaDao recompensaDao;
@@ -103,9 +109,10 @@ public class BilleteraRestController {
                     List<MovimientoBilletera> movimientos = periodoConsulta == null
                             ? List.of()
                             : movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodoConsulta.getId());
+                    List<BilleteraMovimientoResponse> movimientosResponse = movimientosResponse(movimientos);
                     return ResponseEntity.ok(new BilleteraResumenResponse(
                             billeteraDesdeMovimientos(billetera, movimientos),
-                            movimientos,
+                            movimientosResponse,
                             billeteraService.listarHistorialMembresias(personaId),
                             billeteraService.listarCierresMensuales(personaId),
                             efectivoRecompensasDisponible(personaId, periodoConsulta),
@@ -192,7 +199,7 @@ public class BilleteraRestController {
 
         private final Billetera billetera;
 
-        private final List<MovimientoBilletera> movimientos;
+        private final List<BilleteraMovimientoResponse> movimientos;
 
         private final List<HistorialMembresia> membresias;
 
@@ -228,6 +235,75 @@ public class BilleteraRestController {
         private final String referidoNombre;
 
         private final String referidoDocumento;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class BilleteraMovimientoResponse {
+
+        private final Long id;
+
+        private final String tipo;
+
+        private final String concepto;
+
+        private final String referenciaTipo;
+
+        private final Long referenciaId;
+
+        private final BigDecimal monto;
+
+        private final BigDecimal saldoResultado;
+
+        private final java.time.LocalDateTime fechaRegistro;
+
+        private final CompraMovimientoResponse compra;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class CompraMovimientoResponse {
+
+        private final Long id;
+
+        private final java.time.LocalDateTime fechaCompra;
+
+        private final String estadoCompra;
+
+        private final String metodoPago;
+
+        private final BigDecimal subtotal;
+
+        private final BigDecimal totalPv;
+
+        private final BigDecimal totalQp;
+
+        private final BigDecimal totalCr;
+
+        private final List<CompraDetalleMovimientoResponse> detalles;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class CompraDetalleMovimientoResponse {
+
+        private final Long productoId;
+
+        private final String productoNombre;
+
+        private final String productoSku;
+
+        private final Integer cantidad;
+
+        private final BigDecimal precioUnitario;
+
+        private final BigDecimal pvUnitario;
+
+        private final BigDecimal qpUnitario;
+
+        private final BigDecimal crUnitario;
+
+        private final BigDecimal subtotal;
     }
 
     @Getter
@@ -572,6 +648,67 @@ public class BilleteraRestController {
         reconstruida.setSaldoCr(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_CR));
         reconstruida.setSaldoProductos(BigDecimal.ZERO);
         return reconstruida;
+    }
+
+    private List<BilleteraMovimientoResponse> movimientosResponse(List<MovimientoBilletera> movimientos) {
+        List<Long> compraIds = movimientos.stream()
+                .filter(movimiento -> "COMPRA".equals(movimiento.getReferenciaTipo()))
+                .map(MovimientoBilletera::getReferenciaId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        Map<Long, Compra> comprasPorId = compraIds.isEmpty()
+                ? Map.of()
+                : compraDao.findByIdInWithDetalles(compraIds).stream()
+                        .collect(Collectors.toMap(Compra::getId, Function.identity()));
+
+        return movimientos.stream()
+                .map(movimiento -> movimientoResponse(movimiento, comprasPorId.get(movimiento.getReferenciaId())))
+                .toList();
+    }
+
+    private BilleteraMovimientoResponse movimientoResponse(MovimientoBilletera movimiento, Compra compra) {
+        return new BilleteraMovimientoResponse(
+                movimiento.getId(),
+                movimiento.getTipo(),
+                movimiento.getConcepto(),
+                movimiento.getReferenciaTipo(),
+                movimiento.getReferenciaId(),
+                zeroIfNull(movimiento.getMonto()),
+                zeroIfNull(movimiento.getSaldoResultado()),
+                movimiento.getFechaRegistro(),
+                compra == null || !"COMPRA".equals(movimiento.getReferenciaTipo()) ? null : compraMovimientoResponse(compra)
+        );
+    }
+
+    private CompraMovimientoResponse compraMovimientoResponse(Compra compra) {
+        return new CompraMovimientoResponse(
+                compra.getId(),
+                compra.getFechaCompra(),
+                compra.getEstadoCompra(),
+                compra.getMetodoPago(),
+                zeroIfNull(compra.getSubtotal()),
+                zeroIfNull(compra.getTotalPv()),
+                zeroIfNull(compra.getTotalQp()),
+                zeroIfNull(compra.getTotalCr()),
+                compra.getDetalles().stream()
+                        .map(this::compraDetalleMovimientoResponse)
+                        .toList()
+        );
+    }
+
+    private CompraDetalleMovimientoResponse compraDetalleMovimientoResponse(CompraDetalle detalle) {
+        return new CompraDetalleMovimientoResponse(
+                detalle.getProducto() == null ? null : detalle.getProducto().getId(),
+                detalle.getProducto() == null ? null : detalle.getProducto().getNombre(),
+                detalle.getProducto() == null ? null : detalle.getProducto().getSku(),
+                detalle.getCantidad(),
+                zeroIfNull(detalle.getPrecioUnitario()),
+                zeroIfNull(detalle.getPvUnitario()),
+                zeroIfNull(detalle.getQpUnitario()),
+                zeroIfNull(detalle.getCrUnitario()),
+                zeroIfNull(detalle.getSubtotal())
+        );
     }
 
     private BigDecimal ultimoSaldoPorTipo(List<MovimientoBilletera> movimientos, String tipo) {
