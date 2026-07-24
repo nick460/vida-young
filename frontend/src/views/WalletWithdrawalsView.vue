@@ -603,18 +603,13 @@ async function registrarRetiro() {
     receipt.fechaRetiro = formatDateTime(retiroProcesado?.fechaRetiro);
     receipt.fechaImpresion = formatDateTime();
     receipt.impresoPor = currentUserName();
-    const printResult = await Swal.fire({
+    await Swal.fire({
       title: "Retiro procesado",
-      text: "Los saldos de la persona fueron actualizados. Ya puedes imprimir el comprobante.",
+      text: "Los saldos de la persona fueron actualizados.",
       icon: "success",
-      showCancelButton: true,
-      confirmButtonText: "Imprimir comprobante",
-      cancelButtonText: "Cerrar",
+      confirmButtonText: "Cerrar",
       confirmButtonColor: "#F28705"
     });
-    if (printResult.isConfirmed) {
-      printWithdrawalReceipt(receipt);
-    }
     closeRetiroModal();
     await loadSaldos();
   } catch (exception) {
