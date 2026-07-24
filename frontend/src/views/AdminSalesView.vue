@@ -46,6 +46,9 @@ const proofModalCompra = ref(null);
 const receiptModalCompra = ref(null);
 const publicReviewModalCompra = ref(null);
 const activeActionMenu = ref("");
+const ventasPage = ref(1);
+const publicVentasPage = ref(1);
+const pageSize = 8;
 
 const cajaCode = ref(generateCajaCode());
 const alertClasses = {
@@ -88,6 +91,11 @@ const visibleCompras = computed(() =>
 const visibleComprasPublicas = computed(() =>
   comprasPublicas.value.filter((compra) => ["PENDIENTE", "VALIDADA", "ENTREGADA"].includes(compra.estadoCompra))
 );
+
+const ventasTotalPages = computed(() => totalPages(visibleCompras.value.length));
+const publicVentasTotalPages = computed(() => totalPages(visibleComprasPublicas.value.length));
+const paginatedCompras = computed(() => paginateItems(visibleCompras.value, ventasPage.value));
+const paginatedComprasPublicas = computed(() => paginateItems(visibleComprasPublicas.value, publicVentasPage.value));
 
 const selectedPeriodo = computed(() =>
   periodosVenta.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value))
@@ -163,6 +171,32 @@ function toggleActionMenu(key) {
 
 function closeActionMenu() {
   activeActionMenu.value = "";
+}
+
+function totalPages(totalItems) {
+  return Math.max(1, Math.ceil(Number(totalItems || 0) / pageSize));
+}
+
+function paginateItems(items, page) {
+  const start = (Math.max(1, page) - 1) * pageSize;
+  return items.slice(start, start + pageSize);
+}
+
+function paginationStart(page, totalItems) {
+  if (!totalItems) return 0;
+  return (Math.max(1, page) - 1) * pageSize + 1;
+}
+
+function paginationEnd(page, totalItems) {
+  return Math.min(Math.max(1, page) * pageSize, totalItems);
+}
+
+function setVentasPage(page) {
+  ventasPage.value = Math.min(Math.max(1, page), ventasTotalPages.value);
+}
+
+function setPublicVentasPage(page) {
+  publicVentasPage.value = Math.min(Math.max(1, page), publicVentasTotalPages.value);
 }
 
 function handleActionMenuDocumentClick() {
@@ -759,6 +793,18 @@ watch(periodosVenta, () => {
   initPeriodoSelect2();
 });
 
+watch(visibleCompras, () => {
+  if (ventasPage.value > ventasTotalPages.value) {
+    ventasPage.value = ventasTotalPages.value;
+  }
+});
+
+watch(visibleComprasPublicas, () => {
+  if (publicVentasPage.value > publicVentasTotalPages.value) {
+    publicVentasPage.value = publicVentasTotalPages.value;
+  }
+});
+
 watch(selectedPersonaId, (value) => {
   if (!personaSelect.value) return;
   const element = $(personaSelect.value);
@@ -768,6 +814,8 @@ watch(selectedPersonaId, (value) => {
 });
 
 watch(selectedPeriodoId, (value) => {
+  ventasPage.value = 1;
+  publicVentasPage.value = 1;
   if (!periodoSelect.value) return;
   const element = $(periodoSelect.value);
   if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
@@ -809,175 +857,217 @@ onMounted(() => {
               </option>
             </select>
           </label>
-          <button class="vy-btn vy-btn-ghost" type="button" @click="loadAll">
-            <RefreshCw :size="15" /> Actualizar
-          </button>
-          <button class="vy-btn vy-btn-primary" type="button" @click="openSaleModal">
-            <Plus :size="16" /> Nueva venta
+          <button class="refresh-action" type="button" :disabled="loading" @click="loadAll">
+            <RefreshCw :class="{ spinning: loading }" :size="15" /> {{ loading ? "Actualizando" : "Actualizar" }}
           </button>
         </div>
       </header>
 
       <div v-if="error" class="error-box">{{ error }}</div>
-      <div v-if="loading" class="loading-box">Cargando ventanilla...</div>
-
-      <section class="vy-card sales-table-card">
-        <div class="card-title">
-          <span class="icon-box"><ClipboardCheck :size="18" /></span>
-          <div>
-            <h2>Ventas realizadas</h2>
-            <p>Compras registradas por tienda o ventanilla, con control de validacion y entrega.</p>
+      <section v-if="loading" class="ventanilla-skeleton" aria-label="Cargando ventanilla">
+        <article v-for="section in 2" :key="section" class="vy-card skeleton-card">
+          <div class="skeleton-title">
+            <span class="skeleton-block skeleton-icon"></span>
+            <div>
+              <span class="skeleton-block skeleton-heading"></span>
+              <span class="skeleton-block skeleton-subtitle"></span>
+            </div>
           </div>
-        </div>
 
-        <div class="sales-table-wrap">
-          <table class="sales-table">
-            <thead>
-              <tr>
-                <th>Compra</th>
-                <th>Cliente</th>
-                <th>Metodo</th>
-                <th>Estado</th>
-                <th>Volumen</th>
-                <th>Total</th>
-                <th>Fecha</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="compra in visibleCompras" :key="compra.id">
-                <td>
-                  <strong>#{{ compra.id }}</strong>
-                  <small v-if="compra.codigoPago">Caja {{ compra.codigoPago }}</small>
-                </td>
-                <td>
-                  <strong>{{ fullName(compra.persona) }}</strong>
-                  <small>{{ compra.persona?.documento || "Sin documento" }}</small>
-                </td>
-                <td>{{ compra.metodoPago || "Sin metodo" }}</td>
-                <td><span class="status-pill">{{ compra.estadoCompra }}</span></td>
-                <td>
-                  <small>PV {{ money(compra.totalPv) }}</small>
-                  <small>QP {{ money(compra.totalQp) }}</small>
-                  <small>CR {{ money(compra.totalCr) }}</small>
-                </td>
-                <td><strong>Bs. {{ money(compra.subtotal) }}</strong></td>
-                <td>{{ formatDateTime(compra.fechaCompra) }}</td>
-                <td>
-                  <div class="action-menu" @click.stop>
-                    <button class="action-menu-toggle" type="button" title="Acciones" @click="toggleActionMenu(`venta-${compra.id}`)">
-                      <MoreVertical :size="17" />
-                    </button>
-                    <div v-if="activeActionMenu === `venta-${compra.id}`" class="action-menu-panel">
-                      <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
-                        <FileText :size="15" /> Ver pago
-                      </button>
-                      <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
-                        <CheckCircle2 :size="15" /> Validar
-                      </button>
-                      <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'ENTREGADA')">
-                        <PackageCheck :size="15" /> Entregar
-                      </button>
-                      <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
-                        <CircleX :size="15" /> Rechazar
-                      </button>
-                      <button
-                        v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
-                        type="button"
-                        @click="closeActionMenu(); openReceiptModal(compra)"
-                      >
-                        <ClipboardCheck :size="15" /> Comprobante
-                      </button>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div v-if="!visibleCompras.length" class="empty-state">
-            <PackageCheck :size="28" />
-            <strong>No hay ventas registradas</strong>
-            <span>Cuando llegue una compra por tienda o ventanilla aparecera aqui.</span>
+          <div class="skeleton-table">
+            <div class="skeleton-row skeleton-row-head">
+              <span v-for="column in 8" :key="column" class="skeleton-block"></span>
+            </div>
+            <div v-for="row in 5" :key="row" class="skeleton-row">
+              <span v-for="column in 8" :key="column" class="skeleton-block"></span>
+            </div>
           </div>
-        </div>
+        </article>
       </section>
 
-      <section class="vy-card sales-table-card public-sales-card">
-        <div class="card-title">
-          <span class="icon-box"><Store :size="18" /></span>
-          <div>
-            <h2>Ventas publicas por distribuidor</h2>
-            <p>Pedidos hechos desde links publicos; al validar se acredita la ganancia al distribuidor.</p>
+      <template v-else>
+        <section class="vy-card sales-table-card">
+          <div class="card-title">
+            <span class="icon-box"><ClipboardCheck :size="18" /></span>
+            <div>
+              <h2>Ventas realizadas</h2>
+              <p>Compras registradas por tienda o ventanilla, con control de validacion y entrega.</p>
+            </div>
           </div>
-        </div>
 
-        <div class="sales-table-wrap">
-          <table class="sales-table">
-            <thead>
-              <tr>
-                <th>Pedido</th>
-                <th>Cliente</th>
-                <th>Distribuidor</th>
-                <th>Tipo</th>
-                <th>Total</th>
-                <th>Empresa</th>
-                <th>Distribuidor</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="compra in visibleComprasPublicas" :key="compra.id">
-                <td><strong>#{{ compra.id }}</strong></td>
-                <td>
-                  <strong>{{ compra.clienteNombres }} {{ compra.clienteApellidos }}</strong>
-                  <small>{{ compra.clienteTelefono || compra.clienteEmail || "Sin contacto" }}</small>
-                </td>
-                <td>
-                  <strong>{{ fullName(compra.distribuidor) }}</strong>
-                  <small>{{ compra.distribuidor?.documento || "Sin documento" }}</small>
-                </td>
-                <td>{{ compra.tipoCliente?.nombre || "Cliente" }}</td>
-                <td><strong>Bs. {{ money(compra.totalCliente) }}</strong></td>
-                <td>Bs. {{ money(compra.totalEmpresa) }}</td>
-                <td>
-                  <strong>Bs. {{ money(compra.totalGananciaDistribuidor) }}</strong>
-                  <small v-if="Number(compra.totalDescuento || 0) > 0">Desc. Bs. {{ money(compra.totalDescuento) }}</small>
-                </td>
-                <td><span class="status-pill">{{ compra.estadoCompra }}</span></td>
-                <td>
-                  <div class="action-menu" @click.stop>
-                    <button class="action-menu-toggle" type="button" title="Acciones" @click="toggleActionMenu(`publica-${compra.id}`)">
-                      <MoreVertical :size="17" />
-                    </button>
-                    <div v-if="activeActionMenu === `publica-${compra.id}`" class="action-menu-panel">
-                      <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
-                        <FileText :size="15" /> Ver pago
+          <div class="sales-table-wrap">
+            <table class="sales-table">
+              <thead>
+                <tr>
+                  <th>Compra</th>
+                  <th>Cliente</th>
+                  <th>Metodo</th>
+                  <th>Estado</th>
+                  <th>Volumen</th>
+                  <th>Total</th>
+                  <th>Fecha</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="compra in paginatedCompras" :key="compra.id">
+                  <td>
+                    <strong>#{{ compra.id }}</strong>
+                    <small v-if="compra.codigoPago">Caja {{ compra.codigoPago }}</small>
+                  </td>
+                  <td>
+                    <strong>{{ fullName(compra.persona) }}</strong>
+                    <small>{{ compra.persona?.documento || "Sin documento" }}</small>
+                  </td>
+                  <td>{{ compra.metodoPago || "Sin metodo" }}</td>
+                  <td><span class="status-pill">{{ compra.estadoCompra }}</span></td>
+                  <td>
+                    <small>PV {{ money(compra.totalPv) }}</small>
+                    <small>QP {{ money(compra.totalQp) }}</small>
+                    <small>CR {{ money(compra.totalCr) }}</small>
+                  </td>
+                  <td><strong>Bs. {{ money(compra.subtotal) }}</strong></td>
+                  <td>{{ formatDateTime(compra.fechaCompra) }}</td>
+                  <td>
+                    <div class="action-menu" @click.stop>
+                      <button class="action-menu-toggle" type="button" title="Acciones" @click="toggleActionMenu(`venta-${compra.id}`)">
+                        <MoreVertical :size="17" />
                       </button>
-                      <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); openPublicReviewModal(compra)">
-                        <CheckCircle2 :size="15" /> Revisar
-                      </button>
-                      <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'ENTREGADA')">
-                        <PackageCheck :size="15" /> Entregar
-                      </button>
-                      <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'RECHAZADA')">
-                        <CircleX :size="15" /> Rechazar
-                      </button>
+                      <div v-if="activeActionMenu === `venta-${compra.id}`" class="action-menu-panel">
+                        <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
+                          <FileText :size="15" /> Ver pago
+                        </button>
+                        <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
+                          <CheckCircle2 :size="15" /> Validar
+                        </button>
+                        <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'ENTREGADA')">
+                          <PackageCheck :size="15" /> Entregar
+                        </button>
+                        <button type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'RECHAZADA')">
+                          <CircleX :size="15" /> Rechazar
+                        </button>
+                        <button
+                          v-if="['VALIDADA', 'ENTREGADA'].includes(compra.estadoCompra)"
+                          type="button"
+                          @click="closeActionMenu(); openReceiptModal(compra)"
+                        >
+                          <ClipboardCheck :size="15" /> Comprobante
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
 
-          <div v-if="!visibleComprasPublicas.length" class="empty-state">
-            <PackageCheck :size="28" />
-            <strong>No hay ventas publicas pendientes</strong>
-            <span>Cuando llegue una venta desde una tienda publica aparecera aqui.</span>
+            <div v-if="visibleCompras.length > pageSize" class="pagination-bar">
+              <span>
+                {{ paginationStart(ventasPage, visibleCompras.length) }}-{{ paginationEnd(ventasPage, visibleCompras.length) }}
+                de {{ visibleCompras.length }}
+              </span>
+              <div>
+                <button type="button" :disabled="ventasPage <= 1" @click="setVentasPage(ventasPage - 1)">Anterior</button>
+                <strong>{{ ventasPage }} / {{ ventasTotalPages }}</strong>
+                <button type="button" :disabled="ventasPage >= ventasTotalPages" @click="setVentasPage(ventasPage + 1)">Siguiente</button>
+              </div>
+            </div>
+
+            <div v-if="!visibleCompras.length" class="empty-state">
+              <PackageCheck :size="28" />
+              <strong>No hay ventas registradas</strong>
+              <span>Cuando llegue una compra por tienda o ventanilla aparecera aqui.</span>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+
+        <section class="vy-card sales-table-card public-sales-card">
+          <div class="card-title">
+            <span class="icon-box"><Store :size="18" /></span>
+            <div>
+              <h2>Ventas publicas por distribuidor</h2>
+              <p>Pedidos hechos desde links publicos; al validar se acredita la ganancia al distribuidor.</p>
+            </div>
+          </div>
+
+          <div class="sales-table-wrap">
+            <table class="sales-table">
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th>Cliente</th>
+                  <th>Distribuidor</th>
+                  <th>Tipo</th>
+                  <th>Total</th>
+                  <th>Empresa</th>
+                  <th>Distribuidor</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="compra in paginatedComprasPublicas" :key="compra.id">
+                  <td><strong>#{{ compra.id }}</strong></td>
+                  <td>
+                    <strong>{{ compra.clienteNombres }} {{ compra.clienteApellidos }}</strong>
+                    <small>{{ compra.clienteTelefono || compra.clienteEmail || "Sin contacto" }}</small>
+                  </td>
+                  <td>
+                    <strong>{{ fullName(compra.distribuidor) }}</strong>
+                    <small>{{ compra.distribuidor?.documento || "Sin documento" }}</small>
+                  </td>
+                  <td>{{ compra.tipoCliente?.nombre || "Cliente" }}</td>
+                  <td><strong>Bs. {{ money(compra.totalCliente) }}</strong></td>
+                  <td>Bs. {{ money(compra.totalEmpresa) }}</td>
+                  <td>
+                    <strong>Bs. {{ money(compra.totalGananciaDistribuidor) }}</strong>
+                    <small v-if="Number(compra.totalDescuento || 0) > 0">Desc. Bs. {{ money(compra.totalDescuento) }}</small>
+                  </td>
+                  <td><span class="status-pill">{{ compra.estadoCompra }}</span></td>
+                  <td>
+                    <div class="action-menu" @click.stop>
+                      <button class="action-menu-toggle" type="button" title="Acciones" @click="toggleActionMenu(`publica-${compra.id}`)">
+                        <MoreVertical :size="17" />
+                      </button>
+                      <div v-if="activeActionMenu === `publica-${compra.id}`" class="action-menu-panel">
+                        <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
+                          <FileText :size="15" /> Ver pago
+                        </button>
+                        <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); openPublicReviewModal(compra)">
+                          <CheckCircle2 :size="15" /> Revisar
+                        </button>
+                        <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'ENTREGADA')">
+                          <PackageCheck :size="15" /> Entregar
+                        </button>
+                        <button type="button" @click="closeActionMenu(); updateCompraPublicaEstado(compra, 'RECHAZADA')">
+                          <CircleX :size="15" /> Rechazar
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div v-if="visibleComprasPublicas.length > pageSize" class="pagination-bar">
+              <span>
+                {{ paginationStart(publicVentasPage, visibleComprasPublicas.length) }}-{{ paginationEnd(publicVentasPage, visibleComprasPublicas.length) }}
+                de {{ visibleComprasPublicas.length }}
+              </span>
+              <div>
+                <button type="button" :disabled="publicVentasPage <= 1" @click="setPublicVentasPage(publicVentasPage - 1)">Anterior</button>
+                <strong>{{ publicVentasPage }} / {{ publicVentasTotalPages }}</strong>
+                <button type="button" :disabled="publicVentasPage >= publicVentasTotalPages" @click="setPublicVentasPage(publicVentasPage + 1)">Siguiente</button>
+              </div>
+            </div>
+
+            <div v-if="!visibleComprasPublicas.length" class="empty-state">
+              <PackageCheck :size="28" />
+              <strong>No hay ventas publicas pendientes</strong>
+              <span>Cuando llegue una venta desde una tienda publica aparecera aqui.</span>
+            </div>
+          </div>
+        </section>
+      </template>
 
       <section v-if="false" class="shell-grid">
         <article class="vy-card sale-card">
@@ -1143,6 +1233,11 @@ onMounted(() => {
         </article>
       </section>
     </main>
+
+    <button class="floating-sale-button" type="button" @click="openSaleModal">
+      <Plus :size="20" />
+      <span>Nueva venta</span>
+    </button>
 
     <Teleport to="body">
       <div v-if="saleModalOpen" class="sale-modal-backdrop" @click.self="closeSaleModal">
@@ -1436,7 +1531,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.workspace { padding: 28px 32px 40px; min-width: 0; }
+.workspace { padding: 28px 32px 110px; min-width: 0; }
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
 .page-header h1 { margin-top: 8px; font-size: 30px; font-weight: 900; }
 .page-header p { margin-top: 5px; color: var(--vy-ink-2); font-size: 14px; }
@@ -1444,6 +1539,66 @@ onMounted(() => {
 .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .period-filter { display: grid; gap: 6px; min-width: 260px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .period-filter select { width: 100%; }
+.refresh-action {
+  min-height: 42px;
+  padding: 0 15px;
+  border: 1px solid var(--vy-line);
+  border-radius: 12px;
+  background: var(--vy-surface);
+  color: var(--vy-ink-2);
+  box-shadow: var(--vy-shadow-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  transition: transform .16s ease, border-color .16s ease, color .16s ease, background .16s ease;
+}
+.refresh-action:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--vy-orange); color: var(--vy-orange-deep); background: #fffaf0; }
+.refresh-action:disabled { cursor: wait; opacity: .7; }
+.refresh-action .spinning { animation: refresh-spin .8s linear infinite; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
+.floating-sale-button {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 90;
+  min-height: 54px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--vy-orange) 0%, var(--vy-orange-deep) 100%);
+  color: #fff;
+  box-shadow: 0 18px 36px rgba(242, 135, 5, .32);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 900;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.floating-sale-button:hover { transform: translateY(-2px); box-shadow: 0 22px 44px rgba(242, 135, 5, .38); }
+.floating-sale-button:active { transform: translateY(0); }
+.ventanilla-skeleton { display: grid; gap: 18px; }
+.skeleton-card { padding: 20px; overflow: hidden; }
+.skeleton-title { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.skeleton-title > div { display: grid; gap: 8px; width: min(360px, 70%); }
+.skeleton-block { display: block; min-width: 0; border-radius: 999px; background: linear-gradient(90deg, #f0eadb 0%, #fff7ea 45%, #f0eadb 90%); background-size: 220% 100%; animation: skeleton-shimmer 1.15s ease-in-out infinite; }
+.skeleton-icon { width: 42px; height: 42px; border-radius: 14px; flex: 0 0 auto; }
+.skeleton-heading { width: 220px; max-width: 100%; height: 18px; }
+.skeleton-subtitle { width: 320px; max-width: 100%; height: 12px; }
+.skeleton-table { display: grid; gap: 1px; min-width: 820px; overflow: hidden; border: 1px solid var(--vy-line-2); border-radius: 14px; background: var(--vy-line-2); }
+.skeleton-row { display: grid; grid-template-columns: .7fr 1.25fr .8fr .75fr 1fr .75fr 1fr .5fr; gap: 12px; align-items: center; min-height: 54px; padding: 0 12px; background: #fff; }
+.skeleton-row-head { min-height: 42px; background: var(--vy-ink); }
+.skeleton-row-head .skeleton-block { height: 10px; background: rgba(255,255,255,.22); animation: none; }
+.skeleton-row:not(.skeleton-row-head) .skeleton-block { height: 13px; }
+.skeleton-row:not(.skeleton-row-head) .skeleton-block:nth-child(2),
+.skeleton-row:not(.skeleton-row-head) .skeleton-block:nth-child(7) { height: 24px; border-radius: 10px; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
 .sales-table-card { padding: 20px; }
 .public-sales-card { margin-top: 18px; }
 .sales-table-wrap { overflow-x: auto; padding-bottom: 76px; }
@@ -1462,6 +1617,41 @@ onMounted(() => {
 .action-menu-panel button { width: 100%; min-height: 34px; padding: 0 9px; border-radius: 8px; background: transparent; color: var(--vy-ink-2); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 900; text-align: left; }
 .action-menu-panel button:hover { background: #fffaf0; color: var(--vy-orange-deep); }
 .sales-table td:last-child { text-align: right; }
+.pagination-bar {
+  min-width: 980px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--vy-line);
+  border-radius: 12px;
+  background: var(--vy-surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pagination-bar span {
+  color: var(--vy-ink-3);
+  font-size: 12px;
+  font-weight: 900;
+}
+.pagination-bar div {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pagination-bar button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--vy-line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--vy-ink-2);
+  font-size: 12px;
+  font-weight: 900;
+}
+.pagination-bar button:hover:not(:disabled) { border-color: var(--vy-orange); color: var(--vy-orange-deep); background: #fffaf0; }
+.pagination-bar button:disabled { opacity: .45; cursor: not-allowed; }
+.pagination-bar strong { color: var(--vy-ink); font-size: 12px; font-weight: 900; white-space: nowrap; }
 .shell-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr); gap: 18px; align-items: start; }
 .sale-card, .pending-card { padding: 20px; }
 .card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
@@ -1609,9 +1799,18 @@ onMounted(() => {
 }
 @media (max-width: 720px) {
   .workspace { padding: 24px 20px 32px; }
+  .workspace { padding-bottom: 110px; }
   .page-header { align-items: stretch; flex-direction: column; }
   .header-actions { align-items: stretch; flex-direction: column; }
   .period-filter { min-width: 0; width: 100%; }
+  .refresh-action { width: 100%; }
+  .floating-sale-button { right: 20px; bottom: 20px; min-height: 52px; padding: 0 18px; }
+  .skeleton-card { padding: 16px; }
+  .skeleton-title { align-items: flex-start; }
+  .skeleton-table { min-width: 0; border: 0; background: transparent; gap: 10px; }
+  .skeleton-row-head { display: none; }
+  .skeleton-row { grid-template-columns: 1fr; gap: 9px; min-height: 132px; padding: 14px; border: 1px solid var(--vy-line-2); border-radius: 14px; }
+  .skeleton-row .skeleton-block:nth-child(n + 5) { display: none; }
   .person-list, .sale-footer, .sale-item { grid-template-columns: 1fr; }
   .sale-item b { text-align: left; }
   .sale-item input, .sale-item button { width: 100%; }

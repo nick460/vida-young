@@ -237,9 +237,9 @@ onMounted(loadWallet);
               </option>
             </select>
           </label>
-          <button class="vy-btn vy-btn-primary" type="button" :disabled="loading" @click="loadWallet">
-            <RefreshCw :size="16" stroke-width="2" />
-            Actualizar
+          <button class="wallet-refresh-button" type="button" :disabled="loading" @click="loadWallet">
+            <RefreshCw :class="{ spinning: loading }" :size="16" stroke-width="2.3" />
+            <span>{{ loading ? "Actualizando" : "Actualizar" }}</span>
           </button>
         </div>
       </header>
@@ -485,6 +485,50 @@ onMounted(loadWallet);
 .period-filter select:focus {
   border-color: var(--vy-orange);
   box-shadow: 0 0 0 3px rgba(242, 135, 5, 0.14);
+}
+
+.wallet-refresh-button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(242, 135, 5, 0.45);
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--vy-orange) 0%, var(--vy-orange-deep) 100%);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(242, 135, 5, 0.22);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+}
+
+.wallet-refresh-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(242, 135, 5, 0.28);
+  filter: saturate(1.05);
+}
+
+.wallet-refresh-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 9px 18px rgba(242, 135, 5, 0.2);
+}
+
+.wallet-refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  box-shadow: none;
+}
+
+.wallet-refresh-button .spinning {
+  animation: refresh-spin 0.8s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .wallet-overview {
@@ -950,7 +994,7 @@ td:nth-child(3) {
 
   .header-actions,
   .period-filter,
-  .header-actions .vy-btn {
+  .wallet-refresh-button {
     width: 100%;
   }
 
