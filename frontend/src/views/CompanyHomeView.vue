@@ -149,11 +149,7 @@ onBeforeUnmount(() => {
       <section class="page-banner-shell">
         <section class="page-banner">
           <div class="page-banner-media">
-            <VyProductImage
-              :grad="STATIC_BANNER_URL"
-              :h="720"
-              big
-            />
+            <img class="page-banner-image" :src="STATIC_BANNER_URL" alt="Banner principal Vidayoung" />
           </div>
           <div class="page-banner-overlay"></div>
         </section>
@@ -390,9 +386,12 @@ onBeforeUnmount(() => {
   inset: 0;
 }
 
-.page-banner-media :deep(> div) {
+.page-banner-image {
+  width: 100%;
   height: 100%;
-  border-radius: 0 !important;
+  display: block;
+  object-fit: cover;
+  object-position: center 22%;
 }
 
 .page-banner-overlay {
@@ -816,6 +815,10 @@ onBeforeUnmount(() => {
     min-height: 52vh;
   }
 
+  .page-banner-image {
+    object-position: center 18%;
+  }
+
   .home-hero {
     margin-top: -58px;
     width: min(100% - 24px, 680px);
@@ -869,7 +872,11 @@ onBeforeUnmount(() => {
   }
 
   .page-banner {
-    min-height: 40vh;
+    min-height: 34vh;
+  }
+
+  .page-banner-image {
+    object-position: center 12%;
   }
 
   .home-hero {
