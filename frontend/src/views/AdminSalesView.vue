@@ -146,6 +146,18 @@ function money(value) {
   });
 }
 
+function compraDescuento(compra) {
+  return Number(compra?.descuentoMonto || 0);
+}
+
+function compraTieneDescuento(compra) {
+  return compraDescuento(compra) > 0;
+}
+
+function compraSubtotalBruto(compra) {
+  return Number(compra?.subtotal || 0) + compraDescuento(compra);
+}
+
 function generateCajaCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -358,6 +370,12 @@ function buildReceiptHtml(compra) {
   `).join("");
   const printedAt = formatDateTime(new Date());
   const printedBy = currentUserName();
+  const discount = compraDescuento(compra);
+  const discountRows = discount > 0 ? `
+      <div class="row"><span>Subtotal</span><span>Bs. ${money(compraSubtotalBruto(compra))}</span></div>
+      <div class="row"><span>Descuento</span><span>- Bs. ${money(discount)}</span></div>
+      <div class="discount-concept"><strong>Concepto descuento:</strong> ${escapeHtml(compra.descuentoConcepto || "Sin concepto")}</div>
+  ` : "";
 
   return `<!doctype html>
 <html lang="es">
@@ -385,6 +403,7 @@ function buildReceiptHtml(compra) {
     .detail-row span { display: block; margin-top: .03cm; color: #333; font-size: 8.5pt; line-height: 1.25; }
     .detail-row > strong { white-space: nowrap; text-align: right; }
     .totals { margin-top: .16cm; }
+    .discount-concept { margin: .08cm 0; color: #333; font-size: 8.5pt; line-height: 1.25; }
     .total-pay { margin-top: .12cm; padding-top: .12cm; border-top: 1px solid #111; font-size: 11pt; font-weight: 900; }
     .signature { margin-top: .65cm; text-align: center; }
     .signature-line { border-top: 1px solid #111; padding-top: .08cm; }
@@ -426,6 +445,7 @@ function buildReceiptHtml(compra) {
       <div class="row"><span>Total PV</span><span>${money(compra.totalPv)}</span></div>
       <div class="row"><span>Total QP</span><span>${money(compra.totalQp)}</span></div>
       <div class="row"><span>Total CR</span><span>${money(compra.totalCr)}</span></div>
+      ${discountRows}
       <div class="row total-pay"><span>Total pagado</span><span>Bs. ${money(compra.subtotal)}</span></div>
     </section>
 
@@ -567,7 +587,9 @@ async function downloadReceiptPdf(compra) {
 
   y += 8;
   doc.setFillColor(255, 250, 240);
-  doc.roundedRect(pageWidth - 86, y, 72, 39, 4, 4, "F");
+  const hasDiscount = compraTieneDescuento(compra);
+  const totalsHeight = hasDiscount ? 62 : 39;
+  doc.roundedRect(pageWidth - 86, y, 72, totalsHeight, 4, 4, "F");
   doc.setTextColor(31, 26, 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -577,11 +599,24 @@ async function downloadReceiptPdf(compra) {
   doc.text(money(compra.totalQp), pageWidth - 18, y + 16, { align: "right" });
   doc.text("Total CR", pageWidth - 80, y + 24);
   doc.text(money(compra.totalCr), pageWidth - 18, y + 24, { align: "right" });
+  let totalY = y + 30;
+  if (hasDiscount) {
+    doc.text("Subtotal", pageWidth - 80, y + 32);
+    doc.text(`Bs. ${money(compraSubtotalBruto(compra))}`, pageWidth - 18, y + 32, { align: "right" });
+    doc.text("Descuento", pageWidth - 80, y + 40);
+    doc.text(`- Bs. ${money(compraDescuento(compra))}`, pageWidth - 18, y + 40, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text(`Concepto: ${compra.descuentoConcepto || "Sin concepto"}`, pageWidth - 80, y + 48, { maxWidth: 62 });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    totalY = y + 53;
+  }
   doc.setFillColor(242, 135, 5);
-  doc.roundedRect(pageWidth - 86, y + 30, 72, 12, 4, 4, "F");
+  doc.roundedRect(pageWidth - 86, totalY, 72, 12, 4, 4, "F");
   doc.setTextColor(255, 255, 255);
-  doc.text("Total", pageWidth - 80, y + 38);
-  doc.text(`Bs. ${money(compra.subtotal)}`, pageWidth - 18, y + 38, { align: "right" });
+  doc.text("Total", pageWidth - 80, totalY + 8);
+  doc.text(`Bs. ${money(compra.subtotal)}`, pageWidth - 18, totalY + 8, { align: "right" });
 
   doc.save(`comprobante-compra-${compra.id}.pdf`);
 }
@@ -988,7 +1023,10 @@ onMounted(() => {
                     <small>QP {{ money(compra.totalQp) }}</small>
                     <small>CR {{ money(compra.totalCr) }}</small>
                   </td>
-                  <td><strong>Bs. {{ money(compra.subtotal) }}</strong></td>
+                  <td>
+                    <strong>Bs. {{ money(compra.subtotal) }}</strong>
+                    <small v-if="compraTieneDescuento(compra)">Desc. Bs. {{ money(compraDescuento(compra)) }}</small>
+                  </td>
                   <td>{{ formatDateTime(compra.fechaCompra) }}</td>
                   <td>
                     <div class="action-menu" @click.stop>
@@ -1247,6 +1285,7 @@ onMounted(() => {
                 <span>QP {{ money(compra.totalQp) }}</span>
                 <span>CR {{ money(compra.totalCr) }}</span>
                 <span v-if="compra.codigoPago">Caja {{ compra.codigoPago }}</span>
+                <span v-if="compraTieneDescuento(compra)">Desc. Bs. {{ money(compraDescuento(compra)) }}</span>
               </div>
 
               <div class="details-list">
@@ -1564,6 +1603,8 @@ onMounted(() => {
                 <div><small>Fecha y hora validacion</small><strong>{{ formatDateTime(receiptModalCompra.fechaValidacion) }}</strong></div>
                 <div><small>Entregado por</small><strong>{{ receiptModalCompra.usuarioEntrega || "Pendiente" }}</strong></div>
                 <div><small>Fecha y hora entrega</small><strong>{{ formatDateTime(receiptModalCompra.fechaEntrega) }}</strong></div>
+                <div v-if="compraTieneDescuento(receiptModalCompra)"><small>Descuento</small><strong>Bs. {{ money(compraDescuento(receiptModalCompra)) }}</strong></div>
+                <div v-if="compraTieneDescuento(receiptModalCompra)"><small>Concepto descuento</small><strong>{{ receiptModalCompra.descuentoConcepto || "Sin concepto" }}</strong></div>
               </div>
 
               <div class="receipt-table-wrap">
@@ -1595,6 +1636,8 @@ onMounted(() => {
                 <div><span>Total PV</span><strong>{{ money(receiptModalCompra.totalPv) }}</strong></div>
                 <div><span>Total QP</span><strong>{{ money(receiptModalCompra.totalQp) }}</strong></div>
                 <div><span>Total CR</span><strong>{{ money(receiptModalCompra.totalCr) }}</strong></div>
+                <div v-if="compraTieneDescuento(receiptModalCompra)"><span>Subtotal</span><strong>Bs. {{ money(compraSubtotalBruto(receiptModalCompra)) }}</strong></div>
+                <div v-if="compraTieneDescuento(receiptModalCompra)"><span>Descuento</span><strong>- Bs. {{ money(compraDescuento(receiptModalCompra)) }}</strong></div>
                 <div><span>Total pagado</span><strong>Bs. {{ money(receiptModalCompra.subtotal) }}</strong></div>
               </div>
             </div>
