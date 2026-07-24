@@ -57,15 +57,15 @@ function serializeFaqItem(item) {
 
 function addSection(type = "text") {
   const templates = {
-    hero: { title: form.title, text: form.description, imageUrl: form.imageUrl, buttonText: "Iniciar sesion", layout: "imageRight" },
-    text: { title: "Nueva seccion", text: "Contenido editable.", layout: "centered" },
-    imageText: { title: "Nueva seccion", text: "Contenido editable.", imageUrl: form.imageUrl, layout: "imageRight" },
-    benefits: { title: "Beneficios", text: "Describe los beneficios principales.", images: ["Beneficio editable.", "Otro diferencial.", "Siguiente punto clave."], layout: "grid3" },
-    gallery: { title: "Productos", text: "Productos o imagenes destacadas.", images: [], layout: "grid3" },
-    carousel: { title: "Galeria", images: [], layout: "carousel" },
-    preguntas: { title: "Preguntas frecuentes", images: ["Pregunta editable|||Respuesta editable."], layout: "darkAccordion" },
-    social: { title: "Redes sociales", text: "Canales oficiales.", images: ["Instagram|||https://www.instagram.com/"], layout: "grid3" },
-    contact: { title: "Unete a Vidayoung", text: "Ingresa a tu cuenta para continuar.", buttonText: "Iniciar sesion", layout: "cardCentered" }
+    hero: { category: "Inicio", title: form.title, text: form.description, imageUrl: form.imageUrl, buttonText: "Iniciar sesion", layout: "imageRight" },
+    text: { category: "Empresa", title: "Nueva seccion", text: "Contenido editable.", layout: "centered" },
+    imageText: { category: "Contenido", title: "Nueva seccion", text: "Contenido editable.", imageUrl: form.imageUrl, layout: "imageRight" },
+    benefits: { category: "Beneficios", title: "Beneficios", text: "Describe los beneficios principales.", images: ["Beneficio editable.", "Otro diferencial.", "Siguiente punto clave."], layout: "grid3" },
+    gallery: { category: "Productos", title: "Productos", text: "Productos o imagenes destacadas.", images: [], layout: "grid3" },
+    carousel: { category: "Galeria", title: "Galeria", images: [], layout: "carousel" },
+    preguntas: { category: "Preguntas", title: "Preguntas frecuentes", images: ["Pregunta editable|||Respuesta editable."], layout: "darkAccordion" },
+    social: { category: "Redes", title: "Redes sociales", text: "Canales oficiales.", images: ["Instagram|||https://www.instagram.com/"], layout: "grid3" },
+    contact: { category: "Contacto", title: "Unete a Vidayoung", text: "Ingresa a tu cuenta para continuar.", buttonText: "Iniciar sesion", layout: "cardCentered" }
   };
 
   form.sections.push(normalizeSection({ type, ...(templates[type] || templates.text) }));
@@ -219,6 +219,10 @@ onMounted(loadConfig);
           </div>
 
           <div class="form-grid">
+            <label class="full-field">
+              <span>Categoria</span>
+              <input v-model.trim="section.category" maxlength="120" />
+            </label>
             <label class="full-field">
               <span>Titulo</span>
               <input v-model.trim="section.title" />

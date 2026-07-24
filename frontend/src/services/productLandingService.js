@@ -149,6 +149,7 @@ function buildLandingSections(defaults, config = {}) {
 export function normalizeLandingSection(section = {}) {
   return {
     type: section.type || "imageText",
+    category: section.category || "",
     title: section.title || "",
     text: section.text || "",
     imageUrl: section.imageUrl || "",

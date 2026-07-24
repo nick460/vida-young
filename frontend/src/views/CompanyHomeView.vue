@@ -16,12 +16,18 @@ const sections = computed(() => landing.value?.sections || []);
 const heroSection = computed(() => sections.value.find((section) => section.type === "hero"));
 const contentSections = computed(() => sections.value.filter((section) => section.type !== "hero"));
 const navSections = computed(() =>
-  contentSections.value
-    .map((section, index) => ({
+  contentSections.value.reduce((items, section, index) => {
+    const label = sectionBadge(section, index);
+    if (!label || items.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
+      return items;
+    }
+
+    items.push({
       id: sectionAnchorId(section, index),
-      label: navSectionLabel(section, index)
-    }))
-    .filter((section) => section.label)
+      label
+    });
+    return items;
+  }, [])
 );
 
 async function loadHome() {
@@ -158,6 +164,10 @@ function navSectionLabel(section, index) {
   return typeLabels[section?.type] || `Seccion ${index + 1}`;
 }
 
+function sectionBadge(section, index) {
+  return String(section?.category || "").trim() || navSectionLabel(section, index);
+}
+
 function handleScroll() {
   scrolled.value = window.scrollY > 24;
 }
@@ -179,10 +189,23 @@ onBeforeUnmount(() => {
       <RouterLink to="/" class="brand-link" aria-label="Ir a la pagina principal">
         <VyLogo :size="30" tagline />
       </RouterLink>
-      <nav>
-        <a v-for="section in navSections" :key="section.id" :href="`#${section.id}`">{{ section.label }}</a>
+      <div class="header-right">
+        <nav>
+          <a v-for="section in navSections" :key="section.id" :href="`#${section.id}`">{{ section.label }}</a>
+        </nav>
+        <div class="header-socials" aria-label="Canales oficiales Vidayoung">
+          <a href="https://www.youtube.com/@vidayoungoficial" target="_blank" rel="noreferrer" aria-label="YouTube Vidayoung">
+            <Youtube :size="16" />
+          </a>
+          <a href="https://www.tiktok.com/@vidayoung.bolivia?_r=1&_t=ZS-98JLs3EFWpb" target="_blank" rel="noreferrer" aria-label="TikTok Vidayoung">
+            <Music2 :size="16" />
+          </a>
+          <a href="https://wa.me/59168880318" target="_blank" rel="noreferrer" aria-label="WhatsApp Vidayoung">
+            <MessageCircle :size="16" />
+          </a>
+        </div>
         <RouterLink to="/login" class="login-link"><LogIn :size="17" /> Iniciar sesion</RouterLink>
-      </nav>
+      </div>
     </header>
 
     <main v-if="loading" class="state-box">Cargando pagina principal...</main>
@@ -219,7 +242,7 @@ onBeforeUnmount(() => {
         >
           <template v-if="section.type === 'text'">
             <div class="section-copy centered-copy">
-              <span class="section-kicker">Empresa</span>
+              <span class="section-kicker">{{ sectionBadge(section, index) }}</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
             </div>
@@ -227,7 +250,7 @@ onBeforeUnmount(() => {
 
           <template v-else-if="section.type === 'imageText'">
             <div class="section-copy">
-              <span class="section-kicker">Vidayoung</span>
+              <span class="section-kicker">{{ sectionBadge(section, index) }}</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
             </div>
@@ -238,7 +261,7 @@ onBeforeUnmount(() => {
 
           <template v-else-if="section.type === 'benefits'">
             <header class="section-copy">
-              <span class="section-kicker">Diferenciales</span>
+              <span class="section-kicker">{{ sectionBadge(section, index) }}</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
             </header>
@@ -252,7 +275,7 @@ onBeforeUnmount(() => {
 
           <template v-else-if="['gallery', 'carousel'].includes(section.type)">
             <header class="section-copy">
-              <span class="section-kicker">Productos</span>
+              <span class="section-kicker">{{ sectionBadge(section, index) }}</span>
               <h2>{{ section.title }}</h2>
               <p v-if="section.text">{{ section.text }}</p>
             </header>
@@ -275,7 +298,7 @@ onBeforeUnmount(() => {
 
           <template v-else-if="section.type === 'preguntas'">
             <div class="faq-wrap">
-              <span class="section-kicker">Ayuda</span>
+              <span class="section-kicker">{{ sectionBadge(section, index) }}</span>
               <h2>{{ section.title || "Preguntas frecuentes" }}</h2>
               <details v-for="item in section.images" :key="item">
                 <summary>{{ faqQuestion(item) }}</summary>
@@ -286,7 +309,7 @@ onBeforeUnmount(() => {
 
           <template v-else-if="section.type === 'social'">
             <header class="section-copy">
-              <span class="section-kicker">Comunidad</span>
+              <span class="section-kicker">{{ sectionBadge(section, index) }}</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
             </header>
@@ -300,7 +323,7 @@ onBeforeUnmount(() => {
 
           <template v-else-if="section.type === 'contact'">
             <div class="contact-block">
-              <span class="section-kicker">Acceso</span>
+              <span class="section-kicker">{{ sectionBadge(section, index) }}</span>
               <h2>{{ section.title }}</h2>
               <p>{{ section.text }}</p>
               <RouterLink to="/login" class="primary-action"><LogIn :size="18" /> Iniciar sesion</RouterLink>
@@ -371,6 +394,14 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
 .home-nav nav,
 .hero-ribbon,
 .hero-actions,
@@ -386,6 +417,7 @@ onBeforeUnmount(() => {
   gap: 10px;
   justify-content: flex-end;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .home-nav nav > a,
@@ -430,6 +462,33 @@ onBeforeUnmount(() => {
   box-shadow: 0 16px 32px rgba(184, 97, 10, 0.34);
 }
 
+.header-socials {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.header-socials a {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.9);
+  transition: background-color .2s ease, color .2s ease, transform .2s ease;
+}
+
+.header-socials a:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
 .home-nav.scrolled nav > a:not(.login-link) {
   border-color: rgba(117, 87, 44, 0.12);
   background: rgba(255, 255, 255, 0.78);
@@ -440,6 +499,21 @@ onBeforeUnmount(() => {
 .home-nav.scrolled nav > a:not(.login-link):hover {
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(242, 135, 5, 0.18);
+  color: var(--vy-ink);
+}
+
+.home-nav.scrolled .header-socials {
+  border-color: rgba(117, 87, 44, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 8px 20px rgba(31, 26, 20, 0.04);
+}
+
+.home-nav.scrolled .header-socials a {
+  color: var(--vy-ink-2);
+}
+
+.home-nav.scrolled .header-socials a:hover {
+  background: rgba(242, 135, 5, 0.1);
   color: var(--vy-ink);
 }
 
@@ -978,6 +1052,11 @@ onBeforeUnmount(() => {
   .home-footer nav {
     justify-content: flex-start;
   }
+
+  .header-right {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 680px) {
@@ -989,6 +1068,19 @@ onBeforeUnmount(() => {
   .home-nav :deep(.vy-mark + div span:last-child),
   .home-nav nav > a:not(.login-link) {
     display: none;
+  }
+
+  .header-right {
+    margin-left: auto;
+  }
+
+  .header-socials {
+    padding: 3px;
+  }
+
+  .header-socials a {
+    width: 32px;
+    height: 32px;
   }
 
   .login-link {

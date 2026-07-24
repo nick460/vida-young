@@ -24,6 +24,7 @@ export function defaultHomeSections(title, description, imageUrl = "") {
   return [
     normalizeLandingSection({
       type: "hero",
+      category: "Inicio",
       title,
       text: description,
       imageUrl,
@@ -32,12 +33,14 @@ export function defaultHomeSections(title, description, imageUrl = "") {
     }),
     normalizeLandingSection({
       type: "text",
+      category: "Empresa",
       title: "Una empresa construida alrededor del bienestar",
       text: "Creamos una experiencia que conecta productos, tecnologia y acompanamiento para personas que quieren vivir mejor y construir una red con proposito.",
       layout: "centered"
     }),
     normalizeLandingSection({
       type: "benefits",
+      category: "Beneficios",
       title: "Lo que encuentras en Vidayoung",
       text: "Un ecosistema simple para descubrir productos, registrarte, comprar y hacer seguimiento a tu crecimiento.",
       images: [
@@ -49,6 +52,7 @@ export function defaultHomeSections(title, description, imageUrl = "") {
     }),
     normalizeLandingSection({
       type: "gallery",
+      category: "Productos",
       title: "Productos destacados",
       text: "Agrega imagenes o enlaces de productos para mostrarlos en la pagina principal.",
       images: [],
@@ -56,6 +60,7 @@ export function defaultHomeSections(title, description, imageUrl = "") {
     }),
     normalizeLandingSection({
       type: "preguntas",
+      category: "Preguntas",
       title: "Preguntas frecuentes",
       images: [
         "¿Como puedo comprar?|||Inicia sesion o contacta a un asesor para recibir orientacion.",
@@ -66,6 +71,7 @@ export function defaultHomeSections(title, description, imageUrl = "") {
     }),
     normalizeLandingSection({
       type: "social",
+      category: "Redes",
       title: "Redes sociales",
       text: "Siguenos y conoce novedades, contenidos y experiencias de la comunidad.",
       images: [
