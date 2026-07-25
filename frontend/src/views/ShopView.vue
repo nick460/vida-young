@@ -62,7 +62,7 @@ async function loadProducts() {
   error.value = "";
 
   try {
-    const data = await apiRequest("/api/public/productos");
+    const data = await apiRequest("/api/shop/productos");
     productos.value = data.map(mapProducto);
   } catch {
     productos.value = [];
@@ -154,7 +154,7 @@ onUnmounted(() => window.removeEventListener("vy-cart-updated", refreshCart));
       <section v-if="!loading && !error && !productos.length" class="empty-shop vy-card">
         <ShoppingCart :size="28" />
         <h2>No hay productos disponibles</h2>
-        <p>La tienda solo muestra productos marcados para publicarse desde inventario.</p>
+        <p>La tienda solo muestra productos marcados para listarse en /shop desde inventario.</p>
       </section>
 
       <button class="floating-cart" type="button" aria-label="Abrir carrito" @click="navigate('cart')">

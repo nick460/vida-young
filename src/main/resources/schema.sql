@@ -274,6 +274,7 @@ CREATE TABLE IF NOT EXISTS productos (
     imagen_url VARCHAR(255),
     imagen_publica_url VARCHAR(255),
     listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE,
+    listar_publicamente BOOLEAN NOT NULL DEFAULT FALSE,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -287,11 +288,20 @@ ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS precio_publico NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS imagen_publica_url VARCHAR(255),
-    ADD COLUMN IF NOT EXISTS listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS listar_publicamente BOOLEAN;
 
 UPDATE productos
 SET precio_publico = precio
 WHERE precio_publico IS NULL OR precio_publico <= 0;
+
+UPDATE productos
+SET listar_publicamente = listar_en_shop
+WHERE listar_publicamente IS NULL;
+
+ALTER TABLE productos
+    ALTER COLUMN listar_publicamente SET DEFAULT FALSE,
+    ALTER COLUMN listar_publicamente SET NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tipos_cliente_publico (
     id BIGSERIAL PRIMARY KEY,

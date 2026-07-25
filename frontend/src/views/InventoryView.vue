@@ -50,7 +50,8 @@ const productForm = reactive({
   cr: 0,
   imagenUrl: "",
   imagenPublicaUrl: "",
-  listarEnShop: false
+  listarEnShop: false,
+  listarPublicamente: false
 });
 
 const productDiscountForm = reactive({});
@@ -79,6 +80,10 @@ const filteredProducts = computed(() => {
 
 const shopProductsCount = computed(() =>
   productos.value.filter((producto) => Boolean(producto.listarEnShop)).length
+);
+
+const publicProductsCount = computed(() =>
+  productos.value.filter((producto) => Boolean(producto.listarPublicamente)).length
 );
 
 const categoriesCount = computed(() =>
@@ -282,14 +287,15 @@ function resetProductForm() {
     nombre: "",
     descripcion: "",
     categoria: "",
-      precio: 0,
-      precioPublico: 0,
-      pv: 0,
+    precio: 0,
+    precioPublico: 0,
+    pv: 0,
     qp: 0,
     cr: 0,
     imagenUrl: "",
     imagenPublicaUrl: "",
-    listarEnShop: false
+    listarEnShop: false,
+    listarPublicamente: false
   });
 }
 
@@ -312,7 +318,8 @@ function openProductModal(producto = null) {
       cr: producto.cr || 0,
       imagenUrl: producto.imagenUrl || "",
       imagenPublicaUrl: producto.imagenPublicaUrl || "",
-      listarEnShop: Boolean(producto.listarEnShop)
+      listarEnShop: Boolean(producto.listarEnShop),
+      listarPublicamente: Boolean(producto.listarPublicamente)
     });
     resetDiscountForm();
     descuentosCliente.value
@@ -360,7 +367,8 @@ async function saveProduct() {
         pv: Number(productForm.pv || 0),
         qp: Number(productForm.qp || 0),
         cr: Number(productForm.cr || 0),
-        listarEnShop: Boolean(productForm.listarEnShop)
+        listarEnShop: Boolean(productForm.listarEnShop),
+        listarPublicamente: Boolean(productForm.listarPublicamente)
       })
     });
 
@@ -452,8 +460,13 @@ watch(productForm, () => {
         </article>
         <article class="vy-card summary-card">
           <div class="summary-icon"><Eye :size="18" stroke-width="1.9" /></div>
-          <span>En tienda</span>
+          <span>En /shop</span>
           <strong>{{ shopProductsCount }}</strong>
+        </article>
+        <article class="vy-card summary-card">
+          <div class="summary-icon"><Eye :size="18" stroke-width="1.9" /></div>
+          <span>Publicos</span>
+          <strong>{{ publicProductsCount }}</strong>
         </article>
         <article class="vy-card summary-card">
           <div class="summary-icon"><Search :size="18" stroke-width="1.9" /></div>
@@ -520,6 +533,11 @@ watch(productForm, () => {
               <Eye v-if="producto.listarEnShop" :size="14" />
               <EyeOff v-else :size="14" />
               {{ producto.listarEnShop ? "Shop" : "Oculto" }}
+            </span>
+            <span class="shop-state public-state" :class="{ disabled: !producto.listarPublicamente }">
+              <Eye v-if="producto.listarPublicamente" :size="14" />
+              <EyeOff v-else :size="14" />
+              {{ producto.listarPublicamente ? "Publico" : "Privado" }}
             </span>
             <span class="price">
               Bs. {{ money(producto.precio) }}
@@ -600,6 +618,10 @@ watch(productForm, () => {
               <input v-model="productForm.listarEnShop" type="checkbox" />
               <span>Listar este producto en /shop</span>
             </label>
+            <label class="toggle-field full-field">
+              <input v-model="productForm.listarPublicamente" type="checkbox" />
+              <span>Listar este producto publicamente en /tienda/nombreusuario</span>
+            </label>
             <section class="image-field full-field">
               <label>
                 <span>Imagen interna</span>
@@ -640,7 +662,7 @@ watch(productForm, () => {
 .header-actions .vy-btn, .entity-modal .vy-btn { min-height: 40px; padding: 10px 16px; border-radius: 12px; font-weight: 800; }
 .vy-btn-primary { background: var(--vy-orange); color: #fff; box-shadow: var(--vy-shadow-orange); }
 .vy-btn-ghost { background: var(--vy-surface); border: 1px solid var(--vy-line); color: var(--vy-ink-2); }
-.summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
 .summary-card { padding: 18px; }
 .summary-icon { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; background: var(--vy-cream); color: var(--vy-orange-deep); }
 .summary-card span { display: block; font-size: 12px; color: var(--vy-ink-3); font-weight: 700; text-transform: uppercase; }
@@ -658,7 +680,7 @@ watch(productForm, () => {
 .search-field { min-width: 280px; height: 40px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 8px; color: var(--vy-ink-3); }
 .search-field input { width: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: var(--vy-ink); }
 .product-list { display: grid; gap: 8px; max-height: 650px; overflow: auto; padding-right: 2px; }
-.product-row { min-height: 78px; padding: 10px 12px; border: 1px solid var(--vy-line); border-radius: 13px; background: var(--vy-surface-2); display: grid; grid-template-columns: 58px minmax(0, 1fr) auto 110px auto; align-items: center; gap: 10px; }
+.product-row { min-height: 78px; padding: 10px 12px; border: 1px solid var(--vy-line); border-radius: 13px; background: var(--vy-surface-2); display: grid; grid-template-columns: 58px minmax(0, 1fr) auto auto 110px auto; align-items: center; gap: 10px; }
 .product-row:hover { border-color: rgba(242, 135, 5, 0.42); background: #fff; box-shadow: var(--vy-shadow-sm); }
 .product-thumb { border-radius: 10px; overflow: hidden; }
 .product-main strong, .product-main small { display: block; }
@@ -666,6 +688,8 @@ watch(productForm, () => {
 .product-main small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 700; }
 .shop-state { padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 900; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; background: rgba(63, 143, 92, 0.12); color: var(--vy-success); }
 .shop-state.disabled { background: rgba(31, 26, 20, 0.08); color: var(--vy-ink-3); }
+.public-state { background: rgba(242, 135, 5, 0.14); color: var(--vy-orange-deep); }
+.public-state.disabled { background: rgba(31, 26, 20, 0.08); color: var(--vy-ink-3); }
 .price { font-size: 13px; font-weight: 900; text-align: right; }
 .price small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 10px; font-weight: 800; white-space: nowrap; }
 .row-actions { display: inline-flex; gap: 6px; }

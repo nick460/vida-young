@@ -116,7 +116,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 .orElseThrow(() -> new IllegalArgumentException("Tienda no encontrada."));
         TipoClientePublico tipoCliente = resolverTipoCliente(tipoClienteCodigo);
 
-        return productoService.listarParaShop().stream()
+        return productoService.listarPublicamente().stream()
                 .map(producto -> toProductoPublico(producto, tipoCliente))
                 .toList();
     }
@@ -168,7 +168,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
 
             Producto producto = productoDao.findById(item.productoId())
                     .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
-                    .filter(found -> Boolean.TRUE.equals(found.getListarEnShop()))
+                    .filter(found -> Boolean.TRUE.equals(found.getListarPublicamente()))
                     .orElseThrow(() -> new IllegalArgumentException("Producto no disponible."));
 
             ProductoPublicoResponse calculo = toProductoPublico(producto, tipoCliente);

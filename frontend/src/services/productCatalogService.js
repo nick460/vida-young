@@ -18,6 +18,7 @@ export function mapProduct(producto) {
     badge: producto.badge || null,
     img: producto.imagenUrl || producto.img || DEFAULT_GRADIENT,
     listarEnShop: Boolean(producto.listarEnShop ?? true),
+    listarPublicamente: Boolean(producto.listarPublicamente ?? false),
     descripcion: producto.descripcion || ""
   };
 }

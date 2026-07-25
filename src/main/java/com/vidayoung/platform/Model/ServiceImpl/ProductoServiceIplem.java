@@ -35,6 +35,13 @@ public class ProductoServiceIplem implements ProductoService {
     }
 
     @Override
+    public List<Producto> listarPublicamente() {
+        return listar().stream()
+                .filter(producto -> Boolean.TRUE.equals(producto.getListarPublicamente()))
+                .toList();
+    }
+
+    @Override
     public Optional<Producto> buscarPorId(Long id) {
         return productoDao.findById(id)
                 .filter(producto -> Auditoria.ESTADO_ACTIVO.equals(producto.getEstado()));
@@ -78,6 +85,10 @@ public class ProductoServiceIplem implements ProductoService {
 
         if (producto.getListarEnShop() == null) {
             producto.setListarEnShop(Boolean.FALSE);
+        }
+
+        if (producto.getListarPublicamente() == null) {
+            producto.setListarPublicamente(Boolean.FALSE);
         }
 
         return productoDao.save(producto);

@@ -24,12 +24,18 @@ public class ProductoLandingRestController {
 
     @GetMapping("/api/public/productos")
     public ResponseEntity<List<Producto>> listarProductosPublicos() {
+        return ResponseEntity.ok(productoService.listarPublicamente());
+    }
+
+    @GetMapping("/api/shop/productos")
+    public ResponseEntity<List<Producto>> listarProductosShop() {
         return ResponseEntity.ok(productoService.listarParaShop());
     }
 
     @GetMapping("/api/public/productos/{productoId}/landing")
     public ResponseEntity<ProductoLandingResponse> buscarLandingPublica(@PathVariable Long productoId) {
         return productoLandingService.buscarPorProductoId(productoId)
+                .filter(response -> Boolean.TRUE.equals(response.producto().getListarPublicamente()))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
