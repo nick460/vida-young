@@ -340,7 +340,10 @@ onBeforeUnmount(() => {
             </a>
           </div>
         </div>
-        <small>Vidayoung © {{ new Date().getFullYear() }}. Todos los derechos reservados.</small>
+        <small>
+          Vidayoung © {{ new Date().getFullYear() }}. Todos los derechos reservados.
+          <a href="https://rubina-solutions.tech/" target="_blank" rel="noreferrer">Desarrollado por NRS Systen Solutions</a>
+        </small>
       </footer>
     </main>
   </div>
@@ -942,6 +945,23 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
   font-weight: 800;
+}
+
+.home-footer small a {
+  min-height: auto;
+  margin-left: 10px;
+  padding: 0;
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.home-footer small a:hover {
+  background: transparent;
+  color: var(--vy-orange);
 }
 
 @media (max-width: 920px) {
