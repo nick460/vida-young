@@ -40,6 +40,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -47,6 +48,7 @@ import org.springframework.stereotype.Service;
 public class BilleteraServiceImpl implements BilleteraService {
 
     private static final String REFERENCIA_AFILIACION = "REFERIDO_AFILIACION";
+    private static final String REFERENCIA_PV_ACTIVACION = "PV_ACTIVACION";
 
     private final BilleteraDao billeteraDao;
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
@@ -291,11 +293,15 @@ public class BilleteraServiceImpl implements BilleteraService {
         referidoDao.save(referido);
         actualizarRecompensasCobrables(persona, true);
 
-        if (!historialMembresiaDao.existsByPersonaIdAndPeriodoIdAndTipo(
-                persona.getId(),
-                periodo.getId(),
+        if (historialMembresiaDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
+                REFERENCIA_PV_ACTIVACION,
+                planActivacion.getId(),
                 HistorialMembresia.TIPO_ACTIVACION
         )) {
+            return;
+        }
+
+        try {
             historialMembresiaDao.save(HistorialMembresia.builder()
                     .persona(persona)
                     .plan(referido.getPlan())
@@ -304,11 +310,19 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .fechaFin(fechaFin)
                     .precioPlan(BigDecimal.ZERO)
                     .qpPlan(BigDecimal.ZERO)
-                    .referenciaTipo("PV_ACTIVACION")
+                    .referenciaTipo(REFERENCIA_PV_ACTIVACION)
                     .referenciaId(planActivacion.getId())
                     .estadoMembresia(HistorialMembresia.MEMBRESIA_ACTIVA)
                     .periodo(periodo)
                     .build());
+        } catch (DataIntegrityViolationException exception) {
+            if (!historialMembresiaDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
+                    REFERENCIA_PV_ACTIVACION,
+                    planActivacion.getId(),
+                    HistorialMembresia.TIPO_ACTIVACION
+            )) {
+                throw exception;
+            }
         }
     }
 
