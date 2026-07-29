@@ -89,6 +89,18 @@ public class CompraRestController {
                 .body(new CompraResponse(compra, compraService.listarBeneficiosPorCompra(compra.getId())));
     }
 
+    @PutMapping("/{compraId}")
+    public ResponseEntity<CompraResponse> modificarCompra(
+            @PathVariable Long compraId,
+            @RequestBody CompraRequest request
+    ) {
+        Compra compra = compraService.modificarCompra(compraId, request.getItems().stream()
+                .map(item -> new CompraService.ItemCompraRequest(item.getProductoId(), item.getCantidad()))
+                .toList(), toPagoRequest(request, null));
+
+        return ResponseEntity.ok(new CompraResponse(compra, compraService.listarBeneficiosPorCompra(compra.getId())));
+    }
+
     @GetMapping("/{compraId}/beneficios")
     public ResponseEntity<List<BeneficioActivacionCompra>> listarBeneficios(@PathVariable Long compraId) {
         return ResponseEntity.ok(compraService.listarBeneficiosPorCompra(compraId));

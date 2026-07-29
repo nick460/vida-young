@@ -90,67 +90,35 @@ public class CompraServiceImpl implements CompraService {
                 .build();
         compra = compraDao.save(compra);
 
-        BigDecimal subtotal = BigDecimal.ZERO;
-        BigDecimal totalPv = BigDecimal.ZERO;
-        BigDecimal totalQp = BigDecimal.ZERO;
-        BigDecimal totalCr = BigDecimal.ZERO;
-        int totalProductos = 0;
+        recalcularCompra(compra, items, pago);
 
-        for (ItemCompraRequest item : items) {
-            int cantidad = item.cantidad() == null ? 0 : item.cantidad();
-            if (cantidad < 1) {
-                throw new IllegalArgumentException("La cantidad debe ser mayor a cero.");
-            }
+        return compraDao.save(compra);
+    }
 
-            Producto producto = productoDao.findById(item.productoId())
-                    .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
-                    .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado."));
-
-            BigDecimal precio = zeroIfNull(producto.getPrecio());
-            BigDecimal pv = zeroIfNull(producto.getPv());
-            BigDecimal qp = zeroIfNull(producto.getQp());
-            BigDecimal cr = zeroIfNull(producto.getCr());
-            BigDecimal detalleSubtotal = precio.multiply(BigDecimal.valueOf(cantidad));
-
-            compra.getDetalles().add(CompraDetalle.builder()
-                    .compra(compra)
-                    .producto(producto)
-                    .cantidad(cantidad)
-                    .precioUnitario(precio)
-                    .pvUnitario(pv)
-                    .qpUnitario(qp)
-                    .crUnitario(cr)
-                    .subtotal(detalleSubtotal)
-                    .build());
-
-            subtotal = subtotal.add(detalleSubtotal);
-            totalPv = totalPv.add(pv.multiply(BigDecimal.valueOf(cantidad)));
-            totalQp = totalQp.add(qp.multiply(BigDecimal.valueOf(cantidad)));
-            totalCr = totalCr.add(cr.multiply(BigDecimal.valueOf(cantidad)));
-            totalProductos += cantidad;
+    @Override
+    @Transactional(rollbackOn = Exception.class)
+    public Compra modificarCompra(Long compraId, List<ItemCompraRequest> items, PagoCompraRequest pago) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("La compra debe tener al menos un producto.");
         }
 
-        BigDecimal descuentoMonto = zeroIfNull(pago == null ? null : pago.descuentoMonto());
-        if (descuentoMonto.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("El descuento no puede ser negativo.");
-        }
-        if (descuentoMonto.compareTo(subtotal) > 0) {
-            throw new IllegalArgumentException("El descuento no puede ser mayor al total de la venta.");
-        }
-        String descuentoConcepto = normalizarTexto(pago == null ? null : pago.descuentoConcepto());
-        if (descuentoMonto.compareTo(BigDecimal.ZERO) > 0 && descuentoConcepto == null) {
-            throw new IllegalArgumentException("Debe ingresar el concepto del descuento.");
+        Compra compra = compraDao.findById(compraId)
+                .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Compra no encontrada."));
+
+        if (!Compra.ESTADO_COMPRA_PENDIENTE.equals(compra.getEstadoCompra())) {
+            throw new IllegalArgumentException("Solo se pueden modificar compras pendientes.");
         }
 
-        compra.setSubtotal(subtotal.subtract(descuentoMonto));
-        compra.setDescuentoMonto(descuentoMonto);
-        compra.setDescuentoConcepto(descuentoConcepto);
-        compra.setTotalPv(totalPv);
-        compra.setTotalQp(totalQp);
-        compra.setTotalCr(totalCr);
-        compra = compraDao.save(compra);
+        compra.setMetodoPago(normalizarTexto(pago == null ? null : pago.metodoPago()));
+        compra.setBancoPago(normalizarTexto(pago == null ? null : pago.bancoPago()));
+        compra.setCuentaPago(normalizarTexto(pago == null ? null : pago.cuentaPago()));
+        compra.setCodigoPago(normalizarTexto(pago == null ? null : pago.codigoPago()));
+        compra.setReferenciaPago(normalizarTexto(pago == null ? null : pago.referenciaPago()));
+        compra.getDetalles().clear();
+        recalcularCompra(compra, items, pago);
 
-        return compra;
+        return compraDao.save(compra);
     }
 
     @Override
@@ -251,6 +219,65 @@ public class CompraServiceImpl implements CompraService {
                 && !Compra.ESTADO_COMPRA_VALIDADA.equals(estadoAnterior)) {
             throw new IllegalArgumentException("Solo se pueden validar compras pendientes.");
         }
+    }
+
+    private void recalcularCompra(Compra compra, List<ItemCompraRequest> items, PagoCompraRequest pago) {
+        BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal totalPv = BigDecimal.ZERO;
+        BigDecimal totalQp = BigDecimal.ZERO;
+        BigDecimal totalCr = BigDecimal.ZERO;
+
+        for (ItemCompraRequest item : items) {
+            int cantidad = item.cantidad() == null ? 0 : item.cantidad();
+            if (cantidad < 1) {
+                throw new IllegalArgumentException("La cantidad debe ser mayor a cero.");
+            }
+
+            Producto producto = productoDao.findById(item.productoId())
+                    .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                    .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado."));
+
+            BigDecimal precio = zeroIfNull(producto.getPrecio());
+            BigDecimal pv = zeroIfNull(producto.getPv());
+            BigDecimal qp = zeroIfNull(producto.getQp());
+            BigDecimal cr = zeroIfNull(producto.getCr());
+            BigDecimal detalleSubtotal = precio.multiply(BigDecimal.valueOf(cantidad));
+
+            compra.getDetalles().add(CompraDetalle.builder()
+                    .compra(compra)
+                    .producto(producto)
+                    .cantidad(cantidad)
+                    .precioUnitario(precio)
+                    .pvUnitario(pv)
+                    .qpUnitario(qp)
+                    .crUnitario(cr)
+                    .subtotal(detalleSubtotal)
+                    .build());
+
+            subtotal = subtotal.add(detalleSubtotal);
+            totalPv = totalPv.add(pv.multiply(BigDecimal.valueOf(cantidad)));
+            totalQp = totalQp.add(qp.multiply(BigDecimal.valueOf(cantidad)));
+            totalCr = totalCr.add(cr.multiply(BigDecimal.valueOf(cantidad)));
+        }
+
+        BigDecimal descuentoMonto = zeroIfNull(pago == null ? null : pago.descuentoMonto());
+        if (descuentoMonto.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("El descuento no puede ser negativo.");
+        }
+        if (descuentoMonto.compareTo(subtotal) > 0) {
+            throw new IllegalArgumentException("El descuento no puede ser mayor al total de la venta.");
+        }
+        String descuentoConcepto = normalizarTexto(pago == null ? null : pago.descuentoConcepto());
+        if (descuentoMonto.compareTo(BigDecimal.ZERO) > 0 && descuentoConcepto == null) {
+            throw new IllegalArgumentException("Debe ingresar el concepto del descuento.");
+        }
+
+        compra.setSubtotal(subtotal.subtract(descuentoMonto));
+        compra.setDescuentoMonto(descuentoMonto);
+        compra.setDescuentoConcepto(descuentoConcepto);
+        compra.setTotalPv(totalPv);
+        compra.setTotalQp(totalQp);
+        compra.setTotalCr(totalCr);
     }
 
     private void procesarCompraValidada(Compra compra) {

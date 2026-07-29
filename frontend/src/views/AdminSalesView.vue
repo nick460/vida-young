@@ -13,6 +13,7 @@ import {
   FileText,
   MoreVertical,
   PackageCheck,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -42,6 +43,7 @@ const selectedPersonaId = ref("");
 const ventaItems = ref([]);
 const discountAmount = ref("");
 const discountConcept = ref("");
+const editingCompra = ref(null);
 const saleModalOpen = ref(false);
 const personaSelect = ref(null);
 const periodoSelect = ref(null);
@@ -331,7 +333,40 @@ async function initPeriodoSelect2() {
   });
 }
 
+function resetSaleForm() {
+  editingCompra.value = null;
+  ventaItems.value = [];
+  discountAmount.value = "";
+  discountConcept.value = "";
+  selectedPersonaId.value = "";
+  personaQuery.value = "";
+  productQuery.value = "";
+  cajaCode.value = generateCajaCode();
+}
+
 function openSaleModal() {
+  resetSaleForm();
+  saleModalOpen.value = true;
+}
+
+function openEditSaleModal(compra) {
+  editingCompra.value = compra;
+  selectedPersonaId.value = String(compra.persona?.id || "");
+  cajaCode.value = compra.codigoPago || generateCajaCode();
+  discountAmount.value = Number(compra.descuentoMonto || 0);
+  discountConcept.value = compra.descuentoConcepto || "";
+  personaQuery.value = "";
+  productQuery.value = "";
+  ventaItems.value = (compra.detalles || []).map((detalle) => ({
+    id: detalle.producto?.id,
+    nombre: detalle.producto?.nombre || "Producto",
+    sku: detalle.producto?.sku || "",
+    precio: Number(detalle.precioUnitario || detalle.producto?.precio || 0),
+    pv: Number(detalle.pvUnitario || detalle.producto?.pv || 0),
+    qp: Number(detalle.qpUnitario || detalle.producto?.qp || 0),
+    cr: Number(detalle.crUnitario || detalle.producto?.cr || 0),
+    cantidad: Number(detalle.cantidad || 1)
+  })).filter((item) => item.id);
   saleModalOpen.value = true;
 }
 
@@ -790,7 +825,7 @@ async function loadVentasPeriodo() {
   comprasPublicas.value = Array.isArray(comprasPublicasData) ? comprasPublicasData : [];
 }
 
-async function createCajaSale() {
+async function saveCajaSale() {
   error.value = "";
 
   if (!selectedPersonaId.value) {
@@ -821,26 +856,35 @@ async function createCajaSale() {
       descuentoMonto: discountAmountNumber.value,
       descuentoConcepto: discountConcept.value.trim() || null
     };
-    const formData = new FormData();
-    formData.append("compra", new Blob([JSON.stringify(payload)], { type: "application/json" }));
+    const isEditing = Boolean(editingCompra.value?.id);
+    let response;
 
-    const response = await apiRequest(`/api/compras/persona/${selectedPersonaId.value}/comprobante`, {
-      method: "POST",
-      body: formData
-    });
+    if (isEditing) {
+      response = await apiRequest(`/api/compras/${editingCompra.value.id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+    } else {
+      const formData = new FormData();
+      formData.append("compra", new Blob([JSON.stringify(payload)], { type: "application/json" }));
 
-    await showSuccess("Venta registrada", `Compra #${response.compra?.id} creada como PENDIENTE.`);
-    ventaItems.value = [];
-    discountAmount.value = "";
-    discountConcept.value = "";
-    selectedPersonaId.value = "";
-    personaQuery.value = "";
-    productQuery.value = "";
-    cajaCode.value = generateCajaCode();
+      response = await apiRequest(`/api/compras/persona/${selectedPersonaId.value}/comprobante`, {
+        method: "POST",
+        body: formData
+      });
+    }
+
+    await showSuccess(
+      isEditing ? "Venta modificada" : "Venta registrada",
+      isEditing
+        ? `Compra #${response.compra?.id} actualizada correctamente.`
+        : `Compra #${response.compra?.id} creada como PENDIENTE.`
+    );
+    resetSaleForm();
     closeSaleModal();
     await loadAll();
   } catch (exception) {
-    await showError("No se pudo registrar", exception.message || "No se pudo registrar la venta.");
+    await showError("No se pudo guardar", exception.message || "No se pudo guardar la venta.");
   } finally {
     saving.value = false;
   }
@@ -1053,6 +1097,9 @@ onMounted(() => {
                         <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
                           <FileText :size="15" /> Ver pago
                         </button>
+                        <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); openEditSaleModal(compra)">
+                          <Pencil :size="15" /> Modificar
+                        </button>
                         <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
                           <CheckCircle2 :size="15" /> Validar
                         </button>
@@ -1260,7 +1307,7 @@ onMounted(() => {
               <strong>Bs. {{ money(saleTotal) }}</strong>
               <span>PV {{ money(salePv) }} · QP {{ money(saleQp) }} · CR {{ money(saleCr) }}</span>
             </div>
-            <button class="vy-btn vy-btn-primary" type="button" :disabled="saving" @click="createCajaSale">
+            <button class="vy-btn vy-btn-primary" type="button" :disabled="saving" @click="saveCajaSale">
               <ShoppingBag :size="16" /> Registrar venta
             </button>
           </footer>
@@ -1314,6 +1361,9 @@ onMounted(() => {
                     <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
                       <FileText :size="15" /> Ver pago
                     </button>
+                    <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); openEditSaleModal(compra)">
+                      <Pencil :size="15" /> Modificar
+                    </button>
                     <button v-if="compra.estadoCompra === 'PENDIENTE'" type="button" @click="closeActionMenu(); updateCompraEstado(compra, 'VALIDADA')">
                       <CheckCircle2 :size="15" /> Validar
                     </button>
@@ -1353,8 +1403,8 @@ onMounted(() => {
           <header>
             <div>
               <span class="vy-eyebrow">Ventanilla</span>
-              <h2>Nueva venta</h2>
-              <p>Genera una compra pendiente con pago en caja.</p>
+              <h2>{{ editingCompra ? `Modificar venta #${editingCompra.id}` : "Nueva venta" }}</h2>
+              <p>{{ editingCompra ? "Ajusta productos, cantidades o descuento antes de validar." : "Genera una compra pendiente con pago en caja." }}</p>
             </div>
             <button type="button" aria-label="Cerrar" @click="closeSaleModal">
               <X :size="18" />
@@ -1365,7 +1415,7 @@ onMounted(() => {
             <div class="sale-card">
               <label class="field">
                 <span>Persona</span>
-                <select ref="personaSelect" class="persona-select">
+                <select ref="personaSelect" class="persona-select" :disabled="Boolean(editingCompra)">
                   <option value=""></option>
                   <option v-for="persona in personas" :key="persona.id" :value="persona.id">
                     {{ fullName(persona) }} - {{ persona.documento || "Sin documento" }} - {{ persona.email || "Sin correo" }}
@@ -1441,8 +1491,8 @@ onMounted(() => {
                   <strong>Bs. {{ money(saleTotal) }}</strong>
                   <span>PV {{ money(salePv) }} - QP {{ money(saleQp) }} - CR {{ money(saleCr) }}</span>
                 </div>
-                <button class="vy-btn vy-btn-primary" type="button" :disabled="saving || !!discountError" @click="createCajaSale">
-                  <ShoppingBag :size="16" /> Registrar venta
+                <button class="vy-btn vy-btn-primary" type="button" :disabled="saving || !!discountError" @click="saveCajaSale">
+                  <ShoppingBag :size="16" /> {{ editingCompra ? "Guardar cambios" : "Registrar venta" }}
                 </button>
               </footer>
             </div>

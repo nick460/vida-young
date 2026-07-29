@@ -8,6 +8,8 @@ public interface CompraService {
 
     Compra registrarCompra(Long personaId, List<ItemCompraRequest> items, PagoCompraRequest pago);
 
+    Compra modificarCompra(Long compraId, List<ItemCompraRequest> items, PagoCompraRequest pago);
+
     List<Compra> listarPorPersona(Long personaId);
 
     List<Compra> listarPorEstado(String estadoCompra);
