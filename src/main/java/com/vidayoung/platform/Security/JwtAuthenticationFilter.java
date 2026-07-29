@@ -10,6 +10,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -19,9 +20,21 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String LOGIN_PATH = "/api/auth/login";
+    private static final String PUBLIC_API_PREFIX = "/api/public/";
+    private static final String UPLOADS_PREFIX = "/uploads/";
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        return LOGIN_PATH.equals(path)
+                || path.startsWith(PUBLIC_API_PREFIX)
+                || path.startsWith(UPLOADS_PREFIX)
+                || "/api/planes/public".equals(path);
+    }
 
     @Override
     protected void doFilterInternal(
@@ -54,7 +67,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             }
-        } catch (IllegalArgumentException exception) {
+        } catch (IllegalArgumentException | UsernameNotFoundException exception) {
             SecurityContextHolder.clearContext();
         }
 
