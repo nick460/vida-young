@@ -153,6 +153,22 @@ public class BilleteraRestController {
                 .toList());
     }
 
+    @GetMapping("/persona/{personaId}/retiros")
+    public ResponseEntity<List<RetiroBilleteraResponse>> listarRetirosPorPersona(
+            @PathVariable Long personaId,
+            @RequestParam(required = false) Long periodoId
+    ) {
+        PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
+        Long periodoConsultaId = periodoId == null ? (periodoActivo == null ? null : periodoActivo.getId()) : periodoId;
+        if (periodoConsultaId == null) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        return ResponseEntity.ok(retiroBilleteraDao.findByPersonaIdAndPeriodoIdOrderByFechaRetiroDesc(personaId, periodoConsultaId).stream()
+                .map(this::retiroResponse)
+                .toList());
+    }
+
     @PostMapping("/cierres-mensuales")
     public ResponseEntity<Integer> cerrarMesBilleteras() {
         return ResponseEntity.ok(billeteraService.cerrarMesBilleteras());

@@ -8,6 +8,7 @@ import {
   Network,
   RefreshCw,
   ShoppingBag,
+  Wallet,
   UserRound,
   WalletCards
 } from "lucide-vue-next";
@@ -28,6 +29,7 @@ const selectedPersonaId = ref(route.params.personaId || "");
 const walletSummary = ref(null);
 const compras = ref([]);
 const recompensas = ref([]);
+const retiros = ref([]);
 
 const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value)) || null
@@ -71,7 +73,17 @@ const totals = computed(() => ({
   pv: compras.value.reduce((sum, compra) => sum + Number(compra.totalPv || 0), 0),
   qp: compras.value.reduce((sum, compra) => sum + Number(compra.totalQp || 0), 0),
   recompensasEfectivo: recompensas.value.reduce((sum, item) => sum + Number(item.montoEfectivo || 0), 0),
-  recompensasProductos: recompensas.value.reduce((sum, item) => sum + Number(item.valorProductos || 0), 0)
+  recompensasProductos: recompensas.value.reduce((sum, item) => sum + Number(item.valorProductos || 0), 0),
+  retirosDinero: retiros.value.reduce((sum, item) => sum + Number(item.montoDinero || 0), 0),
+  retirosProductos: retiros.value.reduce((sum, item) => sum + Number(item.montoProductos || 0), 0)
+}));
+
+const retiroMensual = computed(() => ({
+  realizado: retiros.value.length > 0,
+  cantidad: retiros.value.length,
+  dinero: totals.value.retirosDinero,
+  productos: totals.value.retirosProductos,
+  ultimo: retiros.value[0] || null
 }));
 
 const timeline = computed(() => {
@@ -91,6 +103,14 @@ const timeline = computed(() => {
       subtitle: `${recompensa.planIngreso?.nombre || "Plan"} - Bs. ${money(recompensa.montoEfectivo)} efectivo`,
       date: recompensa.fechaRegistro,
       icon: Gift
+    })),
+    ...retiros.value.map((retiro) => ({
+      id: `retiro-${retiro.id}`,
+      type: "Retiro",
+      title: `Retiro #${retiro.id}`,
+      subtitle: `${retiro.estadoRetiro || "Procesado"} - Bs. ${money(retiro.montoDinero)} efectivo / Bs. ${money(retiro.montoProductos)} productos`,
+      date: retiro.fechaRetiro,
+      icon: Wallet
     })),
     ...membresias.value.map((membresia) => ({
       id: `membresia-${membresia.id}`,
@@ -253,6 +273,7 @@ async function loadPersonaDetail() {
   walletSummary.value = null;
   compras.value = [];
   recompensas.value = [];
+  retiros.value = [];
 
   if (!selectedPersonaId.value) return;
 
@@ -261,17 +282,19 @@ async function loadPersonaDetail() {
 
   try {
     const queryString = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
-    const [walletResult, comprasResult, recompensasResult] = await Promise.allSettled([
+    const [walletResult, comprasResult, recompensasResult, retirosResult] = await Promise.allSettled([
       apiRequest(`/api/billeteras/persona/${selectedPersonaId.value}${queryString}`),
       apiRequest(`/api/compras/persona/${selectedPersonaId.value}${queryString}`),
-      apiRequest(`/api/recompensas/persona/${selectedPersonaId.value}${queryString}`)
+      apiRequest(`/api/recompensas/persona/${selectedPersonaId.value}${queryString}`),
+      apiRequest(`/api/billeteras/persona/${selectedPersonaId.value}/retiros${queryString}`)
     ]);
 
     walletSummary.value = walletResult.status === "fulfilled" ? walletResult.value : null;
     compras.value = comprasResult.status === "fulfilled" && Array.isArray(comprasResult.value) ? comprasResult.value : [];
     recompensas.value = recompensasResult.status === "fulfilled" && Array.isArray(recompensasResult.value) ? recompensasResult.value : [];
+    retiros.value = retirosResult.status === "fulfilled" && Array.isArray(retirosResult.value) ? retirosResult.value : [];
 
-    if ([walletResult, comprasResult, recompensasResult].some((result) => result.status === "rejected")) {
+    if ([walletResult, comprasResult, recompensasResult, retirosResult].some((result) => result.status === "rejected")) {
       error.value = "Algunos datos no se pudieron cargar, pero la consulta disponible se mantiene visible.";
     }
   } finally {
@@ -373,6 +396,12 @@ onMounted(loadBaseData);
                 <strong>{{ periodoActivo?.nombre || "Sin periodo" }}</strong>
                 <p>{{ periodoActivo?.gestion?.anio || "" }}</p>
               </article>
+              <article class="summary-card vy-card" :class="{ warning: !retiroMensual.realizado }">
+                <span class="summary-icon"><Wallet :size="18" /></span>
+                <small>Retiro mensual</small>
+                <strong>{{ retiroMensual.realizado ? "Realizado" : "Pendiente" }}</strong>
+                <p>{{ retiroMensual.realizado ? `${retiroMensual.cantidad} retiro(s) por Bs. ${money(retiroMensual.dinero)}` : "No registra retiro en este mes." }}</p>
+              </article>
             </section>
 
             <section class="wallet-grid">
@@ -412,8 +441,42 @@ onMounted(loadBaseData);
                   <div><span>QP compras</span><strong>{{ money(totals.qp) }}</strong></div>
                   <div><span>Recompensas efectivo</span><strong>Bs. {{ money(totals.recompensasEfectivo) }}</strong></div>
                   <div><span>Recompensas productos</span><strong>Bs. {{ money(totals.recompensasProductos) }}</strong></div>
+                  <div><span>Retiros efectivo</span><strong>Bs. {{ money(totals.retirosDinero) }}</strong></div>
+                  <div><span>Retiros productos</span><strong>Bs. {{ money(totals.retirosProductos) }}</strong></div>
                 </div>
               </article>
+            </section>
+
+            <section class="vy-card history-card">
+              <header>
+                <h3>Retiros mensuales</h3>
+                <span>{{ retiroMensual.realizado ? `${retiroMensual.cantidad} realizado(s)` : "Pendiente" }}</span>
+              </header>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Estado</th>
+                      <th>Efectivo</th>
+                      <th>Productos</th>
+                      <th>Observacion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="retiro in retiros" :key="retiro.id">
+                      <td>{{ formatDateTime(retiro.fechaRetiro) }}</td>
+                      <td><span class="status-pill">{{ retiro.estadoRetiro }}</span></td>
+                      <td>Bs. {{ money(retiro.montoDinero) }}</td>
+                      <td>Bs. {{ money(retiro.montoProductos) }}</td>
+                      <td>{{ retiro.observacion || "Sin observacion" }}</td>
+                    </tr>
+                    <tr v-if="!retiros.length">
+                      <td colspan="5">No realizo retiros en el mes seleccionado.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
 
             <section class="vy-card history-card">
@@ -555,7 +618,7 @@ onMounted(loadBaseData);
 .profile-status strong { font-size: 12px; font-weight: 900; color: var(--vy-success); }
 .profile-status small { margin-top: 4px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
 .summary-grid, .wallet-grid, .content-grid { display: grid; gap: 14px; }
-.summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.summary-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 .wallet-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .content-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .summary-card, .wallet-card { padding: 16px; }
@@ -563,6 +626,8 @@ onMounted(loadBaseData);
 .summary-card small, .wallet-card span, .info-row small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .summary-card strong, .wallet-card strong { display: block; margin-top: 5px; font-size: 18px; font-weight: 900; overflow-wrap: anywhere; }
 .summary-card p { margin-top: 5px; color: var(--vy-ink-2); font-size: 12px; line-height: 1.35; }
+.summary-card.warning .summary-icon { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); }
+.summary-card.warning strong { color: var(--vy-danger); }
 .wallet-card { border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
 .wallet-card strong { font-size: 20px; }
 .info-card, .history-card, .timeline-card { padding: 18px; min-width: 0; }
