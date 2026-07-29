@@ -277,7 +277,7 @@ onMounted(async () => {
 
       <section class="product-grid">
         <article v-for="product in productos" :key="product.id" class="vy-card product-card">
-          <VyProductImage :grad="product.img" :h="168" />
+          <VyProductImage :grad="product.toolImg || product.img" :h="168" />
           <div class="product-body">
             <small>{{ product.cat }}</small>
             <h2>{{ product.name }}</h2>

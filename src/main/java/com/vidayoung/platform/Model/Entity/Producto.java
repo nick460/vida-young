@@ -67,6 +67,9 @@ public class Producto extends Auditoria {
     @Column(name = "imagen_publica_url", length = 255)
     private String imagenPublicaUrl;
 
+    @Column(name = "imagen_herramienta_url", length = 255)
+    private String imagenHerramientaUrl;
+
     @Column(name = "listar_en_shop", nullable = false)
     @Builder.Default
     private Boolean listarEnShop = Boolean.FALSE;

@@ -29,6 +29,8 @@ const productImageFile = ref(null);
 const productImagePreview = ref("");
 const productPublicImageFile = ref(null);
 const productPublicImagePreview = ref("");
+const productToolImageFile = ref(null);
+const productToolImagePreview = ref("");
 
 const alertClasses = {
   popup: "vy-swal-popup",
@@ -50,6 +52,7 @@ const productForm = reactive({
   cr: 0,
   imagenUrl: "",
   imagenPublicaUrl: "",
+  imagenHerramientaUrl: "",
   listarEnShop: false,
   listarPublicamente: false
 });
@@ -279,6 +282,8 @@ function resetProductForm() {
   productImagePreview.value = "";
   productPublicImageFile.value = null;
   productPublicImagePreview.value = "";
+  productToolImageFile.value = null;
+  productToolImagePreview.value = "";
   productSubmitted.value = false;
   setErrors(productErrors, {});
   resetDiscountForm();
@@ -294,6 +299,7 @@ function resetProductForm() {
     cr: 0,
     imagenUrl: "",
     imagenPublicaUrl: "",
+    imagenHerramientaUrl: "",
     listarEnShop: false,
     listarPublicamente: false
   });
@@ -306,6 +312,8 @@ function openProductModal(producto = null) {
     productImagePreview.value = producto.imagenUrl || "";
     productPublicImageFile.value = null;
     productPublicImagePreview.value = producto.imagenPublicaUrl || "";
+    productToolImageFile.value = null;
+    productToolImagePreview.value = producto.imagenHerramientaUrl || "";
     Object.assign(productForm, {
       sku: producto.sku || "",
       nombre: producto.nombre || "",
@@ -318,6 +326,7 @@ function openProductModal(producto = null) {
       cr: producto.cr || 0,
       imagenUrl: producto.imagenUrl || "",
       imagenPublicaUrl: producto.imagenPublicaUrl || "",
+      imagenHerramientaUrl: producto.imagenHerramientaUrl || "",
       listarEnShop: Boolean(producto.listarEnShop),
       listarPublicamente: Boolean(producto.listarPublicamente)
     });
@@ -343,6 +352,12 @@ function handleProductPublicImage(event) {
   const [file] = event.target.files || [];
   productPublicImageFile.value = file || null;
   productPublicImagePreview.value = file ? URL.createObjectURL(file) : productForm.imagenPublicaUrl;
+}
+
+function handleProductToolImage(event) {
+  const [file] = event.target.files || [];
+  productToolImageFile.value = file || null;
+  productToolImagePreview.value = file ? URL.createObjectURL(file) : productForm.imagenHerramientaUrl;
 }
 
 function closeProductModal() {
@@ -385,6 +400,15 @@ async function saveProduct() {
       const formData = new FormData();
       formData.append("imagen", productPublicImageFile.value);
       await apiRequest(`/api/productos/${savedProduct.id}/imagen-publica`, {
+        method: "POST",
+        body: formData
+      });
+    }
+
+    if (productToolImageFile.value) {
+      const formData = new FormData();
+      formData.append("imagen", productToolImageFile.value);
+      await apiRequest(`/api/productos/${savedProduct.id}/imagen-herramienta`, {
         method: "POST",
         body: formData
       });
@@ -636,6 +660,14 @@ watch(productForm, () => {
                 <small>Se usa solo en /tienda/nombreusuario. Si esta vacia, usa la imagen interna.</small>
               </label>
               <VyProductImage :grad="productPublicImagePreview || productForm.imagenPublicaUrl || productForm.imagenUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 100%)'" :h="120" />
+            </section>
+            <section class="image-field full-field">
+              <label>
+                <span>Imagen herramientas digitales</span>
+                <input type="file" accept="image/png,image/jpeg,image/webp" @change="handleProductToolImage" />
+                <small>Se usa en /herramientas-digitales para mostrar una imagen limpia, sin precio.</small>
+              </label>
+              <VyProductImage :grad="productToolImagePreview || productForm.imagenHerramientaUrl || productForm.imagenUrl || 'linear-gradient(135deg, #F2E7C4 0%, #F28705 100%)'" :h="120" />
             </section>
             <label class="full-field">
               <span>Descripcion</span>

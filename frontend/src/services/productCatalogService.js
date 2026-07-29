@@ -17,6 +17,7 @@ export function mapProduct(producto) {
     rating: producto.rating || 4.8,
     badge: producto.badge || null,
     img: producto.imagenUrl || producto.img || DEFAULT_GRADIENT,
+    toolImg: producto.imagenHerramientaUrl || producto.imagenUrl || producto.img || DEFAULT_GRADIENT,
     listarEnShop: Boolean(producto.listarEnShop ?? true),
     listarPublicamente: Boolean(producto.listarPublicamente ?? false),
     descripcion: producto.descripcion || ""

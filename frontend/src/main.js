@@ -8,6 +8,7 @@ import LoginView from "./views/LoginView.vue";
 import LoginCarouselConfigView from "./views/LoginCarouselConfigView.vue";
 import NetworkView from "./views/NetworkView.vue";
 import PersonasView from "./views/PersonasView.vue";
+import ConsultarPersonaView from "./views/ConsultarPersonaView.vue";
 import ProfileView from "./views/ProfileView.vue";
 import RewardsView from "./views/RewardsView.vue";
 import ShopView from "./views/ShopView.vue";
@@ -64,6 +65,7 @@ const routes = [
   { path: "/novedades-login", name: "login-carousel-config", component: LoginCarouselConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/asistente", name: "asistente", component: AssistantView, meta: { sidebar: true, roles: ["*"] } },
   { path: "/asistente-config", name: "asistente-config", component: AssistantConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/consultar", name: "consultar", component: ConsultarPersonaView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/personas", name: "personas", component: PersonasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/rangos", name: "rangos", component: RangosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes", name: "planes", component: PlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },

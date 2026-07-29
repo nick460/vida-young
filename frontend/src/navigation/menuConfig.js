@@ -10,6 +10,7 @@ export const BASE_MENU_ITEMS = [
   { id: "landing-productos-config", label: "Configuracion landings", icon: "PanelsTopLeft", roles: [ROLE_ADMIN] },
   { id: "asistente", label: "Asistente", icon: "Bot", roles: ["*"] },
   { id: "asistente-config", label: "Config asistente", icon: "Settings", roles: [ROLE_ADMIN] },
+  { id: "consultar", label: "Consultar", icon: "Search", roles: [ROLE_ADMIN] },
   { id: "personas", label: "Personas", icon: "User", roles: [ROLE_ADMIN] },
   { id: "rangos", label: "Rangos", icon: "Trophy", roles: [ROLE_ADMIN] },
   { id: "planes", label: "Planes", icon: "BadgePercent", roles: [ROLE_ADMIN] },

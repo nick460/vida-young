@@ -75,7 +75,7 @@ public class ProductoRestController {
             @PathVariable Long id,
             @RequestPart("imagen") MultipartFile imagen
     ) throws IOException {
-        return guardarImagenProducto(id, imagen, false);
+        return guardarImagenProducto(id, imagen, TipoImagenProducto.INTERNA);
     }
 
     @PostMapping("/{id}/imagen-publica")
@@ -83,10 +83,18 @@ public class ProductoRestController {
             @PathVariable Long id,
             @RequestPart("imagen") MultipartFile imagen
     ) throws IOException {
-        return guardarImagenProducto(id, imagen, true);
+        return guardarImagenProducto(id, imagen, TipoImagenProducto.PUBLICA);
     }
 
-    private ResponseEntity<Producto> guardarImagenProducto(Long id, MultipartFile imagen, boolean publica) throws IOException {
+    @PostMapping("/{id}/imagen-herramienta")
+    public ResponseEntity<Producto> subirImagenHerramienta(
+            @PathVariable Long id,
+            @RequestPart("imagen") MultipartFile imagen
+    ) throws IOException {
+        return guardarImagenProducto(id, imagen, TipoImagenProducto.HERRAMIENTA);
+    }
+
+    private ResponseEntity<Producto> guardarImagenProducto(Long id, MultipartFile imagen, TipoImagenProducto tipoImagen) throws IOException {
         if (imagen.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -106,10 +114,11 @@ public class ProductoRestController {
                         Path destino = PRODUCT_UPLOAD_DIR.resolve(fileName).normalize();
                         imagen.transferTo(destino);
 
-                        if (publica) {
-                            producto.setImagenPublicaUrl("/uploads/productos/" + fileName);
-                        } else {
-                            producto.setImagenUrl("/uploads/productos/" + fileName);
+                        String url = "/uploads/productos/" + fileName;
+                        switch (tipoImagen) {
+                            case PUBLICA -> producto.setImagenPublicaUrl(url);
+                            case HERRAMIENTA -> producto.setImagenHerramientaUrl(url);
+                            case INTERNA -> producto.setImagenUrl(url);
                         }
                         return ResponseEntity.ok(productoService.guardar(producto));
                     } catch (IOException exception) {
@@ -117,6 +126,12 @@ public class ProductoRestController {
                     }
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    private enum TipoImagenProducto {
+        INTERNA,
+        PUBLICA,
+        HERRAMIENTA
     }
 
     @DeleteMapping("/{id}")
