@@ -8,6 +8,7 @@ import LoginView from "./views/LoginView.vue";
 import LoginCarouselConfigView from "./views/LoginCarouselConfigView.vue";
 import NetworkView from "./views/NetworkView.vue";
 import PersonasView from "./views/PersonasView.vue";
+import ConsultarPersonaSearchView from "./views/ConsultarPersonaSearchView.vue";
 import ConsultarPersonaView from "./views/ConsultarPersonaView.vue";
 import ProfileView from "./views/ProfileView.vue";
 import RewardsView from "./views/RewardsView.vue";
@@ -65,7 +66,8 @@ const routes = [
   { path: "/novedades-login", name: "login-carousel-config", component: LoginCarouselConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/asistente", name: "asistente", component: AssistantView, meta: { sidebar: true, roles: ["*"] } },
   { path: "/asistente-config", name: "asistente-config", component: AssistantConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
-  { path: "/consultar", name: "consultar", component: ConsultarPersonaView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/consultar", name: "consultar", component: ConsultarPersonaSearchView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/consultar/:personaId", name: "consultar-detalle", component: ConsultarPersonaView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "consultar" } },
   { path: "/personas", name: "personas", component: PersonasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/rangos", name: "rangos", component: RangosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes", name: "planes", component: PlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },

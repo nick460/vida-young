@@ -1,12 +1,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   BadgeCheck,
   CalendarClock,
   Gift,
   Network,
   RefreshCw,
-  Search,
   ShoppingBag,
   UserRound,
   WalletCards
@@ -14,16 +14,17 @@ import {
 import { apiRequest } from "../services/api.js";
 import { VyAvatar } from "../components/ui.js";
 
+const route = useRoute();
+const router = useRouter();
 const loading = ref(false);
 const detailLoading = ref(false);
 const error = ref("");
-const query = ref("");
 const personas = ref([]);
 const usuarios = ref([]);
 const referidos = ref([]);
 const periodos = ref([]);
 const selectedPeriodoId = ref("");
-const selectedPersonaId = ref("");
+const selectedPersonaId = ref(route.params.personaId || "");
 const walletSummary = ref(null);
 const compras = ref([]);
 const recompensas = ref([]);
@@ -31,21 +32,6 @@ const recompensas = ref([]);
 const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value)) || null
 );
-
-const filteredPersonas = computed(() => {
-  const term = normalize(query.value);
-  if (!term) return personas.value.slice(0, 20);
-
-  return personas.value
-    .filter((persona) => normalize([
-      persona.nombres,
-      persona.apellidos,
-      persona.documento,
-      persona.email,
-      persona.telefono
-    ].join(" ")).includes(term))
-    .slice(0, 30);
-});
 
 const usuario = computed(() =>
   usuarios.value.find((item) => Number(item.persona?.id) === Number(selectedPersonaId.value)) || null
@@ -251,6 +237,7 @@ async function loadBaseData() {
     personas.value = Array.isArray(personasData) ? personasData : [];
     usuarios.value = Array.isArray(usuariosData) ? usuariosData : [];
     referidos.value = Array.isArray(referidosData) ? referidosData : [];
+    await loadPersonaDetail();
   } catch (exception) {
     error.value = exception.message || "No se pudieron cargar las personas.";
   } finally {
@@ -260,14 +247,6 @@ async function loadBaseData() {
 
 async function refreshAll() {
   await loadBaseData();
-  if (selectedPersonaId.value) {
-    await loadPersonaDetail();
-  }
-}
-
-async function selectPersona(persona) {
-  selectedPersonaId.value = persona?.id || "";
-  await loadPersonaDetail();
 }
 
 async function loadPersonaDetail() {
@@ -306,6 +285,11 @@ watch(selectedPeriodoId, async (newValue, oldValue) => {
   }
 });
 
+watch(() => route.params.personaId, async (value) => {
+  selectedPersonaId.value = value || "";
+  await loadPersonaDetail();
+});
+
 onMounted(loadBaseData);
 </script>
 
@@ -332,51 +316,20 @@ onMounted(loadBaseData);
             <RefreshCw :class="{ spinning: loading || detailLoading }" :size="15" />
             Actualizar
           </button>
+          <button class="vy-btn vy-btn-dark" type="button" @click="router.push({ name: 'consultar' })">
+            <UserRound :size="15" />
+            Otra consulta
+          </button>
         </div>
       </header>
 
-      <section class="lookup-layout">
-        <section class="vy-card search-panel">
-          <div class="search-row">
-            <label class="search-field">
-              <Search :size="16" />
-              <input v-model.trim="query" placeholder="Buscar por nombre, CI, telefono o email" />
-            </label>
-            <div v-if="selectedPersona" class="selected-preview">
-              <VyAvatar :name="fullName(selectedPersona)" :size="36" bg="var(--vy-ink)" color="#fff" />
-              <span>
-                <strong>{{ fullName(selectedPersona) }}</strong>
-                <small>{{ selectedPersona.documento || "Sin documento" }} - {{ selectedPersona.telefono || "Sin telefono" }}</small>
-              </span>
-            </div>
-          </div>
-
-          <div v-if="loading" class="empty-box">Cargando personas...</div>
-          <div v-else class="person-results">
-            <button
-              v-for="persona in filteredPersonas"
-              :key="persona.id"
-              type="button"
-              :class="{ active: Number(persona.id) === Number(selectedPersonaId) }"
-              @click="selectPersona(persona)"
-            >
-              <VyAvatar :name="fullName(persona)" :size="34" bg="var(--vy-orange)" color="#fff" />
-              <span>
-                <strong>{{ fullName(persona) }}</strong>
-                <small>{{ persona.documento || "Sin documento" }} - {{ persona.telefono || "Sin telefono" }}</small>
-              </span>
-            </button>
-            <div v-if="!filteredPersonas.length" class="empty-box">No se encontraron personas.</div>
-          </div>
-        </section>
-
-        <section class="detail-panel">
+      <section class="detail-panel">
           <div v-if="error" class="error-box">{{ error }}</div>
 
           <section v-if="!selectedPersona" class="vy-card empty-state">
-            <Search :size="30" />
-            <h2>Selecciona una persona</h2>
-            <p>La consulta mostrara datos personales, usuario, plan, patrocinador, directos, billetera y actividad historica.</p>
+            <UserRound :size="30" />
+            <h2>Persona no encontrada</h2>
+            <p>Vuelve a la busqueda y selecciona una persona disponible.</p>
           </section>
 
           <template v-else>
@@ -575,7 +528,6 @@ onMounted(loadBaseData);
               </div>
             </section>
           </template>
-        </section>
       </section>
     </main>
   </div>
@@ -589,24 +541,10 @@ onMounted(loadBaseData);
 .header-actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .vy-btn { min-height: 40px; padding: 10px 16px; border-radius: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; }
 .vy-btn-ghost { background: var(--vy-surface); border: 1px solid var(--vy-line); color: var(--vy-ink-2); }
+.vy-btn-dark { background: var(--vy-ink); color: #fff; }
 .period-filter { min-width: 230px; display: grid; gap: 6px; }
 .period-filter span { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .period-filter select { width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; }
-.lookup-layout { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
-.search-panel { padding: 14px; display: grid; gap: 12px; }
-.search-row { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(260px, 0.7fr); gap: 12px; align-items: center; }
-.search-field { min-height: 42px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 8px; color: var(--vy-ink-3); }
-.search-field input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 700; }
-.selected-preview { min-height: 42px; padding: 8px 10px; border: 1px solid rgba(242, 135, 5, 0.35); border-radius: 12px; background: #fff8e8; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.selected-preview span { min-width: 0; display: grid; gap: 2px; }
-.selected-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 900; }
-.selected-preview small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
-.person-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; max-height: 220px; overflow: auto; padding-right: 2px; }
-.person-results button { width: 100%; min-height: 58px; padding: 10px; border: 1px solid var(--vy-line); border-radius: 12px; background: #fff; display: flex; align-items: center; gap: 10px; text-align: left; color: var(--vy-ink); }
-.person-results button.active, .person-results button:hover { border-color: rgba(242, 135, 5, 0.5); background: #fff8e8; }
-.person-results span { min-width: 0; display: grid; gap: 2px; }
-.person-results strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 900; }
-.person-results small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
 .detail-panel { min-width: 0; display: grid; gap: 14px; }
 .profile-strip { padding: 18px; display: flex; align-items: center; gap: 16px; }
 .profile-main { min-width: 0; flex: 1; }
@@ -666,8 +604,7 @@ td { color: var(--vy-ink-2); font-weight: 700; }
   .workspace { padding: 24px 20px 112px; }
   .page-header, .header-actions, .profile-strip { align-items: stretch; flex-direction: column; }
   .period-filter, .header-actions .vy-btn { width: 100%; }
-  .search-row, .summary-grid, .wallet-grid, .content-grid { grid-template-columns: 1fr; }
-  .person-results { max-height: 320px; }
+  .summary-grid, .wallet-grid, .content-grid { grid-template-columns: 1fr; }
   .profile-status { text-align: left; }
 }
 </style>
