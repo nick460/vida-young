@@ -12,6 +12,8 @@ public interface CompraService {
 
     List<Compra> listarPorPersona(Long personaId);
 
+    List<Compra> listarPorPersonaYPeriodo(Long personaId, Long periodoId);
+
     List<Compra> listarPorEstado(String estadoCompra);
 
     List<Compra> listarTodas();

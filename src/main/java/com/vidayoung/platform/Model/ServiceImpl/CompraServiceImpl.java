@@ -129,6 +129,17 @@ public class CompraServiceImpl implements CompraService {
     }
 
     @Override
+    public List<Compra> listarPorPersonaYPeriodo(Long personaId, Long periodoId) {
+        if (periodoId == null) {
+            return listarPorPersona(personaId);
+        }
+
+        return compraDao.findByPersonaIdAndPeriodoIdOrderByFechaCompraDesc(personaId, periodoId).stream()
+                .filter(compra -> Auditoria.ESTADO_ACTIVO.equals(compra.getEstado()))
+                .toList();
+    }
+
+    @Override
     public List<Compra> listarPorEstado(String estadoCompra) {
         String estado = normalizarTexto(estadoCompra);
         if (estado == null) {

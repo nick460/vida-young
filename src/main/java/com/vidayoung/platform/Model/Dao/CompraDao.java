@@ -12,6 +12,8 @@ public interface CompraDao extends JpaRepository<Compra, Long> {
 
     List<Compra> findByPersonaIdOrderByFechaCompraDesc(Long personaId);
 
+    List<Compra> findByPersonaIdAndPeriodoIdOrderByFechaCompraDesc(Long personaId, Long periodoId);
+
     List<Compra> findByEstadoCompraOrderByFechaCompraDesc(String estadoCompra);
 
     List<Compra> findByPeriodoIdOrderByFechaCompraDesc(Long periodoId);

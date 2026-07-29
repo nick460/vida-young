@@ -10,5 +10,7 @@ public interface RecompensaDao extends JpaRepository<Recompensa, Long> {
 
     List<Recompensa> findByBeneficiarioId(Long beneficiarioId);
 
+    List<Recompensa> findByBeneficiarioIdAndPeriodoId(Long beneficiarioId, Long periodoId);
+
     List<Recompensa> findByReferidoId(Long referidoId);
 }

@@ -44,8 +44,14 @@ public class RecompensaRestController {
     private final CarteraEmpresaService carteraEmpresaService;
 
     @GetMapping("/persona/{personaId}")
-    public ResponseEntity<List<Recompensa>> listarPorPersona(@PathVariable Long personaId) {
-        return ResponseEntity.ok(recompensaDao.findByBeneficiarioId(personaId).stream()
+    public ResponseEntity<List<Recompensa>> listarPorPersona(
+            @PathVariable Long personaId,
+            @RequestParam(required = false) Long periodoId
+    ) {
+        List<Recompensa> recompensas = periodoId == null
+                ? recompensaDao.findByBeneficiarioId(personaId)
+                : recompensaDao.findByBeneficiarioIdAndPeriodoId(personaId, periodoId);
+        return ResponseEntity.ok(recompensas.stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .toList());
     }

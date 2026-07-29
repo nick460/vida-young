@@ -47,8 +47,11 @@ public class CompraRestController {
     private final CompraService compraService;
 
     @GetMapping("/persona/{personaId}")
-    public ResponseEntity<List<Compra>> listarPorPersona(@PathVariable Long personaId) {
-        return ResponseEntity.ok(compraService.listarPorPersona(personaId));
+    public ResponseEntity<List<Compra>> listarPorPersona(
+            @PathVariable Long personaId,
+            @RequestParam(required = false) Long periodoId
+    ) {
+        return ResponseEntity.ok(compraService.listarPorPersonaYPeriodo(personaId, periodoId));
     }
 
     @GetMapping

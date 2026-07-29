@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   BadgeCheck,
   CalendarClock,
@@ -21,6 +21,8 @@ const query = ref("");
 const personas = ref([]);
 const usuarios = ref([]);
 const referidos = ref([]);
+const periodos = ref([]);
+const selectedPeriodoId = ref("");
 const selectedPersonaId = ref("");
 const walletSummary = ref(null);
 const compras = ref([]);
@@ -59,11 +61,15 @@ const directos = computed(() =>
   referidos.value.filter((item) => Number(item.patrocinador?.id) === Number(selectedPersonaId.value))
 );
 
+const selectedPeriodo = computed(() =>
+  periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value)) || null
+);
+
 const billetera = computed(() => walletSummary.value?.billetera || {});
 const movimientos = computed(() => walletSummary.value?.movimientos || []);
-const membresias = computed(() => walletSummary.value?.membresias || []);
-const cierres = computed(() => walletSummary.value?.cierresMensuales || []);
-const periodoActivo = computed(() => walletSummary.value?.periodoActivo || null);
+const membresias = computed(() => (walletSummary.value?.membresias || []).filter(membershipInSelectedPeriod));
+const cierres = computed(() => (walletSummary.value?.cierresMensuales || []).filter(cierreInSelectedPeriod));
+const periodoActivo = computed(() => selectedPeriodo.value || walletSummary.value?.periodoActivo || null);
 
 const walletCards = computed(() => [
   { label: "Dinero", value: `Bs. ${money(billetera.value.saldoDinero)}` },
@@ -164,6 +170,37 @@ function formatDateTime(value) {
   });
 }
 
+function dateOnly(value) {
+  if (!value) return null;
+  const [datePart] = String(value).split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function periodMonthKey(periodo) {
+  if (!periodo?.gestion?.anio || !periodo?.mes) return "";
+  return `${periodo.gestion.anio}-${String(periodo.mes).padStart(2, "0")}`;
+}
+
+function membershipInSelectedPeriod(membership) {
+  if (!selectedPeriodo.value) return true;
+  if (membership?.periodo?.id && Number(membership.periodo.id) === Number(selectedPeriodoId.value)) return true;
+
+  const start = dateOnly(membership?.fechaInicio);
+  const end = dateOnly(membership?.fechaFin);
+  const periodStart = dateOnly(selectedPeriodo.value.fechaInicio);
+  const periodEnd = dateOnly(selectedPeriodo.value.fechaFin);
+  if (!start || !end || !periodStart || !periodEnd) return false;
+  return start <= periodEnd && end >= periodStart;
+}
+
+function cierreInSelectedPeriod(cierre) {
+  if (!selectedPeriodo.value) return true;
+  if (cierre?.periodoGestion?.id && Number(cierre.periodoGestion.id) === Number(selectedPeriodoId.value)) return true;
+  return cierre?.periodo === periodMonthKey(selectedPeriodo.value);
+}
+
 function membershipName(membership) {
   return membership?.nombreActivacion || membership?.plan?.nombre || "Plan";
 }
@@ -174,6 +211,32 @@ function compraProductos(compra) {
     .join(", ");
 }
 
+async function loadPeriodos() {
+  const [activePeriodo, gestiones] = await Promise.all([
+    apiRequest("/api/gestiones/periodos/activo"),
+    apiRequest("/api/gestiones")
+  ]);
+  const periodosPorGestion = await Promise.all(
+    gestiones.map(async (gestion) => {
+      const items = await apiRequest(`/api/gestiones/${gestion.id}/periodos`);
+      return items.map((periodo) => ({ ...periodo, gestion: periodo.gestion || gestion }));
+    })
+  );
+
+  periodos.value = periodosPorGestion
+    .flat()
+    .sort((a, b) => {
+      const gestionA = Number(a.gestion?.anio || 0);
+      const gestionB = Number(b.gestion?.anio || 0);
+      if (gestionA !== gestionB) return gestionB - gestionA;
+      return Number(b.mes || 0) - Number(a.mes || 0);
+    });
+
+  if (!selectedPeriodoId.value) {
+    selectedPeriodoId.value = String(activePeriodo?.id || periodos.value[0]?.id || "");
+  }
+}
+
 async function loadBaseData() {
   loading.value = true;
   error.value = "";
@@ -182,7 +245,8 @@ async function loadBaseData() {
     const [personasData, usuariosData, referidosData] = await Promise.all([
       apiRequest("/api/personas"),
       apiRequest("/api/usuarios"),
-      apiRequest("/api/referidos")
+      apiRequest("/api/referidos"),
+      loadPeriodos()
     ]);
     personas.value = Array.isArray(personasData) ? personasData : [];
     usuarios.value = Array.isArray(usuariosData) ? usuariosData : [];
@@ -194,8 +258,19 @@ async function loadBaseData() {
   }
 }
 
+async function refreshAll() {
+  await loadBaseData();
+  if (selectedPersonaId.value) {
+    await loadPersonaDetail();
+  }
+}
+
 async function selectPersona(persona) {
   selectedPersonaId.value = persona?.id || "";
+  await loadPersonaDetail();
+}
+
+async function loadPersonaDetail() {
   walletSummary.value = null;
   compras.value = [];
   recompensas.value = [];
@@ -206,10 +281,11 @@ async function selectPersona(persona) {
   error.value = "";
 
   try {
+    const queryString = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
     const [walletResult, comprasResult, recompensasResult] = await Promise.allSettled([
-      apiRequest(`/api/billeteras/persona/${selectedPersonaId.value}`),
-      apiRequest(`/api/compras/persona/${selectedPersonaId.value}`),
-      apiRequest(`/api/recompensas/persona/${selectedPersonaId.value}`)
+      apiRequest(`/api/billeteras/persona/${selectedPersonaId.value}${queryString}`),
+      apiRequest(`/api/compras/persona/${selectedPersonaId.value}${queryString}`),
+      apiRequest(`/api/recompensas/persona/${selectedPersonaId.value}${queryString}`)
     ]);
 
     walletSummary.value = walletResult.status === "fulfilled" ? walletResult.value : null;
@@ -224,6 +300,12 @@ async function selectPersona(persona) {
   }
 }
 
+watch(selectedPeriodoId, async (newValue, oldValue) => {
+  if (newValue && oldValue && selectedPersonaId.value) {
+    await loadPersonaDetail();
+  }
+});
+
 onMounted(loadBaseData);
 </script>
 
@@ -234,20 +316,40 @@ onMounted(loadBaseData);
         <div>
           <div class="vy-eyebrow">Consultar</div>
           <h1>Vista completa de persona</h1>
-          <p>Busca una persona y revisa sus datos, red, billetera activa e historial operativo.</p>
+          <p>Busca una persona y revisa sus datos, red, billetera e historial del mes seleccionado.</p>
         </div>
-        <button class="vy-btn vy-btn-ghost" type="button" :disabled="loading" @click="loadBaseData">
-          <RefreshCw :class="{ spinning: loading }" :size="15" />
-          Actualizar
-        </button>
+        <div class="header-actions">
+          <label class="period-filter">
+            <span>Mes</span>
+            <select v-model="selectedPeriodoId">
+              <option value="" disabled>Selecciona un mes</option>
+              <option v-for="periodo in periodos" :key="periodo.id" :value="periodo.id">
+                {{ periodo.nombre }} - Gestion {{ periodo.gestion?.anio || "" }}
+              </option>
+            </select>
+          </label>
+          <button class="vy-btn vy-btn-ghost" type="button" :disabled="loading || detailLoading" @click="refreshAll">
+            <RefreshCw :class="{ spinning: loading || detailLoading }" :size="15" />
+            Actualizar
+          </button>
+        </div>
       </header>
 
       <section class="lookup-layout">
-        <aside class="vy-card search-panel">
-          <label class="search-field">
-            <Search :size="16" />
-            <input v-model.trim="query" placeholder="Buscar por nombre, CI, telefono o email" />
-          </label>
+        <section class="vy-card search-panel">
+          <div class="search-row">
+            <label class="search-field">
+              <Search :size="16" />
+              <input v-model.trim="query" placeholder="Buscar por nombre, CI, telefono o email" />
+            </label>
+            <div v-if="selectedPersona" class="selected-preview">
+              <VyAvatar :name="fullName(selectedPersona)" :size="36" bg="var(--vy-ink)" color="#fff" />
+              <span>
+                <strong>{{ fullName(selectedPersona) }}</strong>
+                <small>{{ selectedPersona.documento || "Sin documento" }} - {{ selectedPersona.telefono || "Sin telefono" }}</small>
+              </span>
+            </div>
+          </div>
 
           <div v-if="loading" class="empty-box">Cargando personas...</div>
           <div v-else class="person-results">
@@ -266,7 +368,7 @@ onMounted(loadBaseData);
             </button>
             <div v-if="!filteredPersonas.length" class="empty-box">No se encontraron personas.</div>
           </div>
-        </aside>
+        </section>
 
         <section class="detail-panel">
           <div v-if="error" class="error-box">{{ error }}</div>
@@ -314,7 +416,7 @@ onMounted(loadBaseData);
               </article>
               <article class="summary-card vy-card">
                 <span class="summary-icon"><CalendarClock :size="18" /></span>
-                <small>Periodo activo</small>
+                <small>Mes consultado</small>
                 <strong>{{ periodoActivo?.nombre || "Sin periodo" }}</strong>
                 <p>{{ periodoActivo?.gestion?.anio || "" }}</p>
               </article>
@@ -348,8 +450,8 @@ onMounted(loadBaseData);
 
               <article class="vy-card info-card">
                 <header>
-                  <h3>Totales historicos</h3>
-                  <span>{{ compras.length }} compras</span>
+                  <h3>Totales del mes</h3>
+                  <span>{{ compras.length }} compras del mes</span>
                 </header>
                 <div class="metrics-list">
                   <div><span>Compras</span><strong>Bs. {{ money(totals.compras) }}</strong></div>
@@ -364,7 +466,7 @@ onMounted(loadBaseData);
             <section class="vy-card history-card">
               <header>
                 <h3>Compras internas</h3>
-                <span>{{ compras.length }} registros</span>
+                <span>{{ compras.length }} registros del mes</span>
               </header>
               <div class="table-wrap">
                 <table>
@@ -396,7 +498,7 @@ onMounted(loadBaseData);
             <section class="vy-card history-card">
               <header>
                 <h3>Recompensas</h3>
-                <span>{{ recompensas.length }} registros</span>
+                <span>{{ recompensas.length }} registros del mes</span>
               </header>
               <div class="table-wrap">
                 <table>
@@ -484,13 +586,22 @@ onMounted(loadBaseData);
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .page-header h1 { margin-top: 8px; font-size: 30px; font-weight: 800; }
 .page-header p { margin-top: 4px; color: var(--vy-ink-2); font-size: 14px; }
+.header-actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .vy-btn { min-height: 40px; padding: 10px 16px; border-radius: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; }
 .vy-btn-ghost { background: var(--vy-surface); border: 1px solid var(--vy-line); color: var(--vy-ink-2); }
-.lookup-layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; }
-.search-panel { position: sticky; top: 18px; padding: 14px; display: grid; gap: 12px; }
+.period-filter { min-width: 230px; display: grid; gap: 6px; }
+.period-filter span { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.period-filter select { width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; }
+.lookup-layout { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
+.search-panel { padding: 14px; display: grid; gap: 12px; }
+.search-row { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(260px, 0.7fr); gap: 12px; align-items: center; }
 .search-field { min-height: 42px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 8px; color: var(--vy-ink-3); }
 .search-field input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 700; }
-.person-results { display: grid; gap: 8px; max-height: calc(100vh - 185px); overflow: auto; padding-right: 2px; }
+.selected-preview { min-height: 42px; padding: 8px 10px; border: 1px solid rgba(242, 135, 5, 0.35); border-radius: 12px; background: #fff8e8; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.selected-preview span { min-width: 0; display: grid; gap: 2px; }
+.selected-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 900; }
+.selected-preview small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.person-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; max-height: 220px; overflow: auto; padding-right: 2px; }
 .person-results button { width: 100%; min-height: 58px; padding: 10px; border: 1px solid var(--vy-line); border-radius: 12px; background: #fff; display: flex; align-items: center; gap: 10px; text-align: left; color: var(--vy-ink); }
 .person-results button.active, .person-results button:hover { border-color: rgba(242, 135, 5, 0.5); background: #fff8e8; }
 .person-results span { min-width: 0; display: grid; gap: 2px; }
@@ -549,14 +660,13 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .spinning { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 1180px) {
-  .lookup-layout { grid-template-columns: 300px minmax(0, 1fr); }
   .summary-grid, .wallet-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
   .workspace { padding: 24px 20px 112px; }
-  .page-header, .profile-strip { align-items: stretch; flex-direction: column; }
-  .lookup-layout, .summary-grid, .wallet-grid, .content-grid { grid-template-columns: 1fr; }
-  .search-panel { position: static; }
+  .page-header, .header-actions, .profile-strip { align-items: stretch; flex-direction: column; }
+  .period-filter, .header-actions .vy-btn { width: 100%; }
+  .search-row, .summary-grid, .wallet-grid, .content-grid { grid-template-columns: 1fr; }
   .person-results { max-height: 320px; }
   .profile-status { text-align: left; }
 }
