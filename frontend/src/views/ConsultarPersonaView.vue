@@ -35,6 +35,8 @@ const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value)) || null
 );
 
+const selectedPersonaPhoto = computed(() => photoUrl(selectedPersona.value));
+
 const usuario = computed(() =>
   usuarios.value.find((item) => Number(item.persona?.id) === Number(selectedPersonaId.value)) || null
 );
@@ -147,6 +149,17 @@ function normalize(value) {
 function fullName(persona) {
   if (!persona) return "Sin persona";
   return `${persona.nombres || ""} ${persona.apellidos || ""}`.trim() || "Sin nombre";
+}
+
+function usuarioDePersona(persona) {
+  return usuarios.value.find((item) => Number(item.persona?.id) === Number(persona?.id)) || null;
+}
+
+function photoUrl(persona) {
+  const photo = persona?.fotoPerfil || usuarioDePersona(persona)?.fotoPerfil || "";
+  if (!photo) return "";
+  if (photo.startsWith("http") || photo.startsWith("blob:")) return photo;
+  return photo.startsWith("/") ? photo : `/${photo}`;
 }
 
 function money(value) {
@@ -357,7 +370,8 @@ onMounted(loadBaseData);
 
           <template v-else>
             <section class="profile-strip vy-card">
-              <VyAvatar :name="fullName(selectedPersona)" :size="64" bg="var(--vy-ink)" color="#fff" />
+              <img v-if="selectedPersonaPhoto" class="profile-photo" :src="selectedPersonaPhoto" :alt="fullName(selectedPersona)" />
+              <VyAvatar v-else :name="fullName(selectedPersona).slice(0, 2).toUpperCase()" :size="64" bg="var(--vy-ink)" color="#fff" />
               <div class="profile-main">
                 <span class="vy-eyebrow">Persona #{{ selectedPersona.id }}</span>
                 <h2>{{ fullName(selectedPersona) }}</h2>
@@ -610,6 +624,7 @@ onMounted(loadBaseData);
 .period-filter select { width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; }
 .detail-panel { min-width: 0; display: grid; gap: 14px; }
 .profile-strip { padding: 18px; display: flex; align-items: center; gap: 16px; }
+.profile-photo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid #fff; box-shadow: var(--vy-shadow-sm); background: var(--vy-surface-2); }
 .profile-main { min-width: 0; flex: 1; }
 .profile-main h2 { margin-top: 5px; font-size: 24px; font-weight: 900; }
 .profile-main p { margin-top: 4px; color: var(--vy-ink-2); font-size: 13px; overflow-wrap: anywhere; }

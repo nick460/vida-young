@@ -13,12 +13,15 @@ const router = useRouter();
 const loading = ref(false);
 const error = ref("");
 const personas = ref([]);
+const usuarios = ref([]);
 const selectedPersonaId = ref("");
 const personaSelect = ref(null);
 
 const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value)) || null
 );
+
+const selectedPersonaPhoto = computed(() => photoUrl(selectedPersona.value));
 
 function fullName(persona) {
   if (!persona) return "Sin persona";
@@ -27,6 +30,17 @@ function fullName(persona) {
 
 function personaLabel(persona) {
   return `${fullName(persona)}${persona.documento ? ` - CI ${persona.documento}` : ""}${persona.telefono ? ` - ${persona.telefono}` : ""}`;
+}
+
+function usuarioDePersona(persona) {
+  return usuarios.value.find((usuario) => Number(usuario.persona?.id) === Number(persona?.id)) || null;
+}
+
+function photoUrl(persona) {
+  const photo = persona?.fotoPerfil || usuarioDePersona(persona)?.fotoPerfil || "";
+  if (!photo) return "";
+  if (photo.startsWith("http") || photo.startsWith("blob:")) return photo;
+  return photo.startsWith("/") ? photo : `/${photo}`;
 }
 
 function destroyPersonaSelect2() {
@@ -68,8 +82,13 @@ async function loadPersonas() {
   error.value = "";
 
   try {
-    const data = await apiRequest("/api/personas");
+    const [personasData, usuariosData] = await Promise.all([
+      apiRequest("/api/personas"),
+      apiRequest("/api/usuarios")
+    ]);
+    const data = personasData;
     personas.value = Array.isArray(data) ? data : [];
+    usuarios.value = Array.isArray(usuariosData) ? usuariosData : [];
     await initPersonaSelect2();
   } catch (exception) {
     error.value = exception.message || "No se pudieron cargar las personas.";
@@ -131,9 +150,13 @@ onBeforeUnmount(destroyPersonaSelect2);
         </form>
 
         <div v-if="selectedPersona" class="preview-box">
-          <small>Vista previa</small>
-          <strong>{{ fullName(selectedPersona) }}</strong>
-          <span>{{ selectedPersona.documento || "Sin documento" }} - {{ selectedPersona.email || "Sin correo" }} - {{ selectedPersona.telefono || "Sin telefono" }}</span>
+          <img v-if="selectedPersonaPhoto" class="preview-photo" :src="selectedPersonaPhoto" :alt="fullName(selectedPersona)" />
+          <div v-else class="preview-avatar">{{ fullName(selectedPersona).slice(0, 2).toUpperCase() }}</div>
+          <div>
+            <small>Vista previa</small>
+            <strong>{{ fullName(selectedPersona) }}</strong>
+            <span>{{ selectedPersona.documento || "Sin documento" }} - {{ selectedPersona.email || "Sin correo" }} - {{ selectedPersona.telefono || "Sin telefono" }}</span>
+          </div>
         </div>
 
         <div v-if="error" class="error-box">{{ error }}</div>
@@ -159,7 +182,10 @@ label span, .preview-box small { display: block; margin-bottom: 6px; color: var(
 select { width: 100%; min-height: 42px; }
 .vy-btn { min-height: 42px; padding: 10px 18px; border-radius: 12px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .vy-btn-primary { background: var(--vy-orange); color: #fff; box-shadow: var(--vy-shadow-orange); }
-.preview-box { padding: 14px; border: 1px solid rgba(242, 135, 5, 0.35); border-radius: 12px; background: #fff8e8; }
+.preview-box { padding: 14px; border: 1px solid rgba(242, 135, 5, 0.35); border-radius: 12px; background: #fff8e8; display: flex; align-items: center; gap: 12px; }
+.preview-photo, .preview-avatar { width: 54px; height: 54px; border-radius: 50%; flex-shrink: 0; }
+.preview-photo { display: block; object-fit: cover; border: 2px solid #fff; box-shadow: var(--vy-shadow-sm); }
+.preview-avatar { background: var(--vy-ink); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; }
 .preview-box strong { display: block; margin-top: 4px; font-size: 16px; font-weight: 900; }
 .preview-box span { display: block; margin-top: 4px; color: var(--vy-ink-2); font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
 .refresh-button { width: fit-content; display: inline-flex; align-items: center; gap: 7px; color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
