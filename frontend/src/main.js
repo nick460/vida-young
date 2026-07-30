@@ -18,6 +18,7 @@ import WalletView from "./views/WalletView.vue";
 import CompanyWalletView from "./views/CompanyWalletView.vue";
 import WalletWithdrawalsView from "./views/WalletWithdrawalsView.vue";
 import LevelOneWithdrawalsView from "./views/LevelOneWithdrawalsView.vue";
+import LogsView from "./views/LogsView.vue";
 import GestionPeriodsView from "./views/GestionPeriodsView.vue";
 import CartView from "./views/CartView.vue";
 import RolesMenusView from "./views/RolesMenusView.vue";
@@ -84,6 +85,7 @@ const routes = [
   { path: "/caja-empresa", name: "caja-empresa", component: CompanyWalletView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/retiros-billeteras", name: "retiros-billeteras", component: WalletWithdrawalsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/retiros-nivel-1", name: "retiros-nivel-1", component: LevelOneWithdrawalsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/logs", name: "logs", component: LogsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/wallet", name: "wallet", component: WalletView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/shop", name: "shop", component: ShopView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] } },
   { path: "/cart", name: "cart", component: CartView, meta: { sidebar: true, roles: ["*"], parentMenu: "shop" } },

@@ -4,6 +4,8 @@ import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.RolDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
+import com.vidayoung.platform.Model.Dao.MenuSistemaDao;
+import com.vidayoung.platform.Model.Entity.MenuSistema;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.Rol;
 import com.vidayoung.platform.Model.Entity.Usuario;
@@ -26,6 +28,7 @@ public class DataInitializer {
     private final PersonaDao personaDao;
     private final UsuarioDao usuarioDao;
     private final RolDao rolDao;
+    private final MenuSistemaDao menuSistemaDao;
     private final PasswordEncoder passwordEncoder;
 
     @Bean
@@ -67,9 +70,26 @@ public class DataInitializer {
             persona.setUsuario(usuario);
             persona.setEstado(Auditoria.ESTADO_ACTIVO);
             rol.setEstado(Auditoria.ESTADO_ACTIVO);
+            asignarMenuLogs(rol);
 
             usuarioDao.save(usuario);
         };
+    }
+
+    private void asignarMenuLogs(Rol rol) {
+        MenuSistema logsMenu = menuSistemaDao.findByMenuId("logs")
+                .orElseGet(() -> MenuSistema.builder()
+                        .menuId("logs")
+                        .label("Logs")
+                        .icon("Terminal")
+                        .custom(false)
+                        .orden(90)
+                        .build());
+
+        logsMenu.setEstado(Auditoria.ESTADO_ACTIVO);
+        logsMenu.setCustom(false);
+        logsMenu = menuSistemaDao.save(logsMenu);
+        rol.getMenus().add(logsMenu);
     }
 
     private boolean isBCryptHash(String value) {
