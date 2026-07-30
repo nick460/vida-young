@@ -1,10 +1,10 @@
 package com.vidayoung.platform.Config;
 
+import com.vidayoung.platform.Model.Dao.MenuSistemaDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.RolDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
-import com.vidayoung.platform.Model.Dao.MenuSistemaDao;
 import com.vidayoung.platform.Model.Entity.MenuSistema;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.Rol;
@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -29,6 +30,7 @@ public class DataInitializer {
     private final UsuarioDao usuarioDao;
     private final RolDao rolDao;
     private final MenuSistemaDao menuSistemaDao;
+    private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
 
     @Bean
@@ -70,6 +72,7 @@ public class DataInitializer {
             persona.setUsuario(usuario);
             persona.setEstado(Auditoria.ESTADO_ACTIVO);
             rol.setEstado(Auditoria.ESTADO_ACTIVO);
+            rol = rolDao.save(rol);
             asignarMenuLogs(rol);
 
             usuarioDao.save(usuario);
@@ -89,7 +92,12 @@ public class DataInitializer {
         logsMenu.setEstado(Auditoria.ESTADO_ACTIVO);
         logsMenu.setCustom(false);
         logsMenu = menuSistemaDao.save(logsMenu);
-        rol.getMenus().add(logsMenu);
+
+        jdbcTemplate.update(
+                "INSERT INTO roles_menus (rol_id, menu_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                rol.getId(),
+                logsMenu.getId()
+        );
     }
 
     private boolean isBCryptHash(String value) {
