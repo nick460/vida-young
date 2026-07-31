@@ -469,6 +469,14 @@ onBeforeUnmount(() => window.clearInterval(carouselTimer.value));
   }
   .carousel-row > :deep(div) { height: clamp(220px, 68vw, 300px) !important; }
   .landing-section.carousel .carousel-row { margin-left: 0; margin-right: 0; }
+  /* Las piezas de contenido suelen ser banners apaisados; en móvil deben
+     conservar toda la imagen en lugar de recortar sus extremos. */
+  .hero-image > :deep(div img),
+  .landing-section.imageText > :deep(div img),
+  .landing-section.gallery .carousel-row > :deep(div img),
+  .landing-section.carousel .carousel-row > :deep(div img) {
+    object-fit: contain !important;
+  }
   .contact-card { border-radius: 16px; }
   .contact-card > div:first-child { width: min(250px, 100%); height: min(250px, calc(100vw - 88px)) !important; }
   .floating-whatsapp { right: 14px; bottom: 14px; min-height: 50px; padding: 0 15px; font-size: 13px; }
