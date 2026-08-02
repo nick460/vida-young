@@ -882,7 +882,7 @@ async function saveCajaSale() {
     );
     resetSaleForm();
     closeSaleModal();
-    await loadAll();
+    await loadVentasPeriodo();
   } catch (exception) {
     await showError("No se pudo guardar", exception.message || "No se pudo guardar la venta.");
   } finally {
@@ -899,7 +899,7 @@ async function updateCompraEstado(compra, estadoCompra) {
       body: JSON.stringify({ estadoCompra })
     });
     await showSuccess("Compra actualizada", `Compra #${compra.id} actualizada a ${estadoCompra}.`);
-    await loadAll();
+    await loadVentasPeriodo();
   } catch (exception) {
     await showError("No se pudo actualizar", exception.message || "No se pudo actualizar la compra.");
   }
@@ -919,7 +919,7 @@ async function updateCompraPublicaEstado(compra, estadoCompra) {
       closePublicReviewModal();
     }
     await showSuccess("Venta publica actualizada", `Pedido publico #${compra.id} actualizado a ${estadoCompra}.`);
-    await loadAll();
+    await loadVentasPeriodo();
   } catch (exception) {
     await showError("No se pudo actualizar", exception.message || "No se pudo actualizar la venta publica.");
   } finally {
