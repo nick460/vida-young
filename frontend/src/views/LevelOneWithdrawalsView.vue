@@ -200,7 +200,7 @@ function buildLevelOneReceipt(retiro) {
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Comprobante nivel 1</title>
+  <title>Bono de patrocinio</title>
   <style>
     @page { size: 8cm auto; margin: 0.5cm; }
     * { box-sizing: border-box; }
@@ -224,7 +224,7 @@ function buildLevelOneReceipt(retiro) {
 <body>
   <main>
     <img class="logo" src="${logoFull}" alt="Vida Young">
-    <h1>Comprobante nivel 1</h1>
+    <h1>Bono de patrocinio</h1>
     <p class="receipt-id">Retiro ${escapeHtml(retiro.retiroId)}</p>
     <div class="row"><span class="label">Beneficiario</span><span class="value">${escapeHtml(retiro.beneficiario)}</span></div>
     <div class="row"><span class="label">Documento</span><span class="value">${escapeHtml(retiro.documento)}</span></div>
@@ -245,7 +245,7 @@ function buildLevelOneReceipt(retiro) {
 
 function printLevelOneReceipt(retiro) {
   const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", "Comprobante nivel 1");
+  iframe.setAttribute("title", "Bono de patrocinio");
   iframe.style.position = "fixed";
   iframe.style.right = "0";
   iframe.style.bottom = "0";
@@ -291,7 +291,7 @@ async function loadAll() {
     productos.value = Array.isArray(productosData) ? productosData : [];
     await initPeriodoSelect2();
   } catch (exception) {
-    error.value = exception.message || "No se pudieron cargar los retiros de nivel 1.";
+    error.value = exception.message || "No se pudieron cargar los bonos de patrocinio.";
   } finally {
     loading.value = false;
   }
@@ -427,7 +427,12 @@ function addProducto() {
   if (!producto) return;
   const siguienteTotal = retiroProductosTotal.value + Number(producto.precio || 0);
   if (siguienteTotal > productosSeleccionadoDisponible.value) {
-    error.value = "El producto seleccionado supera el credito disponible de la recompensa.";
+    Swal.fire({
+      title: "Crédito insuficiente",
+      text: "El producto seleccionado supera el crédito disponible para este bono de patrocinio.",
+      icon: "warning",
+      confirmButtonColor: "#F28705"
+    });
     return;
   }
   error.value = "";
@@ -468,7 +473,12 @@ function nextPage() {
 async function registrarRetiro() {
   if (!selected.value || processing.value) return;
   if (!canRegistrarRetiro.value) {
-    error.value = "Revisa los montos: no pueden superar el efectivo o credito disponible.";
+    await Swal.fire({
+      title: "Montos no válidos",
+      text: "Revisa los montos: no pueden superar el efectivo o crédito disponible del bono de patrocinio.",
+      icon: "warning",
+      confirmButtonColor: "#F28705"
+    });
     return;
   }
   processing.value = true;
@@ -487,8 +497,8 @@ async function registrarRetiro() {
       })
     });
     await Swal.fire({
-      title: "Retiro procesado",
-      text: "La recompensa de nivel 1 fue actualizada.",
+      title: "Bono procesado",
+      text: "El bono de patrocinio fue actualizado.",
       icon: "success",
       confirmButtonColor: "#F28705"
     });
@@ -496,7 +506,12 @@ async function registrarRetiro() {
     closeModal();
     await loadAll();
   } catch (exception) {
-    error.value = exception.message || "No se pudo registrar el retiro.";
+    await Swal.fire({
+      title: "No se pudo procesar el bono",
+      text: exception.message || "No se pudo registrar el bono de patrocinio.",
+      icon: "error",
+      confirmButtonColor: "#F28705"
+    });
   } finally {
     processing.value = false;
   }
@@ -553,9 +568,9 @@ onBeforeUnmount(() => {
       <header class="page-header">
         <div>
           <div class="vy-eyebrow">Recompensas inmediatas</div>
-          <h1>Retiros nivel 1</h1>
+          <h1>Bonos de patrocinio</h1>
           <p>
-            Retiros individuales de efectivo inmediato y credito en producto del patrocinador directo.
+            Bonos individuales de efectivo inmediato y crédito en producto del patrocinador directo.
             <strong v-if="selectedPeriodo">Mostrando {{ selectedPeriodo.nombre }}.</strong>
           </p>
         </div>
@@ -596,8 +611,8 @@ onBeforeUnmount(() => {
       <section class="vy-card table-card">
         <header class="section-header">
           <div>
-            <h2>Beneficiarios nivel 1</h2>
-            <p>Selecciona una recompensa para procesar su retiro inmediato.</p>
+            <h2>Beneficiarios del bono</h2>
+            <p>Selecciona un bono de patrocinio para procesar su entrega.</p>
           </div>
           <label class="search-box">
             <Search :size="16" />
@@ -680,7 +695,7 @@ onBeforeUnmount(() => {
         <article class="retiro-modal">
           <header>
             <div>
-              <span class="vy-eyebrow">Nivel 1</span>
+              <span class="vy-eyebrow">Bono de patrocinio</span>
               <h2>Detalle de retiro #{{ selectedRetiroDetalle.id }}</h2>
               <p>{{ selectedRetiroDetalle.nombres }} {{ selectedRetiroDetalle.apellidos }} - {{ selectedRetiroDetalle.periodoNombre }}</p>
             </div>
@@ -757,8 +772,8 @@ onBeforeUnmount(() => {
         <article class="retiro-modal">
           <header>
             <div>
-              <span class="vy-eyebrow">Nivel 1</span>
-              <h2>Retiro inmediato</h2>
+              <span class="vy-eyebrow">Bono de patrocinio</span>
+              <h2>Entrega del bono</h2>
               <p>{{ fullName(selected.beneficiario) }}</p>
             </div>
             <button type="button" aria-label="Cerrar" @click="closeModal">
@@ -802,7 +817,7 @@ onBeforeUnmount(() => {
               <div class="field" :class="{ invalid: retiroExcedeProductos }">
                 <span>Total productos</span>
                 <div class="readonly-total">Bs. {{ money(retiroProductosTotal) }}</div>
-                <small v-if="retiroExcedeProductos">Supera el credito disponible.</small>
+                <small v-if="retiroExcedeProductos">Supera el crédito disponible.</small>
               </div>
             </div>
 
