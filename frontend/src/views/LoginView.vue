@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { Eye, EyeOff } from "lucide-vue-next";
 import { VyIcon } from "../components/ui.js";
 import { useAuthStore } from "../stores/authStore.js";
 import { apiRequest } from "../services/api.js";
@@ -13,6 +14,7 @@ const route = useRoute();
 
 const username = ref("");
 const password = ref("");
+const showPassword = ref(false);
 const remember = ref(true);
 const loading = ref(false);
 const error = ref("");
@@ -158,13 +160,25 @@ onBeforeUnmount(() => {
               <span>Contrasena</span>
               <button type="button">Olvidaste tu contrasena?</button>
             </span>
-            <input
-              v-model="password"
-              type="password"
-              autocomplete="current-password"
-              placeholder="**********"
-              required
-            />
+            <div class="password-input-wrap">
+              <input
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                placeholder="**********"
+                required
+              />
+              <button
+                class="password-toggle"
+                type="button"
+                :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
+                :title="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
+                @click="showPassword = !showPassword"
+              >
+                <EyeOff v-if="showPassword" :size="18" />
+                <Eye v-else :size="18" />
+              </button>
+            </div>
           </label>
 
           <div v-if="error" class="login-error">{{ error }}</div>
@@ -294,6 +308,36 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
+  color: var(--vy-ink);
+}
+
+.password-input-wrap {
+  position: relative;
+}
+
+.password-input-wrap input {
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vy-ink-3);
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background: var(--vy-surface-2);
   color: var(--vy-ink);
 }
 
