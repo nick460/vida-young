@@ -130,7 +130,7 @@ VALUES
     ('gestiones', 'Gestiones', 'CalendarClock', FALSE, 180),
     ('caja-empresa', 'Caja empresa', 'Building2', FALSE, 190),
     ('retiros-billeteras', 'Retiros billeteras', 'ArrowDownToLine', FALSE, 200),
-    ('retiros-nivel-1', 'Retiros nivel 1', 'Gift', FALSE, 210),
+    ('retiros-nivel-1', 'Bono de Patrocinio', 'Gift', FALSE, 210),
     ('logs', 'Logs', 'Terminal', FALSE, 215),
     ('wallet', 'Billetera', 'Wallet', FALSE, 220),
     ('shop', 'Tienda', 'ShoppingBag', FALSE, 230),

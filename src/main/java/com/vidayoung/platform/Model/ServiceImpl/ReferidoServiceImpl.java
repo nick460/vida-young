@@ -271,6 +271,7 @@ public class ReferidoServiceImpl implements ReferidoService {
             boolean beneficiarioActivo = beneficiarioReferido
                     .map(this::membresiaActiva)
                     .orElse(false);
+            boolean recompensaCobrable = nivelActual == 1 || beneficiarioActivo;
 
             if (nivelAlcanza && (efectivo.compareTo(BigDecimal.ZERO) > 0 || productos.compareTo(BigDecimal.ZERO) > 0)) {
                 Recompensa recompensa = recompensaDao.save(Recompensa.builder()
@@ -280,8 +281,8 @@ public class ReferidoServiceImpl implements ReferidoService {
                         .nivelGenerado(nivelActual)
                         .montoEfectivo(efectivo)
                         .valorProductos(productos)
-                        .cobrable(beneficiarioActivo)
-                        .motivoNoCobrable(beneficiarioActivo ? null : "No cobrable porque la membresia no esta activa.")
+                        .cobrable(recompensaCobrable)
+                        .motivoNoCobrable(recompensaCobrable ? null : "No cobrable porque la membresia no esta activa.")
                         .periodo(gestionPeriodoService.obtenerPeriodoActivo())
                         .build());
                 billeteraService.sincronizarSaldoProductosRecompensa(recompensa.getId());

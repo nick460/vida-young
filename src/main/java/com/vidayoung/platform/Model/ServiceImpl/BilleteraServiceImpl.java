@@ -698,8 +698,10 @@ public class BilleteraServiceImpl implements BilleteraService {
         recompensaDao.findByBeneficiarioId(persona.getId()).stream()
                 .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
                 .forEach(recompensa -> {
-                    recompensa.setCobrable(cobrable);
-                    recompensa.setMotivoNoCobrable(cobrable ? null : "No cobrable porque la membresia no esta activa.");
+                    boolean esNivelUno = Integer.valueOf(1).equals(recompensa.getNivelGenerado());
+                    boolean cobrableFinal = esNivelUno || cobrable;
+                    recompensa.setCobrable(cobrableFinal);
+                    recompensa.setMotivoNoCobrable(cobrableFinal ? null : "No cobrable porque la membresia no esta activa.");
                     recompensa = recompensaDao.save(recompensa);
                     sincronizarSaldoProductosRecompensa(recompensa);
                 });
