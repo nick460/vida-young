@@ -140,15 +140,24 @@ export const VyBarChart = defineComponent({
 });
 
 // ============ PRODUCT IMAGE ============
+const MEDIA_API_URL = String(import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
 export const VyProductImage = defineComponent({
   props: { grad: String, label: String, h: { default: 220 }, big: Boolean },
   computed: {
     isImage() {
       return this.grad && (this.grad.startsWith("/") || this.grad.startsWith("http") || this.grad.startsWith("blob:"));
+    },
+    imageSrc() {
+      if (!this.grad || !this.grad.startsWith("/")) {
+        return this.grad;
+      }
+
+      return `${MEDIA_API_URL}${this.grad}`;
     }
   },
   template: `<div :style="{height:h+'px',borderRadius:'14px',background:isImage ? 'var(--vy-surface-2)' : grad,position:'relative',overflow:'hidden',display:'flex',alignItems:'flex-end',padding:'14px'}">
-    <img v-if="isImage" :src="grad" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
+    <img v-if="isImage" :src="imageSrc" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
     <div v-if="!isImage" style="position:absolute;inset:0;background:radial-gradient(circle at 30% 20%, rgba(255,255,255,.5), transparent 60%)"></div>
     <svg v-if="!isImage" viewBox="0 0 120 180" :style="{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%, -52%)',width:(big ? 140 : 90)+'px',height:(big ? 210 : 135)+'px',filter:'drop-shadow(0 12px 18px rgba(31,26,20,.18))'}">
       <rect x="48" y="6" width="24" height="22" rx="3" fill="rgba(31,26,20,.85)"/>
