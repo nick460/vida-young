@@ -328,6 +328,12 @@ function youtubeEmbedUrl(url) {
   return videoId ? `https://www.youtube.com/embed/${videoId}` : "";
 }
 
+function heroPreviewImage(section) {
+  return /(?:youtube\.com|youtu\.be)/i.test(String(section?.imageUrl || ""))
+    ? previewGallery.value[0]
+    : (section?.imageUrl || previewGallery.value[0]);
+}
+
 onMounted(loadProducts);
 watch(selectedProduct, fillForm);
 </script>
@@ -571,7 +577,7 @@ watch(selectedProduct, fillForm);
                     {{ section.buttonText || "Comprar ahora" }}
                   </button>
                 </div>
-                <VyProductImage :grad="section.imageUrl || previewGallery[0]" :h="300" big />
+                <VyProductImage :grad="heroPreviewImage(section)" :h="300" big />
               </template>
 
               <template v-else-if="section.type === 'benefits'">

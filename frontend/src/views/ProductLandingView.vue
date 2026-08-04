@@ -25,6 +25,7 @@ const referral = ref({
 const gallery = computed(() => landing.value?.gallery?.length ? landing.value.gallery : [product.value?.img].filter(Boolean));
 const sections = computed(() => landing.value?.sections?.length ? landing.value.sections : []);
 const heroSection = computed(() => sections.value.find((section) => section.type === "hero"));
+const heroImage = computed(() => isVideoUrl(heroSection.value?.imageUrl) ? gallery.value[0] : (heroSection.value?.imageUrl || gallery.value[0]));
 const contentSections = computed(() => sections.value.filter((section) => section.type !== "hero"));
 const contactSection = computed(() => sections.value.find((section) => section.type === "contact"));
 const advisorName = computed(() => formatAdvisorName(referral.value.name || referral.value.user || contactSection.value?.title || "Asesor Vidayoung"));
@@ -178,6 +179,10 @@ function youtubeEmbedUrl(url) {
   return videoId ? `https://www.youtube.com/embed/${videoId}` : "";
 }
 
+function isVideoUrl(url) {
+  return /(?:youtube\.com|youtu\.be)/i.test(String(url || ""));
+}
+
 onMounted(loadProduct);
 onBeforeUnmount(() => window.clearInterval(carouselTimer.value));
 </script>
@@ -214,7 +219,7 @@ onBeforeUnmount(() => window.clearInterval(carouselTimer.value));
           </div>
         </div>
         <div class="hero-image">
-          <VyProductImage :grad="heroSection.imageUrl || gallery[0]" :h="460" big />
+          <VyProductImage :grad="heroImage" :h="460" big />
         </div>
       </section>
 

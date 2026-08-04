@@ -146,7 +146,9 @@ export const VyProductImage = defineComponent({
   props: { grad: String, label: String, h: { default: 220 }, big: Boolean },
   computed: {
     isImage() {
-      return this.grad && (this.grad.startsWith("/") || this.grad.startsWith("http") || this.grad.startsWith("blob:"));
+      return this.grad
+        && (this.grad.startsWith("/") || this.grad.startsWith("http") || this.grad.startsWith("blob:"))
+        && !/(youtube\.com|youtu\.be)/i.test(this.grad);
     },
     imageSrc() {
       if (!this.grad || !this.grad.startsWith("/")) {
