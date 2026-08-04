@@ -38,4 +38,6 @@ public interface MovimientoCarteraEmpresaDao extends JpaRepository<MovimientoCar
     BigDecimal sumMontoByPeriodo(@Param("carteraId") Long carteraId, @Param("periodoId") Long periodoId);
 
     boolean existsByReferenciaTipoAndReferenciaIdAndTipo(String referenciaTipo, Long referenciaId, String tipo);
+
+    List<MovimientoCarteraEmpresa> findByReferenciaTipoAndReferenciaId(String referenciaTipo, Long referenciaId);
 }

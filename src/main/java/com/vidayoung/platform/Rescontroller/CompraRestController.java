@@ -119,6 +119,16 @@ public class CompraRestController {
         return ResponseEntity.ok(compraService.cambiarEstado(compraId, request.getEstadoCompra(), usuarioOperacion));
     }
 
+    @PostMapping("/{compraId}/anular")
+    public ResponseEntity<Compra> anularCompra(
+            @PathVariable Long compraId,
+            @RequestBody AnularCompraRequest request,
+            Authentication authentication
+    ) {
+        String usuarioOperacion = authentication == null ? null : authentication.getName();
+        return ResponseEntity.ok(compraService.anularCompra(compraId, request.getMotivo(), usuarioOperacion));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> manejarValidacion(IllegalArgumentException exception) {
         return ResponseEntity.badRequest().body(exception.getMessage());
@@ -201,6 +211,13 @@ public class CompraRestController {
     public static class EstadoCompraRequest {
 
         private String estadoCompra;
+    }
+
+    @Getter
+    @Setter
+    public static class AnularCompraRequest {
+
+        private String motivo;
     }
 
     @Getter

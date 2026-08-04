@@ -3,6 +3,7 @@ package com.vidayoung.platform.Model.ServiceImpl;
 import com.vidayoung.platform.Model.Dao.CarteraEmpresaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoCarteraEmpresaDao;
 import com.vidayoung.platform.Model.Entity.CarteraEmpresa;
+import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.MovimientoCarteraEmpresa;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
@@ -47,7 +48,9 @@ public class CarteraEmpresaServiceImpl implements CarteraEmpresaService {
     @Override
     public List<MovimientoCarteraEmpresa> listarMovimientos() {
         CarteraEmpresa cartera = asegurarCarteraPrincipal();
-        return movimientoCarteraEmpresaDao.findByCarteraIdOrderByFechaRegistroDesc(cartera.getId());
+        return movimientoCarteraEmpresaDao.findByCarteraIdOrderByFechaRegistroDesc(cartera.getId()).stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .toList();
     }
 
     @Override
@@ -56,7 +59,9 @@ public class CarteraEmpresaServiceImpl implements CarteraEmpresaService {
             return listarMovimientos();
         }
         CarteraEmpresa cartera = asegurarCarteraPrincipal();
-        return movimientoCarteraEmpresaDao.findByCarteraIdAndPeriodoIdOrderByFechaRegistroDesc(cartera.getId(), periodoId);
+        return movimientoCarteraEmpresaDao.findByCarteraIdAndPeriodoIdOrderByFechaRegistroDesc(cartera.getId(), periodoId).stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .toList();
     }
 
     @Override

@@ -92,7 +92,9 @@ public class BilleteraServiceImpl implements BilleteraService {
 
     @Override
     public List<MovimientoBilletera> listarMovimientos(Long personaId) {
-        return movimientoBilleteraDao.findByBilleteraPersonaIdOrderByFechaRegistroDesc(personaId);
+        return movimientoBilleteraDao.findByBilleteraPersonaIdOrderByFechaRegistroDesc(personaId).stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .toList();
     }
 
     @Override

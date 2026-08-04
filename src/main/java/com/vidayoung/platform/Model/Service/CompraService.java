@@ -24,6 +24,8 @@ public interface CompraService {
 
     Compra cambiarEstado(Long compraId, String estadoCompra, String usuarioOperacion);
 
+    Compra anularCompra(Long compraId, String motivo, String usuarioOperacion);
+
     record ItemCompraRequest(Long productoId, Integer cantidad) {
     }
 

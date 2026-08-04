@@ -9,6 +9,7 @@ import { jsPDF } from "jspdf";
 import {
   CheckCircle2,
   CircleX,
+  Ban,
   ClipboardCheck,
   FileText,
   MoreVertical,
@@ -92,7 +93,7 @@ const selectedPersona = computed(() =>
 );
 
 const visibleCompras = computed(() =>
-  compras.value.filter((compra) => ["PENDIENTE", "VALIDADA"].includes(compra.estadoCompra))
+  compras.value.filter((compra) => ["PENDIENTE", "VALIDADA", "ANULADA"].includes(compra.estadoCompra))
 );
 
 const visibleComprasPublicas = computed(() =>
@@ -905,6 +906,34 @@ async function updateCompraEstado(compra, estadoCompra) {
   }
 }
 
+async function anularCompra(compra) {
+  const result = await Swal.fire({
+    title: `Anular compra #${compra.id}`,
+    input: "textarea",
+    inputLabel: "Motivo de anulacion",
+    inputPlaceholder: "Escribe el motivo...",
+    inputAttributes: { maxlength: 240 },
+    showCancelButton: true,
+    confirmButtonText: "Anular compra",
+    cancelButtonText: "Cancelar",
+    customClass: alertClasses,
+    inputValidator: (value) => !String(value || "").trim() ? "El motivo es obligatorio." : undefined
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    await apiRequest(`/api/compras/${compra.id}/anular`, {
+      method: "POST",
+      body: JSON.stringify({ motivo: result.value.trim() })
+    });
+    await showSuccess("Compra anulada", `La compra #${compra.id} fue anulada y sus movimientos fueron revertidos.`);
+    await loadVentasPeriodo();
+  } catch (exception) {
+    await showError("No se pudo anular", exception.message || "No se pudo anular la compra.");
+  }
+}
+
 async function updateCompraPublicaEstado(compra, estadoCompra) {
   error.value = "";
   if (saving.value) return;
@@ -1112,6 +1141,9 @@ onMounted(() => {
                           @click="closeActionMenu(); openReceiptModal(compra)"
                         >
                           <ClipboardCheck :size="15" /> Comprobante
+                        </button>
+                        <button v-if="compra.estadoCompra === 'VALIDADA'" type="button" @click="closeActionMenu(); anularCompra(compra)">
+                          <Ban :size="15" /> Anular compra
                         </button>
                       </div>
                     </div>
@@ -1376,6 +1408,9 @@ onMounted(() => {
                       @click="closeActionMenu(); openReceiptModal(compra)"
                     >
                       <FileText :size="15" /> Comprobante
+                    </button>
+                    <button v-if="compra.estadoCompra === 'VALIDADA'" type="button" @click="closeActionMenu(); anularCompra(compra)">
+                      <Ban :size="15" /> Anular compra
                     </button>
                   </div>
                 </div>

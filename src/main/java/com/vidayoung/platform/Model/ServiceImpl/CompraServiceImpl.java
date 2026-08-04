@@ -4,6 +4,7 @@ import com.vidayoung.platform.Model.Dao.BeneficioActivacionCompraDao;
 import com.vidayoung.platform.Model.Dao.BilleteraDao;
 import com.vidayoung.platform.Model.Dao.CompraDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
+import com.vidayoung.platform.Model.Dao.MovimientoCarteraEmpresaDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionNivelDao;
@@ -15,6 +16,7 @@ import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.Compra;
 import com.vidayoung.platform.Model.Entity.CompraDetalle;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
+import com.vidayoung.platform.Model.Entity.MovimientoCarteraEmpresa;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
@@ -41,7 +43,8 @@ public class CompraServiceImpl implements CompraService {
             Compra.ESTADO_COMPRA_PENDIENTE,
             Compra.ESTADO_COMPRA_VALIDADA,
             Compra.ESTADO_COMPRA_RECHAZADA,
-            Compra.ESTADO_COMPRA_CONFIRMADA
+            Compra.ESTADO_COMPRA_CONFIRMADA,
+            Compra.ESTADO_COMPRA_ANULADA
     );
 
     private final CompraDao compraDao;
@@ -49,6 +52,7 @@ public class CompraServiceImpl implements CompraService {
     private final PersonaDao personaDao;
     private final BilleteraDao billeteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
+    private final MovimientoCarteraEmpresaDao movimientoCarteraEmpresaDao;
     private final ReferidoDao referidoDao;
     private final PlanActivacionDao planActivacionDao;
     private final PlanActivacionNivelDao planActivacionNivelDao;
@@ -196,6 +200,144 @@ public class CompraServiceImpl implements CompraService {
         }
 
         return compra;
+    }
+
+    @Override
+    @Transactional(rollbackOn = Exception.class)
+    public Compra anularCompra(Long compraId, String motivo, String usuarioOperacion) {
+        String motivoNormalizado = normalizarTexto(motivo);
+        if (motivoNormalizado == null) {
+            throw new IllegalArgumentException("El motivo de anulacion es obligatorio.");
+        }
+
+        Compra compra = compraDao.findById(compraId)
+                .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Compra no encontrada."));
+        if (!Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra())) {
+            throw new IllegalArgumentException("Solo se pueden anular compras validadas.");
+        }
+
+        revertirMovimientosCompra(compra);
+        revertirBeneficiosCompra(compra);
+
+        compra.setEstadoCompra(Compra.ESTADO_COMPRA_ANULADA);
+        compra.setMotivoAnulacion(motivoNormalizado);
+        compra.setUsuarioAnulacion(normalizarTexto(usuarioOperacion));
+        compra.setFechaAnulacion(LocalDateTime.now());
+        return compraDao.save(compra);
+    }
+
+    private void revertirMovimientosCompra(Compra compra) {
+        List<MovimientoBilletera> movimientos = movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaId("COMPRA", compra.getId());
+        for (MovimientoBilletera movimiento : movimientos) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                continue;
+            }
+            Billetera billetera = movimiento.getBilletera();
+            BigDecimal saldoAnterior = saldoPorTipo(billetera, movimiento.getTipo());
+            BigDecimal nuevoSaldo = saldoAnterior.subtract(zeroIfNull(movimiento.getMonto()));
+            if (nuevoSaldo.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("No se puede anular la compra porque el saldo "
+                        + movimiento.getTipo() + " ya fue utilizado.");
+            }
+            asignarSaldoPorTipo(billetera, movimiento.getTipo(), nuevoSaldo);
+            billeteraDao.save(billetera);
+            movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
+            movimientoBilleteraDao.save(movimiento);
+            movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                    .billetera(billetera)
+                    .tipo(movimiento.getTipo())
+                    .periodo(compra.getPeriodo())
+                    .concepto("Anulacion de compra #" + compra.getId())
+                    .referenciaTipo("ANULACION_COMPRA")
+                    .referenciaId(compra.getId())
+                    .monto(zeroIfNull(movimiento.getMonto()).negate())
+                    .saldoResultado(nuevoSaldo)
+                    .build());
+        }
+
+        List<MovimientoCarteraEmpresa> movimientosCartera = movimientoCarteraEmpresaDao
+                .findByReferenciaTipoAndReferenciaId("VENTA_INTERNA", compra.getId());
+        BigDecimal importe = movimientosCartera.stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .map(MovimientoCarteraEmpresa::getMonto)
+                .map(this::zeroIfNull)
+                .map(BigDecimal::abs)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (importe.compareTo(BigDecimal.ZERO) > 0) {
+            carteraEmpresaService.registrarEgreso(
+                    "ANULACION_COMPRA", compra.getId(), importe,
+                    "Anulacion de venta interna #" + compra.getId());
+            movimientosCartera.stream()
+                    .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                    .forEach(movimiento -> {
+                        movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
+                        movimientoCarteraEmpresaDao.save(movimiento);
+                    });
+        }
+    }
+
+    private void revertirBeneficiosCompra(Compra compra) {
+        for (BeneficioActivacionCompra beneficio : beneficioActivacionCompraDao.findByCompraId(compra.getId())) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado())) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(beneficio.getPaga())) {
+                for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                        .findByReferenciaTipoAndReferenciaId("BENEFICIO_ACTIVACION_COMPRA", beneficio.getId())) {
+                    if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                        continue;
+                    }
+                    Billetera billetera = movimiento.getBilletera();
+                    BigDecimal nuevoSaldo = zeroIfNull(billetera.getSaldoDinero())
+                            .subtract(zeroIfNull(movimiento.getMonto()));
+                    if (nuevoSaldo.compareTo(BigDecimal.ZERO) < 0) {
+                        throw new IllegalArgumentException("No se puede anular la compra porque un beneficio ya fue utilizado.");
+                    }
+                    billetera.setSaldoDinero(nuevoSaldo);
+                    billeteraDao.save(billetera);
+                    movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
+                    movimientoBilleteraDao.save(movimiento);
+                    movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                            .billetera(billetera)
+                            .tipo(MovimientoBilletera.TIPO_DINERO)
+                            .periodo(compra.getPeriodo())
+                            .concepto("Anulacion de beneficio de compra #" + compra.getId())
+                            .referenciaTipo("ANULACION_BENEFICIO_COMPRA")
+                            .referenciaId(beneficio.getId())
+                            .monto(zeroIfNull(movimiento.getMonto()).negate())
+                            .saldoResultado(nuevoSaldo)
+                            .build());
+                }
+            }
+            beneficio.setEstado(Auditoria.ESTADO_ELIMINADO);
+            beneficio.setMotivo("Anulado por anulacion de compra #" + compra.getId());
+            beneficioActivacionCompraDao.save(beneficio);
+        }
+    }
+
+    private BigDecimal saldoPorTipo(Billetera billetera, String tipo) {
+        return switch (tipo) {
+            case MovimientoBilletera.TIPO_PV -> zeroIfNull(billetera.getSaldoPv());
+            case MovimientoBilletera.TIPO_QP -> zeroIfNull(billetera.getSaldoQp());
+            case MovimientoBilletera.TIPO_CR -> zeroIfNull(billetera.getSaldoCr());
+            case MovimientoBilletera.TIPO_DINERO -> zeroIfNull(billetera.getSaldoDinero());
+            default -> throw new IllegalArgumentException("Tipo de movimiento no reversible: " + tipo);
+        };
+    }
+
+    private void asignarSaldoPorTipo(Billetera billetera, String tipo, BigDecimal saldo) {
+        switch (tipo) {
+            case MovimientoBilletera.TIPO_PV -> billetera.setSaldoPv(saldo);
+            case MovimientoBilletera.TIPO_QP -> {
+                billetera.setSaldoQp(saldo);
+                billeteraService.actualizarRangoActual(billetera.getPersona(), saldo);
+            }
+            case MovimientoBilletera.TIPO_CR -> billetera.setSaldoCr(saldo);
+            case MovimientoBilletera.TIPO_DINERO -> billetera.setSaldoDinero(saldo);
+            default -> throw new IllegalArgumentException("Tipo de movimiento no reversible: " + tipo);
+        }
     }
 
     private void registrarAuditoriaEstado(Compra compra, String estadoNuevo, String usuarioOperacion) {

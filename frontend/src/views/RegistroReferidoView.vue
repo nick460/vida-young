@@ -5,7 +5,7 @@ import select2 from "select2";
 import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { CheckCircle2, RefreshCw, UserCheck, XCircle } from "lucide-vue-next";
+import { CheckCircle2, RefreshCw, UserCheck, UserPlus, XCircle } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 
 select2($);
@@ -18,6 +18,7 @@ const personas = ref([]);
 const planes = ref([]);
 const referidos = ref([]);
 const selectedId = ref("");
+const newRegistrationOpen = ref(false);
 const patrocinadorSelect = ref(null);
 const planSelect = ref(null);
 
@@ -32,7 +33,9 @@ const form = reactive({
   documento: "",
   telefono: "",
   email: "",
-  usernameSolicitado: ""
+  usernameSolicitado: "",
+  password: "",
+  confirmPassword: ""
 });
 
 function fullName(persona) {
@@ -87,6 +90,7 @@ async function loadAll() {
 }
 
 function selectPreinscripcion(item) {
+  newRegistrationOpen.value = false;
   selectedId.value = String(item.id);
   Object.assign(form, {
     patrocinadorId: item.patrocinador?.id || "",
@@ -96,7 +100,9 @@ function selectPreinscripcion(item) {
     documento: item.documento || "",
     telefono: item.telefono || "",
     email: item.email || "",
-    usernameSolicitado: item.usernameSolicitado || ""
+    usernameSolicitado: item.usernameSolicitado || "",
+    password: "",
+    confirmPassword: ""
   });
   initializeSelect2Controls();
 }
@@ -125,7 +131,7 @@ function syncSelect2Value(selectRef, value) {
 async function initializeSelect2Controls() {
   await nextTick();
 
-  if (!selected.value) return;
+  if (!selected.value && !newRegistrationOpen.value) return;
 
   destroySelect2(patrocinadorSelect);
   destroySelect2(planSelect);
@@ -152,6 +158,30 @@ async function initializeSelect2Controls() {
 
   syncSelect2Value(patrocinadorSelect, form.patrocinadorId);
   syncSelect2Value(planSelect, form.planId);
+}
+
+function startNewRegistration() {
+  selectedId.value = "";
+  newRegistrationOpen.value = true;
+  Object.assign(form, {
+    patrocinadorId: "",
+    planId: "",
+    nombres: "",
+    apellidos: "",
+    documento: "",
+    telefono: "",
+    email: "",
+    usernameSolicitado: "",
+    password: "",
+    confirmPassword: ""
+  });
+  initializeSelect2Controls();
+}
+
+function closeNewRegistration() {
+  newRegistrationOpen.value = false;
+  destroySelect2(patrocinadorSelect);
+  destroySelect2(planSelect);
 }
 
 function planById(planId) {
@@ -322,6 +352,89 @@ async function validateSelected() {
   }
 }
 
+async function createNewRegistration() {
+  const requiredFields = [
+    [form.patrocinadorId, "Selecciona la persona que refiere."],
+    [form.planId, "Selecciona el plan de ingreso."],
+    [form.nombres, "Ingresa los nombres."],
+    [form.apellidos, "Ingresa los apellidos."],
+    [form.documento, "Ingresa el CI."],
+    [form.telefono, "Ingresa el numero de celular."],
+    [form.usernameSolicitado, "Ingresa el nombre de usuario."],
+    [form.password, "Ingresa la contrasena."],
+    [form.confirmPassword, "Confirma la contrasena."]
+  ];
+  const missing = requiredFields.find(([value]) => !String(value || "").trim());
+  if (missing) {
+    await Swal.fire({ title: "Datos incompletos", text: missing[1], icon: "warning", confirmButtonText: "Entendido", confirmButtonColor: "#F28705" });
+    return;
+  }
+  if (form.password !== form.confirmPassword) {
+    await Swal.fire({ title: "Contrasenas diferentes", text: "La confirmacion de contrasena no coincide.", icon: "warning", confirmButtonText: "Entendido", confirmButtonColor: "#F28705" });
+    return;
+  }
+
+  try {
+    const confirmation = await Swal.fire({
+      title: "Confirmar nuevo registro",
+      html: confirmationHtml(),
+      icon: "info",
+      showCancelButton: true,
+      confirmButtonText: "Registrar persona",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#F28705",
+      cancelButtonColor: "#1F1A14",
+      width: 680
+    });
+    if (!confirmation.isConfirmed) return;
+
+    saving.value = true;
+    const preinscripcion = await apiRequest("/api/public/preinscripciones-referidos", {
+      method: "POST",
+      auth: false,
+      body: JSON.stringify({
+        patrocinadorId: Number(form.patrocinadorId),
+        planId: Number(form.planId),
+        nombres: form.nombres,
+        apellidos: form.apellidos,
+        documento: form.documento,
+        telefono: form.telefono,
+        email: form.email,
+        username: form.usernameSolicitado,
+        password: form.password,
+        confirmPassword: form.confirmPassword
+      })
+    });
+
+    await apiRequest(`/api/preinscripciones-referidos/${preinscripcion.id}/validar`, {
+      method: "POST",
+      body: JSON.stringify({
+        patrocinadorId: Number(form.patrocinadorId),
+        planId: Number(form.planId),
+        nombres: form.nombres,
+        apellidos: form.apellidos,
+        documento: form.documento,
+        telefono: form.telefono,
+        email: form.email
+      })
+    });
+
+    await Swal.fire({
+      title: "Referido registrado",
+      text: "La persona fue creada y agregada a la red correctamente.",
+      icon: "success",
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#F28705"
+    });
+    closeNewRegistration();
+    await loadAll();
+  } catch (exception) {
+    await Swal.fire({ title: "No se pudo registrar", text: exception.message || "Revisa los datos del nuevo referido.", icon: "error", confirmButtonText: "Entendido", confirmButtonColor: "#F28705" });
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function rejectSelected() {
   if (!selected.value) return;
 
@@ -368,6 +481,10 @@ onBeforeUnmount(() => {
         <RefreshCw :size="16" />
         Actualizar
       </button>
+      <button type="button" class="new-registration-button" :disabled="saving" @click="startNewRegistration">
+        <UserPlus :size="16" />
+        Nuevo registro
+      </button>
     </section>
 
     <p v-if="error" class="error-box">{{ error }}</p>
@@ -396,13 +513,14 @@ onBeforeUnmount(() => {
         <p v-if="loading" class="empty-state">Cargando solicitudes...</p>
       </aside>
 
-      <form v-if="selected" class="panel validation-form" @submit.prevent="validateSelected">
+      <form v-if="selected || newRegistrationOpen" class="panel validation-form" @submit.prevent="selected ? validateSelected() : createNewRegistration()">
         <header>
           <div>
-            <h2>Validar datos</h2>
-            <p>Solicitud #{{ selected.id }}</p>
+            <h2>{{ selected ? "Validar datos" : "Nuevo registro" }}</h2>
+            <p v-if="selected">Solicitud #{{ selected.id }}</p>
+            <p v-else>Registro manual desde ventanilla</p>
           </div>
-          <span class="status-pill">{{ selected.estadoPreinscripcion }}</span>
+          <span v-if="selected" class="status-pill">{{ selected.estadoPreinscripcion }}</span>
         </header>
 
         <div class="form-grid">
@@ -428,8 +546,18 @@ onBeforeUnmount(() => {
           </label>
           <label class="full-field">
             Usuario solicitado
-            <input v-model.trim="form.usernameSolicitado" disabled />
+            <input v-model.trim="form.usernameSolicitado" :disabled="!!selected" required maxlength="50" />
           </label>
+          <template v-if="!selected">
+            <label>
+              Contrasena
+              <input v-model="form.password" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
+            </label>
+            <label>
+              Confirmar contrasena
+              <input v-model="form.confirmPassword" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
+            </label>
+          </template>
           <label class="full-field">
             Persona que refiere
             <select ref="patrocinadorSelect" v-model="form.patrocinadorId" required>
@@ -451,13 +579,16 @@ onBeforeUnmount(() => {
         </div>
 
         <footer>
-          <button type="button" class="reject-button" :disabled="saving" @click="rejectSelected">
+          <button v-if="selected" type="button" class="reject-button" :disabled="saving" @click="rejectSelected">
             <XCircle :size="16" />
             Rechazar
           </button>
+          <button v-if="newRegistrationOpen" type="button" class="reject-button" :disabled="saving" @click="closeNewRegistration">
+            Cancelar
+          </button>
           <button type="submit" class="validate-button" :disabled="saving">
             <CheckCircle2 :size="16" />
-            {{ saving ? "Validando..." : "Validar y registrar" }}
+            {{ saving ? "Guardando..." : selected ? "Validar y registrar" : "Registrar desde cero" }}
           </button>
         </footer>
       </form>
@@ -465,7 +596,7 @@ onBeforeUnmount(() => {
       <section v-else class="panel empty-panel">
         <UserCheck :size="36" />
         <h2>Selecciona una solicitud</h2>
-        <p>Cuando haya preinscripciones pendientes, selecciona una para validar datos y asignar plan.</p>
+        <p>Selecciona una preinscripcion pendiente o crea un nuevo registro desde cero.</p>
       </section>
     </section>
   </main>
@@ -502,6 +633,7 @@ onBeforeUnmount(() => {
 }
 
 .refresh-button,
+.new-registration-button,
 .validate-button,
 .reject-button {
   min-height: 42px;
@@ -519,6 +651,12 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(242, 135, 5, 0.34);
   background: #fff;
   color: var(--vy-orange-deep);
+}
+
+.new-registration-button {
+  border: 1px solid rgba(31, 26, 20, 0.18);
+  background: var(--vy-ink);
+  color: #fff;
 }
 
 .layout-grid {

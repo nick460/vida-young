@@ -61,7 +61,9 @@ function progressWidth(node) {
           <strong>{{ fullName(node.persona) }}</strong>
           <small>{{ node.plan?.nombre || "Sin plan" }}</small>
         </div>
-        <MoreHorizontal :size="15" stroke-width="2" />
+        <button class="details-button" type="button" title="Ver detalles" @click.stop="$emit('open-details', node)">
+          <MoreHorizontal :size="15" stroke-width="2" />
+        </button>
       </header>
 
       <div class="volume-track">
@@ -80,6 +82,7 @@ function progressWidth(node) {
         :key="child.id"
         :node="child"
         :level="level + 1"
+        @open-details="$emit('open-details', $event)"
       />
     </ul>
   </li>
@@ -160,6 +163,23 @@ function progressWidth(node) {
 .tree-card header > div {
   flex: 1;
   min-width: 0;
+}
+
+.details-button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  color: var(--vy-ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.details-button:hover,
+.details-button:focus-visible {
+  background: var(--vy-cream);
+  color: var(--vy-orange-deep);
 }
 
 .tree-card header strong,

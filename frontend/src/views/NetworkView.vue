@@ -2,9 +2,13 @@
 import { computed, onMounted, ref } from "vue";
 import {
   Copy,
+  CreditCard,
+  Mail,
   Maximize2,
+  Phone,
   Plus,
   RefreshCw,
+  X,
   ZoomIn,
   ZoomOut
 } from "lucide-vue-next";
@@ -17,6 +21,8 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 const loading = ref(false);
 const error = ref("");
 const referidos = ref([]);
+const activePeriodo = ref(null);
+const selectedPerson = ref(null);
 const viewMode = ref("tree");
 const copiedInvite = ref(false);
 const zoomLevel = ref(1);
@@ -37,7 +43,7 @@ const mapLevels = computed(() => {
   });
   return [...levels.entries()].map(([level, rows]) => ({ level, rows }));
 });
-const activeCount = computed(() => collectNetwork(currentPersona.value?.id).length);
+const activeCount = computed(() => collectNetwork(currentPersona.value?.id).filter(isActiveCurrentMonth).length);
 const maxDepth = computed(() => {
   const planDepths = collectNetwork(currentPersona.value?.id).map((item) => Number(item.plan?.nivelesAlcance || 0));
   return Math.max(0, ...planDepths);
@@ -48,6 +54,7 @@ const zoomStyle = computed(() => ({
   transform: `scale(${zoomLevel.value})`,
   transformOrigin: viewMode.value === "tree" ? "top center" : "top left"
 }));
+const selectedPersonActive = computed(() => isActiveCurrentMonth(selectedPerson.value));
 const inviteCode = computed(() => authStore.usuario?.username || currentPersona.value?.documento || "VIDAYOUNG");
 const inviteLink = computed(() => {
   const username = authStore.usuario?.username?.trim();
@@ -98,6 +105,31 @@ function photoUrl(persona, fallback = "") {
 
 function currentPhotoUrl() {
   return photoUrl(currentPersona.value, authStore.usuario?.fotoPerfil || "");
+}
+
+function isActiveCurrentMonth(referido) {
+  if (!referido || referido.estado !== "ACTIVO" || referido.persona?.estado !== "ACTIVO") {
+    return false;
+  }
+
+  if (!Boolean(referido.membresiaActiva) || !referido.fechaFinMembresia) {
+    return false;
+  }
+
+  if (!activePeriodo.value?.fechaFin) {
+    return Boolean(referido.membresiaActiva);
+  }
+
+  return new Date(referido.fechaFinMembresia).getTime()
+    >= new Date(`${activePeriodo.value.fechaFin}T23:59:59`).getTime();
+}
+
+function openPersonDetails(referido) {
+  selectedPerson.value = referido;
+}
+
+function closePersonDetails() {
+  selectedPerson.value = null;
 }
 
 function childrenOf(personaId) {
@@ -215,7 +247,12 @@ async function loadNetwork() {
       await authStore.cargarPerfil();
     }
 
-    referidos.value = await apiRequest("/api/referidos");
+    const [referidosData, periodoData] = await Promise.all([
+      apiRequest("/api/referidos"),
+      apiRequest("/api/gestiones/periodos/activo")
+    ]);
+    referidos.value = referidosData;
+    activePeriodo.value = periodoData;
   } catch (exception) {
     error.value = "No se pudo cargar tu red. Verifica que la sesion siga activa.";
   } finally {
@@ -344,6 +381,7 @@ onMounted(loadNetwork);
                   :key="node.id"
                   :node="node"
                   :level="1"
+                  @open-details="openPersonDetails"
                 />
               </ul>
             </div>
@@ -403,6 +441,45 @@ onMounted(loadNetwork);
         </div>
       </section>
     </main>
+
+    <div v-if="selectedPerson" class="person-details-backdrop" @click.self="closePersonDetails">
+      <article class="person-details-modal">
+        <header>
+          <div>
+            <span class="vy-eyebrow">Detalle de persona</span>
+            <h2>{{ fullName(selectedPerson.persona) }}</h2>
+            <p>{{ selectedPerson.plan?.nombre || "Sin plan asignado" }}</p>
+          </div>
+          <button type="button" aria-label="Cerrar detalles" @click="closePersonDetails">
+            <X :size="18" />
+          </button>
+        </header>
+
+        <div class="person-details-status" :class="selectedPersonActive ? 'active' : 'inactive'">
+          <span>{{ selectedPersonActive ? "Activo en el mes actual" : "No activo en el mes actual" }}</span>
+          <strong>{{ activePeriodo?.nombre || "Periodo actual" }}</strong>
+        </div>
+
+        <div class="person-details-grid">
+          <div>
+            <CreditCard :size="16" />
+            <span><small>CI</small><strong>{{ selectedPerson.persona?.documento || "Sin registro" }}</strong></span>
+          </div>
+          <div>
+            <Mail :size="16" />
+            <span><small>Correo</small><strong>{{ selectedPerson.persona?.email || "Sin registro" }}</strong></span>
+          </div>
+          <div>
+            <Phone :size="16" />
+            <span><small>Celular</small><strong>{{ selectedPerson.persona?.telefono || "Sin registro" }}</strong></span>
+          </div>
+        </div>
+
+        <footer>
+          <button class="vy-btn vy-btn-dark" type="button" @click="closePersonDetails">Cerrar</button>
+        </footer>
+      </article>
+    </div>
   </div>
 </template>
 
@@ -1063,6 +1140,132 @@ onMounted(loadNetwork);
   color: var(--vy-ink-3);
   font-size: 10.5px;
   font-weight: 800;
+}
+
+.person-details-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(31, 26, 20, 0.48);
+}
+
+.person-details-modal {
+  width: min(520px, 100%);
+  padding: 22px;
+  border: 1px solid var(--vy-line);
+  border-radius: 14px;
+  background: var(--vy-surface);
+  box-shadow: 0 24px 70px rgba(31, 26, 20, 0.24);
+}
+
+.person-details-modal > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.person-details-modal h2 {
+  margin-top: 6px;
+  color: var(--vy-ink);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.person-details-modal header p {
+  margin-top: 4px;
+  color: var(--vy-ink-2);
+  font-size: 13px;
+}
+
+.person-details-modal header button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--vy-ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.person-details-modal header button:hover {
+  background: var(--vy-cream);
+  color: var(--vy-orange-deep);
+}
+
+.person-details-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.person-details-status.active {
+  color: #1f7a45;
+  background: rgba(42, 157, 91, 0.12);
+}
+
+.person-details-status.inactive {
+  color: var(--vy-danger);
+  background: rgba(196, 69, 42, 0.1);
+}
+
+.person-details-status strong {
+  font-weight: 900;
+}
+
+.person-details-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.person-details-grid > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--vy-line);
+  border-radius: 10px;
+  background: var(--vy-surface-2);
+  color: var(--vy-orange-deep);
+}
+
+.person-details-grid span {
+  min-width: 0;
+}
+
+.person-details-grid small,
+.person-details-grid strong {
+  display: block;
+}
+
+.person-details-grid small {
+  color: var(--vy-ink-3);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.person-details-grid strong {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--vy-ink);
+  font-size: 13px;
+}
+
+.person-details-modal > footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
 }
 
 @media (max-width: 1120px) {

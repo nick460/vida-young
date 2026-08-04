@@ -39,6 +39,7 @@ public class Compra extends Auditoria {
     public static final String ESTADO_COMPRA_VALIDADA = "VALIDADA";
     public static final String ESTADO_COMPRA_ENTREGADA = "ENTREGADA";
     public static final String ESTADO_COMPRA_RECHAZADA = "RECHAZADA";
+    public static final String ESTADO_COMPRA_ANULADA = "ANULADA";
     public static final String METODO_PAGO_TRANSFERENCIA = "TRANSFERENCIA";
     public static final String METODO_PAGO_QR = "QR";
     public static final String METODO_PAGO_CAJA = "CAJA";
@@ -94,6 +95,15 @@ public class Compra extends Auditoria {
 
     @Column(name = "fecha_validacion")
     private LocalDateTime fechaValidacion;
+
+    @Column(name = "motivo_anulacion", length = 240)
+    private String motivoAnulacion;
+
+    @Column(name = "usuario_anulacion", length = 80)
+    private String usuarioAnulacion;
+
+    @Column(name = "fecha_anulacion")
+    private LocalDateTime fechaAnulacion;
 
     @Column(name = "usuario_entrega", length = 80)
     private String usuarioEntrega;
