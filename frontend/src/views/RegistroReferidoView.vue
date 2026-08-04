@@ -5,7 +5,7 @@ import select2 from "select2";
 import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { CheckCircle2, RefreshCw, UserCheck, UserPlus, XCircle } from "lucide-vue-next";
+import { CheckCircle2, Eye, EyeOff, RefreshCw, UserCheck, UserPlus, XCircle } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 
 select2($);
@@ -19,6 +19,8 @@ const planes = ref([]);
 const referidos = ref([]);
 const selectedId = ref("");
 const newRegistrationOpen = ref(false);
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 const patrocinadorSelect = ref(null);
 const planSelect = ref(null);
 
@@ -551,11 +553,23 @@ onBeforeUnmount(() => {
           <template v-if="!selected">
             <label>
               Contrasena
-              <input v-model="form.password" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
+              <span class="password-field">
+                <input v-model="form.password" :type="showPassword ? 'text' : 'password'" required minlength="6" maxlength="80" autocomplete="new-password" />
+                <button type="button" class="password-toggle" :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'" @click="showPassword = !showPassword">
+                  <EyeOff v-if="showPassword" :size="18" />
+                  <Eye v-else :size="18" />
+                </button>
+              </span>
             </label>
             <label>
               Confirmar contrasena
-              <input v-model="form.confirmPassword" type="password" required minlength="6" maxlength="80" autocomplete="new-password" />
+              <span class="password-field">
+                <input v-model="form.confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" required minlength="6" maxlength="80" autocomplete="new-password" />
+                <button type="button" class="password-toggle" :aria-label="showConfirmPassword ? 'Ocultar confirmacion' : 'Mostrar confirmacion'" @click="showConfirmPassword = !showConfirmPassword">
+                  <EyeOff v-if="showConfirmPassword" :size="18" />
+                  <Eye v-else :size="18" />
+                </button>
+              </span>
             </label>
           </template>
           <label class="full-field">
@@ -753,6 +767,35 @@ onBeforeUnmount(() => {
   background: #fff;
   color: var(--vy-ink);
   font: inherit;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  border-radius: 8px;
+  color: var(--vy-ink-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: var(--vy-cream);
+  color: var(--vy-orange-deep);
 }
 
 :deep(.select2-container--default .select2-selection--single) {
