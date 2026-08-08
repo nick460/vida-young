@@ -52,6 +52,8 @@ const saleModalOpen = ref(false);
 const publicSaleModalOpen = ref(false);
 const personaSelect = ref(null);
 const periodoSelect = ref(null);
+const publicDistributorSelect = ref(null);
+const publicTipoClienteSelect = ref(null);
 const proofModalCompra = ref(null);
 const receiptModalCompra = ref(null);
 const publicReviewModalCompra = ref(null);
@@ -347,6 +349,24 @@ function destroyPeriodoSelect2() {
   }
 }
 
+function destroyPublicDistributorSelect2() {
+  if (!publicDistributorSelect.value) return;
+  const element = $(publicDistributorSelect.value);
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.off("change.public-distributor");
+    element.select2("destroy");
+  }
+}
+
+function destroyPublicTipoClienteSelect2() {
+  if (!publicTipoClienteSelect.value) return;
+  const element = $(publicTipoClienteSelect.value);
+  if (element.hasClass("select2-hidden-accessible")) {
+    element.off("change.public-tipo-cliente");
+    element.select2("destroy");
+  }
+}
+
 async function initPersonaSelect2() {
   if (!saleModalOpen.value) return;
 
@@ -397,6 +417,60 @@ async function initPeriodoSelect2() {
   element.on("change.periodo-ventas", async () => {
     selectedPeriodoId.value = element.val() || "";
     await loadVentasPeriodo();
+  });
+}
+
+async function initPublicDistributorSelect2() {
+  if (!publicSaleModalOpen.value) return;
+
+  await nextTick();
+  if (!publicDistributorSelect.value) return;
+
+  destroyPublicDistributorSelect2();
+  const element = $(publicDistributorSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona un distribuidor",
+      allowClear: true,
+      dropdownParent: $(".public-sale-modal"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(selectedPublicDistributorId.value || null)
+    .trigger("change.select2");
+
+  element.on("change.public-distributor", () => {
+    selectedPublicDistributorId.value = element.val() || "";
+  });
+}
+
+async function initPublicTipoClienteSelect2() {
+  if (!publicSaleModalOpen.value) return;
+
+  await nextTick();
+  if (!publicTipoClienteSelect.value) return;
+
+  destroyPublicTipoClienteSelect2();
+  const element = $(publicTipoClienteSelect.value);
+  element
+    .select2({
+      width: "100%",
+      placeholder: "Selecciona un tipo de cliente",
+      allowClear: false,
+      dropdownParent: $(".public-sale-modal"),
+      language: {
+        noResults: () => "Sin resultados",
+        searching: () => "Buscando..."
+      }
+    })
+    .val(publicForm.tipoClienteCodigo || null)
+    .trigger("change.select2");
+
+  element.on("change.public-tipo-cliente", () => {
+    publicForm.tipoClienteCodigo = element.val() || "";
   });
 }
 
@@ -469,6 +543,8 @@ function closeSaleModal() {
 
 function closePublicSaleModal() {
   publicSaleModalOpen.value = false;
+  destroyPublicDistributorSelect2();
+  destroyPublicTipoClienteSelect2();
 }
 
 function formatDateTime(value) {
@@ -1182,13 +1258,22 @@ watch(saleModalOpen, (isOpen) => {
 });
 
 watch(publicSaleModalOpen, (isOpen) => {
-  if (isOpen && selectedPublicDistributorId.value) {
-    loadPublicProductsForSale();
+  if (isOpen) {
+    initPublicDistributorSelect2();
+    initPublicTipoClienteSelect2();
+    if (selectedPublicDistributorId.value) {
+      loadPublicProductsForSale();
+    }
   }
 });
 
 watch(personas, () => {
   initPersonaSelect2();
+  initPublicDistributorSelect2();
+});
+
+watch(tiposClientePublico, () => {
+  initPublicTipoClienteSelect2();
 });
 
 watch(periodosVenta, () => {
@@ -1223,6 +1308,22 @@ watch(selectedPersonaId, (value) => {
   }
 });
 
+watch(selectedPublicDistributorId, (value) => {
+  if (!publicDistributorSelect.value) return;
+  const element = $(publicDistributorSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
+watch(() => publicForm.tipoClienteCodigo, (value) => {
+  if (!publicTipoClienteSelect.value) return;
+  const element = $(publicTipoClienteSelect.value);
+  if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
+    element.val(value || null).trigger("change.select2");
+  }
+});
+
 watch([selectedPublicDistributorId, () => publicForm.tipoClienteCodigo], () => {
   if (publicSaleModalOpen.value) {
     loadPublicProductsForSale();
@@ -1244,6 +1345,8 @@ onBeforeUnmount(() => {
   unlockPageScroll();
   destroyPersonaSelect2();
   destroyPeriodoSelect2();
+  destroyPublicDistributorSelect2();
+  destroyPublicTipoClienteSelect2();
 });
 
 onMounted(() => {
@@ -1665,7 +1768,7 @@ onMounted(() => {
       </button>
       <button class="floating-sale-button" type="button" @click="openSaleModal">
         <Plus :size="20" />
-        <span>Nueva venta</span>
+        <span>Venta interna</span>
       </button>
     </div>
 
@@ -1792,7 +1895,7 @@ onMounted(() => {
               <section class="public-sale-panel">
                 <label class="field">
                   <span>Distribuidor</span>
-                  <select v-model="selectedPublicDistributorId">
+                  <select ref="publicDistributorSelect" v-model="selectedPublicDistributorId">
                     <option value="">Selecciona un distribuidor</option>
                     <option v-for="persona in personas" :key="persona.id" :value="persona.id">
                       {{ fullName(persona) }} - {{ usuarioDePersona(persona)?.username || "Sin usuario" }}
@@ -1807,7 +1910,7 @@ onMounted(() => {
 
                 <label class="field">
                   <span>Tipo de cliente</span>
-                  <select v-model="publicForm.tipoClienteCodigo">
+                  <select ref="publicTipoClienteSelect" v-model="publicForm.tipoClienteCodigo">
                     <option v-for="tipo in tiposClientePublico" :key="tipo.id" :value="tipo.codigo">
                       {{ tipo.nombre }}
                     </option>

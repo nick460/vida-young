@@ -117,6 +117,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
         TipoClientePublico tipoCliente = resolverTipoCliente(tipoClienteCodigo);
 
         return productoService.listarPublicamente().stream()
+                .filter(this::esProductoVentaPublica)
                 .map(producto -> toProductoPublico(producto, tipoCliente))
                 .toList();
     }
@@ -169,6 +170,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
             Producto producto = productoDao.findById(item.productoId())
                     .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
                     .filter(found -> Boolean.TRUE.equals(found.getListarPublicamente()))
+                    .filter(this::esProductoVentaPublica)
                     .orElseThrow(() -> new IllegalArgumentException("Producto no disponible."));
 
             ProductoPublicoResponse calculo = toProductoPublico(producto, tipoCliente);
@@ -203,6 +205,10 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
         compra.setTotalDescuento(totalDescuento);
         compra.setTotalGananciaDistribuidor(totalGanancia);
         return compraPublicaDao.save(compra);
+    }
+
+    private boolean esProductoVentaPublica(Producto producto) {
+        return zeroIfNull(producto.getCr()).compareTo(BigDecimal.ZERO) == 0;
     }
 
     @Override
