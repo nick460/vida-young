@@ -1322,6 +1322,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
   overflow-y: scroll;
   overscroll-behavior: contain;
 }
+.detalle-modal-body > * { min-height: max-content; }
 .person-wallet-detail { display: grid; gap: 14px; }
 .selected-person, .wallet-values div { padding: 14px; border: 1px solid var(--vy-line); border-radius: 14px; background: var(--vy-surface-2); }
 .selected-person small, .wallet-values small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
@@ -1342,7 +1343,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .breakdown-row b { white-space: nowrap; font-size: 14px; font-weight: 950; }
 .detail-source-row strong, .detail-source-row small { overflow-wrap: anywhere; }
 .breakdown-empty { padding: 12px 14px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
-.source-table-section { background: var(--vy-surface); }
+.source-table-section { background: var(--vy-surface); overflow: visible; }
 .source-table-wrap { overflow: visible; max-height: none; }
 .source-table { width: 100%; min-width: 0; table-layout: fixed; }
 .source-table th, .source-table td { padding: 11px 12px; }
