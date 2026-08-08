@@ -1302,6 +1302,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .retiro-modal { width: min(780px, 100%); max-height: calc(100vh - 40px); padding: 20px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); overflow: hidden; display: flex; flex-direction: column; }
 .detalle-modal { width: min(1120px, 100%); height: min(860px, calc(100vh - 40px)); }
 .retiro-modal > header, .retiro-modal > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.retiro-modal > header, .retiro-modal > footer { flex: 0 0 auto; }
 .retiro-modal > header { padding-bottom: 14px; border-bottom: 1px solid var(--vy-line-2); }
 .retiro-modal h2 { margin-top: 4px; font-size: 22px; font-weight: 900; }
 .retiro-modal p { margin-top: 3px; color: var(--vy-ink-3); font-size: 13px; font-weight: 800; }
@@ -1329,11 +1330,14 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .detail-source-row strong, .detail-source-row small { overflow-wrap: anywhere; }
 .breakdown-empty { padding: 12px 14px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
 .source-table-section { background: var(--vy-surface); }
-.source-table-wrap { overflow-x: auto; overflow-y: visible; }
-.source-table { min-width: 860px; }
+.source-table-wrap { overflow: visible; }
+.source-table { width: 100%; min-width: 0; table-layout: fixed; }
 .source-table th, .source-table td { padding: 11px 12px; }
 .source-table th { position: sticky; top: 0; z-index: 1; background: #fff; }
 .source-table td:nth-child(n + 3) { white-space: nowrap; font-weight: 900; }
+.source-table th:nth-child(1), .source-table td:nth-child(1) { width: 25%; }
+.source-table th:nth-child(2), .source-table td:nth-child(2) { width: 36%; }
+.source-table th:nth-child(n + 3), .source-table td:nth-child(n + 3) { width: 7.8%; }
 .source-table td strong, .source-table td small { overflow-wrap: anywhere; }
 .readonly-total { min-height: 42px; display: flex; align-items: center; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); font-weight: 900; }
 .max-button { width: fit-content; min-height: 36px; padding: 0 13px; border-radius: 10px; background: rgba(242, 135, 5, 0.1); color: var(--vy-orange-deep); font-size: 12px; font-weight: 900; }
