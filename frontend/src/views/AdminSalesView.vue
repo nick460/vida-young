@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import $ from "jquery";
 import select2 from "select2";
 import "select2/dist/css/select2.css";
@@ -30,9 +30,12 @@ import logoMark from "../assets/logoMark.png";
 select2($);
 
 const personas = ref([]);
+const usuarios = ref([]);
 const productos = ref([]);
 const compras = ref([]);
 const comprasPublicas = ref([]);
+const tiposClientePublico = ref([]);
+const productosPublicos = ref([]);
 const periodosVenta = ref([]);
 const selectedPeriodoId = ref("");
 const loading = ref(false);
@@ -46,6 +49,7 @@ const discountAmount = ref("");
 const discountConcept = ref("");
 const editingCompra = ref(null);
 const saleModalOpen = ref(false);
+const publicSaleModalOpen = ref(false);
 const personaSelect = ref(null);
 const periodoSelect = ref(null);
 const proofModalCompra = ref(null);
@@ -57,6 +61,22 @@ const publicVentasPage = ref(1);
 const pageSize = 8;
 
 const cajaCode = ref(generateCajaCode());
+const publicCajaCode = ref(generateCajaCode());
+const selectedPublicDistributorId = ref("");
+const publicProductQuery = ref("");
+const publicVentaItems = ref([]);
+const publicForm = reactive({
+  tipoClienteCodigo: "NORMAL",
+  clienteNombres: "",
+  clienteApellidos: "",
+  clienteDocumento: "",
+  clienteEmail: "",
+  clienteTelefono: "",
+  envioRequiere: false,
+  envioDireccion: "",
+  envioCiudad: "",
+  envioReferencia: ""
+});
 let bodyOverflowBeforeModal = "";
 let pageScrollLocked = false;
 const alertClasses = {
@@ -88,8 +108,28 @@ const filteredProducts = computed(() => {
   ].some((value) => String(value || "").toLowerCase().includes(text)));
 });
 
+const filteredPublicProducts = computed(() => {
+  const text = publicProductQuery.value.trim().toLowerCase();
+  if (!text) return productosPublicos.value;
+  return productosPublicos.value.filter((producto) => [
+    producto.nombre,
+    producto.sku,
+    producto.categoria
+  ].some((value) => String(value || "").toLowerCase().includes(text)));
+});
+
 const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value))
+);
+
+const selectedPublicDistributor = computed(() =>
+  personas.value.find((persona) => Number(persona.id) === Number(selectedPublicDistributorId.value))
+);
+
+const selectedPublicDistributorUser = computed(() => usuarioDePersona(selectedPublicDistributor.value));
+
+const selectedPublicDistributorUsername = computed(() =>
+  selectedPublicDistributorUser.value?.username || ""
 );
 
 const visibleCompras = computed(() =>
@@ -111,6 +151,7 @@ const selectedPeriodo = computed(() =>
 
 const modalOpen = computed(() =>
   saleModalOpen.value
+  || publicSaleModalOpen.value
   || Boolean(proofModalCompra.value)
   || Boolean(receiptModalCompra.value)
   || Boolean(publicReviewModalCompra.value)
@@ -143,6 +184,22 @@ const saleCr = computed(() =>
   ventaItems.value.reduce((sum, item) => sum + Number(item.cr || 0) * Number(item.cantidad || 0), 0)
 );
 
+const publicSaleSubtotal = computed(() =>
+  publicVentaItems.value.reduce((sum, item) => sum + Number(item.precioFinal || 0) * Number(item.cantidad || 0), 0)
+);
+
+const publicSaleEmpresa = computed(() =>
+  publicVentaItems.value.reduce((sum, item) => sum + Number(item.precioDistribuidor || 0) * Number(item.cantidad || 0), 0)
+);
+
+const publicSaleDescuento = computed(() =>
+  publicVentaItems.value.reduce((sum, item) => sum + Number(item.descuento || 0) * Number(item.cantidad || 0), 0)
+);
+
+const publicSaleGanancia = computed(() =>
+  Math.max(0, publicSaleSubtotal.value - publicSaleEmpresa.value)
+);
+
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", {
     minimumFractionDigits: 2,
@@ -168,6 +225,11 @@ function generateCajaCode() {
 
 function fullName(persona) {
   return `${persona?.nombres || ""} ${persona?.apellidos || ""}`.trim() || "Sin nombre";
+}
+
+function usuarioDePersona(persona) {
+  if (!persona?.id) return null;
+  return usuarios.value.find((usuario) => Number(usuario.persona?.id) === Number(persona.id)) || null;
 }
 
 function isClubRoyaleProduct(producto) {
@@ -349,9 +411,34 @@ function resetSaleForm() {
   cajaCode.value = generateCajaCode();
 }
 
+function resetPublicSaleForm() {
+  selectedPublicDistributorId.value = "";
+  publicProductQuery.value = "";
+  productosPublicos.value = [];
+  publicVentaItems.value = [];
+  publicCajaCode.value = generateCajaCode();
+  Object.assign(publicForm, {
+    tipoClienteCodigo: tiposClientePublico.value[0]?.codigo || "NORMAL",
+    clienteNombres: "",
+    clienteApellidos: "",
+    clienteDocumento: "",
+    clienteEmail: "",
+    clienteTelefono: "",
+    envioRequiere: false,
+    envioDireccion: "",
+    envioCiudad: "",
+    envioReferencia: ""
+  });
+}
+
 function openSaleModal() {
   resetSaleForm();
   saleModalOpen.value = true;
+}
+
+function openPublicSaleModal() {
+  resetPublicSaleForm();
+  publicSaleModalOpen.value = true;
 }
 
 function openEditSaleModal(compra) {
@@ -378,6 +465,10 @@ function openEditSaleModal(compra) {
 function closeSaleModal() {
   saleModalOpen.value = false;
   destroyPersonaSelect2();
+}
+
+function closePublicSaleModal() {
+  publicSaleModalOpen.value = false;
 }
 
 function formatDateTime(value) {
@@ -755,6 +846,26 @@ function addProduct(producto) {
   });
 }
 
+function addPublicProduct(producto) {
+  const found = publicVentaItems.value.find((item) => Number(item.id) === Number(producto.id));
+  if (found) {
+    found.cantidad += 1;
+    return;
+  }
+
+  publicVentaItems.value.push({
+    id: producto.id,
+    nombre: producto.nombre,
+    sku: producto.sku,
+    categoria: producto.categoria,
+    precioDistribuidor: Number(producto.precioDistribuidor || 0),
+    precioPublico: Number(producto.precioPublico || 0),
+    descuento: Number(producto.descuento || 0),
+    precioFinal: Number(producto.precioFinal || 0),
+    cantidad: 1
+  });
+}
+
 function changeQuantity(item, value) {
   const next = Number(value || 1);
   item.cantidad = Math.max(1, next);
@@ -772,17 +883,28 @@ function removeItem(item) {
   ventaItems.value = ventaItems.value.filter((current) => Number(current.id) !== Number(item.id));
 }
 
+function removePublicItem(item) {
+  publicVentaItems.value = publicVentaItems.value.filter((current) => Number(current.id) !== Number(item.id));
+}
+
 async function loadAll() {
   loading.value = true;
   error.value = "";
 
   try {
-    const [personasData, productosData] = await Promise.all([
+    const [personasData, usuariosData, productosData, tiposClienteData] = await Promise.all([
       apiRequest("/api/personas"),
-      apiRequest("/api/productos")
+      apiRequest("/api/usuarios"),
+      apiRequest("/api/productos"),
+      apiRequest("/api/public/tipos-cliente")
     ]);
     personas.value = personasData;
+    usuarios.value = Array.isArray(usuariosData) ? usuariosData : [];
     productos.value = productosData;
+    tiposClientePublico.value = Array.isArray(tiposClienteData) ? tiposClienteData : [];
+    if (!tiposClientePublico.value.some((tipo) => tipo.codigo === publicForm.tipoClienteCodigo)) {
+      publicForm.tipoClienteCodigo = tiposClientePublico.value[0]?.codigo || "NORMAL";
+    }
     await loadPeriodoOptions();
     await loadVentasPeriodo();
     await initPeriodoSelect2();
@@ -828,6 +950,29 @@ async function loadVentasPeriodo() {
   ]);
   compras.value = Array.isArray(comprasData) ? comprasData : [];
   comprasPublicas.value = Array.isArray(comprasPublicasData) ? comprasPublicasData : [];
+}
+
+async function loadPublicProductsForSale() {
+  productosPublicos.value = [];
+  publicVentaItems.value = [];
+  publicProductQuery.value = "";
+
+  if (!publicSaleModalOpen.value || !selectedPublicDistributorId.value) return;
+
+  if (!selectedPublicDistributorUsername.value) {
+    await showError("Distribuidor sin tienda", "La persona seleccionada no tiene usuario asociado para su tienda publica.");
+    return;
+  }
+
+  const query = publicForm.tipoClienteCodigo
+    ? `?tipoCliente=${encodeURIComponent(publicForm.tipoClienteCodigo)}`
+    : "";
+  try {
+    const data = await apiRequest(`/api/public/tiendas/${encodeURIComponent(selectedPublicDistributorUsername.value)}/productos${query}`);
+    productosPublicos.value = Array.isArray(data) ? data : [];
+  } catch (exception) {
+    await showError("No se cargaron productos", exception.message || "No se pudieron cargar los productos publicos del distribuidor.");
+  }
 }
 
 async function saveCajaSale() {
@@ -890,6 +1035,76 @@ async function saveCajaSale() {
     await loadVentasPeriodo();
   } catch (exception) {
     await showError("No se pudo guardar", exception.message || "No se pudo guardar la venta.");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function savePublicCajaSale() {
+  error.value = "";
+
+  if (!selectedPublicDistributorId.value) {
+    await showError("Falta distribuidor", "Selecciona el distribuidor que recibira la venta publica.");
+    return;
+  }
+
+  if (!selectedPublicDistributorUsername.value) {
+    await showError("Distribuidor sin tienda", "La persona seleccionada no tiene usuario asociado para su tienda publica.");
+    return;
+  }
+
+  if (!publicForm.tipoClienteCodigo) {
+    await showError("Falta tipo de cliente", "Selecciona el tipo de cliente publico.");
+    return;
+  }
+
+  if (!publicForm.clienteNombres.trim()) {
+    await showError("Falta cliente", "Ingresa el nombre del cliente publico.");
+    return;
+  }
+
+  if (publicForm.envioRequiere && (!publicForm.envioCiudad.trim() || !publicForm.envioDireccion.trim())) {
+    await showError("Faltan datos de envio", "Ingresa ciudad y direccion para el envio.");
+    return;
+  }
+
+  if (!publicVentaItems.value.length) {
+    await showError("Faltan productos", "Agrega al menos un producto publico a la venta.");
+    return;
+  }
+
+  saving.value = true;
+  try {
+    const payload = {
+      items: publicVentaItems.value.map((item) => ({
+        productoId: Number(item.id),
+        cantidad: Number(item.cantidad || 1)
+      })),
+      tipoClienteCodigo: publicForm.tipoClienteCodigo,
+      clienteNombres: publicForm.clienteNombres.trim(),
+      clienteApellidos: publicForm.clienteApellidos.trim(),
+      clienteDocumento: publicForm.clienteDocumento.trim(),
+      clienteEmail: publicForm.clienteEmail.trim(),
+      clienteTelefono: publicForm.clienteTelefono.trim(),
+      envioRequiere: Boolean(publicForm.envioRequiere),
+      envioDireccion: publicForm.envioRequiere ? publicForm.envioDireccion.trim() : "",
+      envioCiudad: publicForm.envioRequiere ? publicForm.envioCiudad.trim() : "",
+      envioReferencia: publicForm.envioRequiere ? publicForm.envioReferencia.trim() : "",
+      metodoPago: "CAJA",
+      referenciaPago: `Venta publica por ventanilla codigo ${publicCajaCode.value}`
+    };
+
+    const response = await apiRequest(`/api/public/tiendas/${encodeURIComponent(selectedPublicDistributorUsername.value)}/compras`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    await showSuccess("Venta publica registrada", `Pedido publico #${response.id} creado como PENDIENTE.`);
+    resetPublicSaleForm();
+    closePublicSaleModal();
+    await loadVentasPeriodo();
+  } catch (exception) {
+    await showError("No se pudo guardar", exception.message || "No se pudo guardar la venta publica.");
   } finally {
     saving.value = false;
   }
@@ -966,6 +1181,12 @@ watch(saleModalOpen, (isOpen) => {
   }
 });
 
+watch(publicSaleModalOpen, (isOpen) => {
+  if (isOpen && selectedPublicDistributorId.value) {
+    loadPublicProductsForSale();
+  }
+});
+
 watch(personas, () => {
   initPersonaSelect2();
 });
@@ -999,6 +1220,12 @@ watch(selectedPersonaId, (value) => {
   const element = $(personaSelect.value);
   if (element.hasClass("select2-hidden-accessible") && element.val() !== value) {
     element.val(value || null).trigger("change.select2");
+  }
+});
+
+watch([selectedPublicDistributorId, () => publicForm.tipoClienteCodigo], () => {
+  if (publicSaleModalOpen.value) {
+    loadPublicProductsForSale();
   }
 });
 
@@ -1431,10 +1658,16 @@ onMounted(() => {
       </section>
     </main>
 
-    <button class="floating-sale-button" type="button" @click="openSaleModal">
-      <Plus :size="20" />
-      <span>Nueva venta</span>
-    </button>
+    <div class="floating-sale-actions">
+      <button class="floating-sale-button public" type="button" @click="openPublicSaleModal">
+        <Store :size="20" />
+        <span>Venta publica</span>
+      </button>
+      <button class="floating-sale-button" type="button" @click="openSaleModal">
+        <Plus :size="20" />
+        <span>Nueva venta</span>
+      </button>
+    </div>
 
     <Teleport to="body">
       <div v-if="saleModalOpen" class="sale-modal-backdrop" @click.self="closeSaleModal">
@@ -1536,6 +1769,154 @@ onMounted(() => {
                   <ShoppingBag :size="16" /> {{ editingCompra ? "Guardar cambios" : "Registrar venta" }}
                 </button>
               </footer>
+            </div>
+          </section>
+        </article>
+      </div>
+
+      <div v-if="publicSaleModalOpen" class="sale-modal-backdrop" @click.self="closePublicSaleModal">
+        <article class="sale-modal public-sale-modal">
+          <header>
+            <div>
+              <span class="vy-eyebrow">Venta publica</span>
+              <h2>Nueva venta publica</h2>
+              <p>Registra un pedido publico para la tienda del distribuidor seleccionado.</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="closePublicSaleModal">
+              <X :size="18" />
+            </button>
+          </header>
+
+          <section class="sale-modal-body">
+            <div class="sale-card public-sale-grid">
+              <section class="public-sale-panel">
+                <label class="field">
+                  <span>Distribuidor</span>
+                  <select v-model="selectedPublicDistributorId">
+                    <option value="">Selecciona un distribuidor</option>
+                    <option v-for="persona in personas" :key="persona.id" :value="persona.id">
+                      {{ fullName(persona) }} - {{ usuarioDePersona(persona)?.username || "Sin usuario" }}
+                    </option>
+                  </select>
+                </label>
+
+                <div v-if="selectedPublicDistributor" class="selected-person">
+                  Tienda: <strong>{{ selectedPublicDistributorUsername || "Sin usuario" }}</strong>
+                  <span>{{ fullName(selectedPublicDistributor) }}</span>
+                </div>
+
+                <label class="field">
+                  <span>Tipo de cliente</span>
+                  <select v-model="publicForm.tipoClienteCodigo">
+                    <option v-for="tipo in tiposClientePublico" :key="tipo.id" :value="tipo.codigo">
+                      {{ tipo.nombre }}
+                    </option>
+                  </select>
+                </label>
+
+                <div class="public-client-grid">
+                  <label class="field">
+                    <span>Nombres</span>
+                    <input v-model.trim="publicForm.clienteNombres" placeholder="Nombre del cliente" />
+                  </label>
+                  <label class="field">
+                    <span>Apellidos</span>
+                    <input v-model.trim="publicForm.clienteApellidos" placeholder="Apellidos" />
+                  </label>
+                  <label class="field">
+                    <span>Documento</span>
+                    <input v-model.trim="publicForm.clienteDocumento" placeholder="CI / NIT" />
+                  </label>
+                  <label class="field">
+                    <span>Telefono</span>
+                    <input v-model.trim="publicForm.clienteTelefono" placeholder="Telefono" />
+                  </label>
+                  <label class="field public-client-wide">
+                    <span>Email</span>
+                    <input v-model.trim="publicForm.clienteEmail" type="email" placeholder="correo@dominio.com" />
+                  </label>
+                </div>
+
+                <label class="toggle-field">
+                  <input v-model="publicForm.envioRequiere" type="checkbox" />
+                  <span>Requiere envio</span>
+                </label>
+
+                <div v-if="publicForm.envioRequiere" class="public-client-grid">
+                  <label class="field">
+                    <span>Ciudad</span>
+                    <input v-model.trim="publicForm.envioCiudad" placeholder="Ciudad" />
+                  </label>
+                  <label class="field public-client-wide">
+                    <span>Direccion</span>
+                    <input v-model.trim="publicForm.envioDireccion" placeholder="Direccion de entrega" />
+                  </label>
+                  <label class="field public-client-wide">
+                    <span>Referencia</span>
+                    <input v-model.trim="publicForm.envioReferencia" placeholder="Referencia opcional" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="public-sale-panel">
+                <label class="field">
+                  <span>Buscar producto publico</span>
+                  <div class="input-icon">
+                    <Search :size="15" />
+                    <input v-model.trim="publicProductQuery" placeholder="Producto, SKU o categoria" />
+                  </div>
+                </label>
+
+                <div class="product-picker public-product-picker">
+                  <button
+                    v-for="producto in filteredPublicProducts.slice(0, 8)"
+                    :key="producto.id"
+                    type="button"
+                    @click="addPublicProduct(producto)"
+                  >
+                    <span>
+                      <strong>{{ producto.nombre }}</strong>
+                      <small>{{ producto.sku }} - {{ producto.categoria || "Producto" }}</small>
+                      <em v-if="Number(producto.descuento || 0) > 0" class="discount-badge">Desc. Bs. {{ money(producto.descuento) }}</em>
+                    </span>
+                    <b>Bs. {{ money(producto.precioFinal) }}</b>
+                  </button>
+                  <div v-if="selectedPublicDistributorId && !productosPublicos.length" class="inline-empty">
+                    No hay productos publicos para este distribuidor y tipo de cliente.
+                  </div>
+                </div>
+
+                <div class="sale-items">
+                  <div v-for="item in publicVentaItems" :key="item.id" class="sale-item public-sale-item">
+                    <div>
+                      <strong>{{ item.nombre }}</strong>
+                      <small>Publico Bs. {{ money(item.precioPublico) }} - Final Bs. {{ money(item.precioFinal) }}</small>
+                    </div>
+                    <div class="quantity-stepper">
+                      <button type="button" aria-label="Disminuir cantidad" @click="decrementQuantity(item)">-</button>
+                      <input :value="item.cantidad" type="number" min="1" @input="changeQuantity(item, $event.target.value)" />
+                      <button type="button" aria-label="Aumentar cantidad" @click="incrementQuantity(item)">+</button>
+                    </div>
+                    <b>Bs. {{ money(item.precioFinal * item.cantidad) }}</b>
+                    <button type="button" @click="removePublicItem(item)"><Trash2 :size="15" /></button>
+                  </div>
+                </div>
+
+                <footer class="sale-footer public-sale-footer">
+                  <div>
+                    <small>Codigo de caja</small>
+                    <strong class="cash-code">{{ publicCajaCode }}</strong>
+                  </div>
+                  <div>
+                    <small>Total cliente</small>
+                    <strong>Bs. {{ money(publicSaleSubtotal) }}</strong>
+                    <span>Empresa Bs. {{ money(publicSaleEmpresa) }} - Desc. Bs. {{ money(publicSaleDescuento) }} - Gan. Bs. {{ money(publicSaleGanancia) }}</span>
+                  </div>
+                  <button class="vy-btn vy-btn-primary" type="button" :disabled="saving" @click="savePublicCajaSale">
+                    <Store :size="16" /> Registrar venta publica
+                  </button>
+                </footer>
+              </section>
             </div>
           </section>
         </article>
@@ -1778,11 +2159,17 @@ onMounted(() => {
 .refresh-action:disabled { cursor: wait; opacity: .7; }
 .refresh-action .spinning { animation: refresh-spin .8s linear infinite; }
 @keyframes refresh-spin { to { transform: rotate(360deg); } }
-.floating-sale-button {
+.floating-sale-actions {
   position: fixed;
   right: 28px;
   bottom: 28px;
   z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.floating-sale-button {
   min-height: 54px;
   padding: 0 20px;
   border-radius: 999px;
@@ -1797,7 +2184,9 @@ onMounted(() => {
   font-weight: 900;
   transition: transform .16s ease, box-shadow .16s ease;
 }
+.floating-sale-button.public { background: linear-gradient(135deg, #3f8f5c 0%, #166534 100%); box-shadow: 0 18px 36px rgba(22, 101, 52, .24); }
 .floating-sale-button:hover { transform: translateY(-2px); box-shadow: 0 22px 44px rgba(242, 135, 5, .38); }
+.floating-sale-button.public:hover { box-shadow: 0 22px 44px rgba(22, 101, 52, .3); }
 .floating-sale-button:active { transform: translateY(0); }
 .ventanilla-skeleton { display: grid; gap: 18px; }
 .skeleton-card { padding: 20px; overflow: hidden; }
@@ -1879,6 +2268,20 @@ onMounted(() => {
 .icon-box { width: 42px; height: 42px; border-radius: 14px; background: var(--vy-cream); color: var(--vy-orange-deep); display: inline-flex; align-items: center; justify-content: center; }
 .field { display: block; margin-top: 14px; }
 .field > span { display: block; margin-bottom: 7px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.field > input, .field > select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--vy-line);
+  border-radius: 12px;
+  background: var(--vy-surface-2);
+  color: var(--vy-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  outline: 0;
+}
+.field > input:focus, .field > select:focus { border-color: var(--vy-orange); box-shadow: 0 0 0 3px rgba(242, 135, 5, .12); background: #fff; }
 .input-icon { min-height: 42px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 8px; color: var(--vy-ink-3); }
 .input-icon input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; }
 .persona-select { width: 100%; }
@@ -1899,7 +2302,9 @@ onMounted(() => {
 .person-list strong, .product-picker strong { display: block; color: var(--vy-ink); font-size: 13px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-list small, .product-picker small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
 .club-royale-badge { width: fit-content; min-height: 24px; margin-top: 7px; padding: 0 9px; border: 1px solid rgba(22, 101, 52, 0.24); border-radius: 999px; background: rgba(22, 101, 52, 0.1); color: #166534; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
+.discount-badge { width: fit-content; min-height: 23px; margin-top: 7px; padding: 0 8px; border-radius: 999px; background: #fff3df; color: var(--vy-orange-deep); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
 .selected-person { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(63, 143, 92, 0.1); color: var(--vy-success); font-size: 13px; font-weight: 800; }
+.selected-person span { display: block; margin-top: 3px; color: var(--vy-ink-2); font-size: 12px; font-weight: 800; }
 .product-picker { margin-top: 10px; max-height: 300px; overflow: auto; }
 .product-picker button span { flex: 1; min-width: 0; }
 .product-picker button b { white-space: nowrap; font-size: 13px; }
@@ -1960,6 +2365,17 @@ onMounted(() => {
 .sale-modal > header button { width: 38px; height: 38px; border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; }
 .sale-modal-body { overflow: auto; padding-top: 16px; }
 .sale-modal .sale-card { padding: 0; }
+.public-sale-modal { width: min(1120px, 100%); }
+.public-sale-grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.15fr); gap: 18px; }
+.public-sale-panel { min-width: 0; padding: 16px; border: 1px solid var(--vy-line); border-radius: 16px; background: #fff; }
+.public-client-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.public-client-wide { grid-column: 1 / -1; }
+.toggle-field { margin-top: 14px; min-height: 42px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 9px; color: var(--vy-ink-2); font-size: 13px; font-weight: 900; }
+.toggle-field input { width: 17px; height: 17px; accent-color: var(--vy-success); }
+.public-product-picker { max-height: 250px; }
+.inline-empty { padding: 14px; border: 1px dashed var(--vy-line); border-radius: 12px; color: var(--vy-ink-3); background: var(--vy-surface-2); font-size: 13px; font-weight: 800; text-align: center; }
+.public-sale-item { grid-template-columns: minmax(0, 1fr) 136px 112px 34px; }
+.public-sale-footer { grid-template-columns: auto minmax(0, 1fr) auto; }
 .public-review-backdrop { position: fixed; inset: 0; z-index: 121; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.55); backdrop-filter: blur(7px); }
 .public-review-modal { width: min(1080px, 100%); max-height: calc(100vh - 40px); padding: 20px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); overflow: hidden; display: flex; flex-direction: column; }
 .public-review-modal > header, .public-review-modal > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
@@ -2038,14 +2454,15 @@ onMounted(() => {
   .header-actions { align-items: stretch; flex-direction: column; }
   .period-filter { min-width: 0; width: 100%; }
   .refresh-action { width: 100%; }
-  .floating-sale-button { right: 20px; bottom: 20px; min-height: 52px; padding: 0 18px; }
+  .floating-sale-actions { right: 20px; bottom: 20px; }
+  .floating-sale-button { min-height: 52px; padding: 0 18px; }
   .skeleton-card { padding: 16px; }
   .skeleton-title { align-items: flex-start; }
   .skeleton-table { min-width: 0; border: 0; background: transparent; gap: 10px; }
   .skeleton-row-head { display: none; }
   .skeleton-row { grid-template-columns: 1fr; gap: 9px; min-height: 132px; padding: 14px; border: 1px solid var(--vy-line-2); border-radius: 14px; }
   .skeleton-row .skeleton-block:nth-child(n + 5) { display: none; }
-  .person-list, .sale-footer, .sale-item { grid-template-columns: 1fr; }
+  .person-list, .sale-footer, .sale-item, .public-sale-grid, .public-client-grid, .public-sale-footer { grid-template-columns: 1fr; }
   .discount-grid { grid-template-columns: 1fr; }
   .sale-item b { text-align: left; }
   .quantity-stepper, .sale-item > button { width: 100%; }
