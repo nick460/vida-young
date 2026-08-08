@@ -882,19 +882,14 @@ onBeforeUnmount(() => {
                   </span>
                 </td>
                 <td class="actions-cell">
-                  <div v-if="saldo.rowType === 'PENDIENTE'" class="processed-actions">
-                    <button class="detail-button" type="button" @click="openSaldoDetalle(saldo)">
+                  <div class="processed-actions">
+                    <button class="detail-button" type="button" @click="saldo.rowType === 'RETIRADO' ? openRetiroDetalle(saldo) : openSaldoDetalle(saldo)">
                       <Eye :size="15" /> Detalles
                     </button>
-                    <button class="row-withdraw-button" type="button" :disabled="!canRegisterWithdrawals" @click="openRetiroModal(saldo)">
+                    <button v-if="saldo.rowType === 'PENDIENTE'" class="row-withdraw-button" type="button" :disabled="!canRegisterWithdrawals" @click="openRetiroModal(saldo)">
                       <ArrowDownToLine :size="15" /> Retiro
                     </button>
-                  </div>
-                  <div v-else class="processed-actions">
-                    <button class="detail-button" type="button" @click="openRetiroDetalle(saldo)">
-                      <Eye :size="15" /> Detalle
-                    </button>
-                    <button class="print-button" type="button" @click="imprimirRetiroProcesado(saldo)">
+                    <button v-else class="print-button" type="button" @click="imprimirRetiroProcesado(saldo)">
                       <Printer :size="15" /> Imprimir
                     </button>
                   </div>
