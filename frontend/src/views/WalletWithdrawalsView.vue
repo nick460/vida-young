@@ -23,9 +23,13 @@ const periodoSelect = ref(null);
 const productoSelect = ref(null);
 const selectedSaldo = ref(null);
 const selectedWallet = ref(null);
+const selectedSaldoDetalle = ref(null);
+const selectedDetalleWallet = ref(null);
 const selectedRetiroDetalle = ref(null);
 const selectedProductoId = ref("");
 const retiroModalOpen = ref(false);
+const detalleModalOpen = ref(false);
+const detalleLoading = ref(false);
 const searchTerm = ref("");
 const page = ref(1);
 const pageSize = ref(10);
@@ -101,6 +105,11 @@ const efectivoDisponibleRetiro = computed(() =>
   Number(billeteraSeleccionada.value.saldoDinero || 0) + Number(selectedWallet.value?.efectivoRecompensasDisponible || 0)
 );
 const detalleEfectivoMensual = computed(() => selectedWallet.value?.detalleEfectivoMensual || []);
+const detalleMovimientos = computed(() => selectedDetalleWallet.value?.movimientos || []);
+const detalleRecompensasMensuales = computed(() => selectedDetalleWallet.value?.detalleEfectivoMensual || []);
+const detalleEfectivoDirecto = computed(() => Number(selectedSaldoDetalle.value?.saldoDinero || 0));
+const detalleEfectivoRecompensas = computed(() => Number(selectedSaldoDetalle.value?.efectivoRecompensasDisponible || 0));
+const detalleEfectivoTotal = computed(() => detalleEfectivoDirecto.value + detalleEfectivoRecompensas.value);
 const productosDisponiblesRetiro = computed(() => Number(selectedWallet.value?.productosRecompensasDisponible || 0));
 const selectedProducto = computed(() =>
   productos.value.find((producto) => Number(producto.id) === Number(selectedProductoId.value))
@@ -467,6 +476,49 @@ function imprimirRetiroProcesado(retiro) {
   printWithdrawalReceipt(retiroReceipt(retiro));
 }
 
+function tipoMovimientoLabel(tipo) {
+  const labels = {
+    DINERO: "Efectivo directo",
+    PRODUCTOS: "Productos",
+    PV: "PV",
+    QP: "QP",
+    CR: "CR"
+  };
+  return labels[tipo] || tipo || "Movimiento";
+}
+
+function movimientosPorTipo(tipo) {
+  return detalleMovimientos.value.filter((movimiento) => movimiento.tipo === tipo && Number(movimiento.monto || 0) !== 0);
+}
+
+function totalMovimientosPorTipo(tipo) {
+  return movimientosPorTipo(tipo).reduce((sum, movimiento) => sum + Number(movimiento.monto || 0), 0);
+}
+
+async function openSaldoDetalle(saldo) {
+  selectedSaldoDetalle.value = saldo;
+  selectedDetalleWallet.value = null;
+  detalleModalOpen.value = true;
+  detalleLoading.value = true;
+  lockPageScroll();
+  try {
+    const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
+    selectedDetalleWallet.value = await apiRequest(`/api/billeteras/persona/${saldo.personaId}${query}`);
+  } catch (exception) {
+    error.value = exception.message || "No se pudo cargar el detalle de la persona.";
+  } finally {
+    detalleLoading.value = false;
+  }
+}
+
+function closeSaldoDetalle() {
+  detalleModalOpen.value = false;
+  selectedSaldoDetalle.value = null;
+  selectedDetalleWallet.value = null;
+  detalleLoading.value = false;
+  unlockPageScroll();
+}
+
 async function loadProductos() {
   try {
     const data = await apiRequest("/api/productos");
@@ -830,9 +882,14 @@ onBeforeUnmount(() => {
                   </span>
                 </td>
                 <td class="actions-cell">
-                  <button v-if="saldo.rowType === 'PENDIENTE'" class="row-withdraw-button" type="button" :disabled="!canRegisterWithdrawals" @click="openRetiroModal(saldo)">
-                    <ArrowDownToLine :size="15" /> Retiro
-                  </button>
+                  <div v-if="saldo.rowType === 'PENDIENTE'" class="processed-actions">
+                    <button class="detail-button" type="button" @click="openSaldoDetalle(saldo)">
+                      <Eye :size="15" /> Detalles
+                    </button>
+                    <button class="row-withdraw-button" type="button" :disabled="!canRegisterWithdrawals" @click="openRetiroModal(saldo)">
+                      <ArrowDownToLine :size="15" /> Retiro
+                    </button>
+                  </div>
                   <div v-else class="processed-actions">
                     <button class="detail-button" type="button" @click="openRetiroDetalle(saldo)">
                       <Eye :size="15" /> Detalle
@@ -868,6 +925,97 @@ onBeforeUnmount(() => {
     </main>
 
     <Teleport to="body">
+      <div v-if="detalleModalOpen" class="retiro-backdrop">
+        <article class="retiro-modal detalle-modal">
+          <header>
+            <div>
+              <span class="vy-eyebrow">Detalle de saldos</span>
+              <h2>{{ selectedSaldoDetalle?.nombres }} {{ selectedSaldoDetalle?.apellidos }}</h2>
+              <p>{{ selectedPeriodo?.nombre || "Periodo seleccionado" }} - {{ selectedSaldoDetalle?.documento || "Sin documento" }}</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="closeSaldoDetalle">
+              <X :size="18" />
+            </button>
+          </header>
+
+          <section class="retiro-body person-wallet-detail">
+            <div v-if="detalleLoading" class="loading-box">Cargando detalle de movimientos...</div>
+            <template v-else>
+              <div class="wallet-values">
+                <div>
+                  <small>Efectivo tabla</small>
+                  <strong>Bs. {{ money(detalleEfectivoTotal) }}</strong>
+                  <span>Billetera Bs. {{ money(detalleEfectivoDirecto) }} + recompensas Bs. {{ money(detalleEfectivoRecompensas) }}</span>
+                </div>
+                <div>
+                  <small>Productos / puntos</small>
+                  <strong>Productos Bs. {{ money(selectedSaldoDetalle?.saldoProductos) }}</strong>
+                  <span>PV {{ money(selectedSaldoDetalle?.saldoPv) }} - QP {{ money(selectedSaldoDetalle?.saldoQp) }} - CR {{ money(selectedSaldoDetalle?.saldoCr) }}</span>
+                </div>
+              </div>
+
+              <section class="cash-breakdown">
+                <header>
+                  <div>
+                    <small>Origen del efectivo</small>
+                    <strong>Valores que componen la columna Efectivo</strong>
+                  </div>
+                  <b>Bs. {{ money(detalleEfectivoTotal) }}</b>
+                </header>
+                <div class="breakdown-row">
+                  <span>
+                    <strong>Movimientos de billetera tipo DINERO</strong>
+                    <small>Suma de movimientos registrados para la persona en este periodo.</small>
+                  </span>
+                  <b>Bs. {{ money(detalleEfectivoDirecto) }}</b>
+                </div>
+                <div class="breakdown-row">
+                  <span>
+                    <strong>Recompensas mensuales cobrables</strong>
+                    <small>Recompensas activas del periodo con nivel 2 en adelante.</small>
+                  </span>
+                  <b>Bs. {{ money(detalleEfectivoRecompensas) }}</b>
+                </div>
+                <div v-for="item in detalleRecompensasMensuales" :key="item.recompensaId" class="breakdown-row detail-source-row">
+                  <span>
+                    <strong>Nivel {{ item.nivelGenerado }} - {{ item.referidoNombre || "Referido" }}</strong>
+                    <small>{{ item.planIngreso || "Plan" }}<template v-if="item.referidoDocumento"> - CI {{ item.referidoDocumento }}</template></small>
+                  </span>
+                  <b>Bs. {{ money(item.montoDisponible) }}</b>
+                </div>
+              </section>
+
+              <section v-for="tipo in ['DINERO', 'PRODUCTOS', 'PV', 'QP', 'CR']" :key="tipo" class="cash-breakdown">
+                <header>
+                  <div>
+                    <small>{{ tipoMovimientoLabel(tipo) }}</small>
+                    <strong>Movimientos que alimentan este saldo</strong>
+                  </div>
+                  <b>{{ tipo === "DINERO" || tipo === "PRODUCTOS" ? "Bs. " : "" }}{{ money(totalMovimientosPorTipo(tipo)) }}</b>
+                </header>
+                <div v-for="movimiento in movimientosPorTipo(tipo)" :key="movimiento.id" class="breakdown-row detail-source-row">
+                  <span>
+                    <strong>{{ movimiento.concepto }}</strong>
+                    <small>
+                      {{ formatDateTime(movimiento.fechaRegistro) }}
+                      <template v-if="movimiento.referenciaTipo"> - {{ movimiento.referenciaTipo }} #{{ movimiento.referenciaId || "" }}</template>
+                    </small>
+                  </span>
+                  <b>{{ tipo === "DINERO" || tipo === "PRODUCTOS" ? "Bs. " : "" }}{{ money(movimiento.monto) }}</b>
+                </div>
+                <div v-if="!movimientosPorTipo(tipo).length" class="breakdown-empty">
+                  No hay movimientos de este tipo para el periodo seleccionado.
+                </div>
+              </section>
+            </template>
+          </section>
+
+          <footer>
+            <button class="vy-btn vy-btn-ghost" type="button" @click="closeSaldoDetalle">Cerrar</button>
+          </footer>
+        </article>
+      </div>
+
       <div v-if="selectedRetiroDetalle" class="retiro-backdrop">
         <article class="retiro-modal">
           <header>
@@ -1090,6 +1238,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .success-box { border: 1px solid rgba(22, 101, 52, 0.2); background: rgba(22, 101, 52, 0.08); color: #166534; }
 .retiro-backdrop { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.42); backdrop-filter: blur(8px); }
 .retiro-modal { width: min(780px, 100%); max-height: calc(100vh - 40px); padding: 20px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); overflow: hidden; display: flex; flex-direction: column; }
+.detalle-modal { width: min(980px, 100%); }
 .retiro-modal > header, .retiro-modal > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .retiro-modal > header { padding-bottom: 14px; border-bottom: 1px solid var(--vy-line-2); }
 .retiro-modal h2 { margin-top: 4px; font-size: 22px; font-weight: 900; }
@@ -1114,6 +1263,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .breakdown-row strong { font-size: 13px; font-weight: 900; }
 .breakdown-row small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
 .breakdown-row b { white-space: nowrap; font-size: 14px; font-weight: 950; }
+.detail-source-row strong, .detail-source-row small { overflow-wrap: anywhere; }
 .breakdown-empty { padding: 12px 14px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
 .readonly-total { min-height: 42px; display: flex; align-items: center; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); font-weight: 900; }
 .max-button { width: fit-content; min-height: 36px; padding: 0 13px; border-radius: 10px; background: rgba(242, 135, 5, 0.1); color: var(--vy-orange-deep); font-size: 12px; font-weight: 900; }
