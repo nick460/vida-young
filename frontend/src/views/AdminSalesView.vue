@@ -67,6 +67,17 @@ const publicCajaCode = ref(generateCajaCode());
 const selectedPublicDistributorId = ref("");
 const publicProductQuery = ref("");
 const publicVentaItems = ref([]);
+const publicSaleSubmitted = ref(false);
+const publicTouched = reactive({
+  distribuidor: false,
+  tipoClienteCodigo: false,
+  clienteNombres: false,
+  clienteDocumento: false,
+  clienteEmail: false,
+  envioCiudad: false,
+  envioDireccion: false,
+  productos: false
+});
 const publicForm = reactive({
   tipoClienteCodigo: "NORMAL",
   clienteNombres: "",
@@ -202,6 +213,30 @@ const publicSaleGanancia = computed(() =>
   Math.max(0, publicSaleSubtotal.value - publicSaleEmpresa.value)
 );
 
+const publicValidationErrors = computed(() => {
+  const errors = {};
+  const email = publicForm.clienteEmail.trim();
+
+  errors.distribuidor = !selectedPublicDistributorId.value
+    ? "Selecciona el distribuidor."
+    : !selectedPublicDistributorUsername.value
+      ? "El distribuidor no tiene usuario para su tienda publica."
+      : "";
+  errors.tipoClienteCodigo = !publicForm.tipoClienteCodigo ? "Selecciona el tipo de cliente." : "";
+  errors.clienteNombres = !publicForm.clienteNombres.trim() ? "Ingresa el nombre del cliente." : "";
+  errors.clienteDocumento = !publicForm.clienteDocumento.trim() ? "Ingresa el documento del cliente." : "";
+  errors.clienteEmail = email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "Ingresa un correo valido." : "";
+  errors.envioCiudad = publicForm.envioRequiere && !publicForm.envioCiudad.trim() ? "Ingresa la ciudad." : "";
+  errors.envioDireccion = publicForm.envioRequiere && !publicForm.envioDireccion.trim() ? "Ingresa la direccion." : "";
+  errors.productos = !publicVentaItems.value.length ? "Agrega al menos un producto." : "";
+
+  return errors;
+});
+
+const publicSaleHasErrors = computed(() =>
+  Object.values(publicValidationErrors.value).some(Boolean)
+);
+
 function money(value) {
   return Number(value || 0).toLocaleString("es-BO", {
     minimumFractionDigits: 2,
@@ -236,6 +271,28 @@ function usuarioDePersona(persona) {
 
 function isClubRoyaleProduct(producto) {
   return Number(producto?.cr || 0) > 0;
+}
+
+function touchPublicField(field) {
+  if (field in publicTouched) {
+    publicTouched[field] = true;
+  }
+}
+
+function publicFieldError(field) {
+  if (!publicSaleSubmitted.value && !publicTouched[field]) return "";
+  return publicValidationErrors.value[field] || "";
+}
+
+function resetPublicTouched() {
+  Object.keys(publicTouched).forEach((field) => {
+    publicTouched[field] = false;
+  });
+  publicSaleSubmitted.value = false;
+}
+
+function firstPublicValidationError() {
+  return Object.values(publicValidationErrors.value).find(Boolean) || "Revisa los campos marcados.";
 }
 
 function currentUserName() {
@@ -444,6 +501,7 @@ async function initPublicDistributorSelect2() {
 
   element.on("change.public-distributor", () => {
     selectedPublicDistributorId.value = element.val() || "";
+    touchPublicField("distribuidor");
   });
 }
 
@@ -471,6 +529,7 @@ async function initPublicTipoClienteSelect2() {
 
   element.on("change.public-tipo-cliente", () => {
     publicForm.tipoClienteCodigo = element.val() || "";
+    touchPublicField("tipoClienteCodigo");
   });
 }
 
@@ -486,6 +545,7 @@ function resetSaleForm() {
 }
 
 function resetPublicSaleForm() {
+  resetPublicTouched();
   selectedPublicDistributorId.value = "";
   publicProductQuery.value = "";
   productosPublicos.value = [];
@@ -923,6 +983,7 @@ function addProduct(producto) {
 }
 
 function addPublicProduct(producto) {
+  touchPublicField("productos");
   const found = publicVentaItems.value.find((item) => Number(item.id) === Number(producto.id));
   if (found) {
     found.cantidad += 1;
@@ -960,6 +1021,7 @@ function removeItem(item) {
 }
 
 function removePublicItem(item) {
+  touchPublicField("productos");
   publicVentaItems.value = publicVentaItems.value.filter((current) => Number(current.id) !== Number(item.id));
 }
 
@@ -1118,34 +1180,10 @@ async function saveCajaSale() {
 
 async function savePublicCajaSale() {
   error.value = "";
+  publicSaleSubmitted.value = true;
 
-  if (!selectedPublicDistributorId.value) {
-    await showError("Falta distribuidor", "Selecciona el distribuidor que recibira la venta publica.");
-    return;
-  }
-
-  if (!selectedPublicDistributorUsername.value) {
-    await showError("Distribuidor sin tienda", "La persona seleccionada no tiene usuario asociado para su tienda publica.");
-    return;
-  }
-
-  if (!publicForm.tipoClienteCodigo) {
-    await showError("Falta tipo de cliente", "Selecciona el tipo de cliente publico.");
-    return;
-  }
-
-  if (!publicForm.clienteNombres.trim()) {
-    await showError("Falta cliente", "Ingresa el nombre del cliente publico.");
-    return;
-  }
-
-  if (publicForm.envioRequiere && (!publicForm.envioCiudad.trim() || !publicForm.envioDireccion.trim())) {
-    await showError("Faltan datos de envio", "Ingresa ciudad y direccion para el envio.");
-    return;
-  }
-
-  if (!publicVentaItems.value.length) {
-    await showError("Faltan productos", "Agrega al menos un producto publico a la venta.");
+  if (publicSaleHasErrors.value) {
+    await showError("Venta publica incompleta", firstPublicValidationError());
     return;
   }
 
@@ -1893,14 +1931,15 @@ onMounted(() => {
           <section class="sale-modal-body">
             <div class="sale-card public-sale-grid">
               <section class="public-sale-panel">
-                <label class="field">
+                <label class="field" :class="{ invalid: publicFieldError('distribuidor') }">
                   <span>Distribuidor</span>
-                  <select ref="publicDistributorSelect" v-model="selectedPublicDistributorId">
+                  <select ref="publicDistributorSelect" v-model="selectedPublicDistributorId" @change="touchPublicField('distribuidor')">
                     <option value="">Selecciona un distribuidor</option>
                     <option v-for="persona in personas" :key="persona.id" :value="persona.id">
                       {{ fullName(persona) }} - {{ usuarioDePersona(persona)?.username || "Sin usuario" }}
                     </option>
                   </select>
+                  <small v-if="publicFieldError('distribuidor')" class="field-error">{{ publicFieldError("distribuidor") }}</small>
                 </label>
 
                 <div v-if="selectedPublicDistributor" class="selected-person">
@@ -1908,51 +1947,57 @@ onMounted(() => {
                   <span>{{ fullName(selectedPublicDistributor) }}</span>
                 </div>
 
-                <label class="field">
+                <label class="field" :class="{ invalid: publicFieldError('tipoClienteCodigo') }">
                   <span>Tipo de cliente</span>
-                  <select ref="publicTipoClienteSelect" v-model="publicForm.tipoClienteCodigo">
+                  <select ref="publicTipoClienteSelect" v-model="publicForm.tipoClienteCodigo" @change="touchPublicField('tipoClienteCodigo')">
                     <option v-for="tipo in tiposClientePublico" :key="tipo.id" :value="tipo.codigo">
                       {{ tipo.nombre }}
                     </option>
                   </select>
+                  <small v-if="publicFieldError('tipoClienteCodigo')" class="field-error">{{ publicFieldError("tipoClienteCodigo") }}</small>
                 </label>
 
                 <div class="public-client-grid">
-                  <label class="field">
+                  <label class="field" :class="{ invalid: publicFieldError('clienteNombres') }">
                     <span>Nombres</span>
-                    <input v-model.trim="publicForm.clienteNombres" placeholder="Nombre del cliente" />
+                    <input v-model.trim="publicForm.clienteNombres" placeholder="Nombre del cliente" @blur="touchPublicField('clienteNombres')" @input="touchPublicField('clienteNombres')" />
+                    <small v-if="publicFieldError('clienteNombres')" class="field-error">{{ publicFieldError("clienteNombres") }}</small>
                   </label>
                   <label class="field">
                     <span>Apellidos</span>
                     <input v-model.trim="publicForm.clienteApellidos" placeholder="Apellidos" />
                   </label>
-                  <label class="field">
+                  <label class="field" :class="{ invalid: publicFieldError('clienteDocumento') }">
                     <span>Documento</span>
-                    <input v-model.trim="publicForm.clienteDocumento" placeholder="CI / NIT" />
+                    <input v-model.trim="publicForm.clienteDocumento" placeholder="CI / NIT" @blur="touchPublicField('clienteDocumento')" @input="touchPublicField('clienteDocumento')" />
+                    <small v-if="publicFieldError('clienteDocumento')" class="field-error">{{ publicFieldError("clienteDocumento") }}</small>
                   </label>
                   <label class="field">
                     <span>Telefono</span>
                     <input v-model.trim="publicForm.clienteTelefono" placeholder="Telefono" />
                   </label>
-                  <label class="field public-client-wide">
+                  <label class="field public-client-wide" :class="{ invalid: publicFieldError('clienteEmail') }">
                     <span>Email</span>
-                    <input v-model.trim="publicForm.clienteEmail" type="email" placeholder="correo@dominio.com" />
+                    <input v-model.trim="publicForm.clienteEmail" type="email" placeholder="correo@dominio.com" @blur="touchPublicField('clienteEmail')" @input="touchPublicField('clienteEmail')" />
+                    <small v-if="publicFieldError('clienteEmail')" class="field-error">{{ publicFieldError("clienteEmail") }}</small>
                   </label>
                 </div>
 
                 <label class="toggle-field">
-                  <input v-model="publicForm.envioRequiere" type="checkbox" />
+                  <input v-model="publicForm.envioRequiere" type="checkbox" @change="touchPublicField('envioCiudad'); touchPublicField('envioDireccion')" />
                   <span>Requiere envio</span>
                 </label>
 
                 <div v-if="publicForm.envioRequiere" class="public-client-grid">
-                  <label class="field">
+                  <label class="field" :class="{ invalid: publicFieldError('envioCiudad') }">
                     <span>Ciudad</span>
-                    <input v-model.trim="publicForm.envioCiudad" placeholder="Ciudad" />
+                    <input v-model.trim="publicForm.envioCiudad" placeholder="Ciudad" @blur="touchPublicField('envioCiudad')" @input="touchPublicField('envioCiudad')" />
+                    <small v-if="publicFieldError('envioCiudad')" class="field-error">{{ publicFieldError("envioCiudad") }}</small>
                   </label>
-                  <label class="field public-client-wide">
+                  <label class="field public-client-wide" :class="{ invalid: publicFieldError('envioDireccion') }">
                     <span>Direccion</span>
-                    <input v-model.trim="publicForm.envioDireccion" placeholder="Direccion de entrega" />
+                    <input v-model.trim="publicForm.envioDireccion" placeholder="Direccion de entrega" @blur="touchPublicField('envioDireccion')" @input="touchPublicField('envioDireccion')" />
+                    <small v-if="publicFieldError('envioDireccion')" class="field-error">{{ publicFieldError("envioDireccion") }}</small>
                   </label>
                   <label class="field public-client-wide">
                     <span>Referencia</span>
@@ -1988,6 +2033,7 @@ onMounted(() => {
                     No hay productos publicos para este distribuidor y tipo de cliente.
                   </div>
                 </div>
+                <p v-if="publicFieldError('productos')" class="field-error public-products-error">{{ publicFieldError("productos") }}</p>
 
                 <div class="sale-items">
                   <div v-for="item in publicVentaItems" :key="item.id" class="sale-item public-sale-item">
@@ -2385,6 +2431,9 @@ onMounted(() => {
   outline: 0;
 }
 .field > input:focus, .field > select:focus { border-color: var(--vy-orange); box-shadow: 0 0 0 3px rgba(242, 135, 5, .12); background: #fff; }
+.field.invalid > input, .field.invalid > select { border-color: var(--vy-danger); background: rgba(196, 69, 42, 0.06); }
+.field.invalid :deep(.select2-container--default .select2-selection--single) { border-color: var(--vy-danger); background: rgba(196, 69, 42, 0.06); }
+.field-error { display: block; margin-top: 7px; color: var(--vy-danger); font-size: 11px; font-weight: 900; line-height: 1.3; }
 .input-icon { min-height: 42px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 8px; color: var(--vy-ink-3); }
 .input-icon input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; }
 .persona-select { width: 100%; }
@@ -2477,6 +2526,7 @@ onMounted(() => {
 .toggle-field input { width: 17px; height: 17px; accent-color: var(--vy-success); }
 .public-product-picker { max-height: 250px; }
 .inline-empty { padding: 14px; border: 1px dashed var(--vy-line); border-radius: 12px; color: var(--vy-ink-3); background: var(--vy-surface-2); font-size: 13px; font-weight: 800; text-align: center; }
+.public-products-error { margin-top: 10px; }
 .public-sale-item { grid-template-columns: minmax(0, 1fr) 136px 112px 34px; }
 .public-sale-footer { grid-template-columns: auto minmax(0, 1fr) auto; }
 .public-review-backdrop { position: fixed; inset: 0; z-index: 121; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.55); backdrop-filter: blur(7px); }
