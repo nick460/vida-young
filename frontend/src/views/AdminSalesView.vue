@@ -170,6 +170,10 @@ function fullName(persona) {
   return `${persona?.nombres || ""} ${persona?.apellidos || ""}`.trim() || "Sin nombre";
 }
 
+function isClubRoyaleProduct(producto) {
+  return Number(producto?.cr || 0) > 0;
+}
+
 function currentUserName() {
   try {
     const usuario = JSON.parse(localStorage.getItem("vy_usuario") || "null");
@@ -1480,6 +1484,7 @@ onMounted(() => {
                   <span>
                     <strong>{{ producto.nombre }}</strong>
                     <small>{{ producto.sku }} - {{ producto.categoria || "Producto" }}</small>
+                    <em v-if="isClubRoyaleProduct(producto)" class="club-royale-badge">Producto Club Royale</em>
                   </span>
                   <b>Bs. {{ money(producto.precio) }}</b>
                 </button>
@@ -1490,6 +1495,7 @@ onMounted(() => {
                   <div>
                     <strong>{{ item.nombre }}</strong>
                     <small>Bs. {{ money(item.precio) }} - PV {{ money(item.pv) }} - QP {{ money(item.qp) }} - CR {{ money(item.cr) }}</small>
+                    <em v-if="isClubRoyaleProduct(item)" class="club-royale-badge">Producto Club Royale</em>
                   </div>
                   <div class="quantity-stepper">
                     <button type="button" aria-label="Disminuir cantidad" @click="decrementQuantity(item)">-</button>
@@ -1892,6 +1898,7 @@ onMounted(() => {
 .person-list button.active, .person-list button:hover, .product-picker button:hover { border-color: var(--vy-orange); background: #fffaf0; }
 .person-list strong, .product-picker strong { display: block; color: var(--vy-ink); font-size: 13px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-list small, .product-picker small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.club-royale-badge { width: fit-content; min-height: 24px; margin-top: 7px; padding: 0 9px; border: 1px solid rgba(22, 101, 52, 0.24); border-radius: 999px; background: rgba(22, 101, 52, 0.1); color: #166534; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
 .selected-person { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(63, 143, 92, 0.1); color: var(--vy-success); font-size: 13px; font-weight: 800; }
 .product-picker { margin-top: 10px; max-height: 300px; overflow: auto; }
 .product-picker button span { flex: 1; min-width: 0; }
