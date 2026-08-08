@@ -110,6 +110,46 @@ const detalleRecompensasMensuales = computed(() => selectedDetalleWallet.value?.
 const detalleEfectivoDirecto = computed(() => Number(selectedSaldoDetalle.value?.saldoDinero || 0));
 const detalleEfectivoRecompensas = computed(() => Number(selectedSaldoDetalle.value?.efectivoRecompensasDisponible || 0));
 const detalleEfectivoTotal = computed(() => detalleEfectivoDirecto.value + detalleEfectivoRecompensas.value);
+const detalleOrigenRows = computed(() => {
+  const rows = new Map();
+
+  detalleMovimientos.value.forEach((movimiento) => {
+    const key = `${movimiento.referenciaTipo || "MOVIMIENTO"}-${movimiento.referenciaId || movimiento.id}`;
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        fecha: movimiento.fechaRegistro,
+        concepto: movimiento.concepto || tipoMovimientoLabel(movimiento.tipo),
+        referenciaTipo: movimiento.referenciaTipo,
+        referenciaId: movimiento.referenciaId,
+        compra: movimiento.compra,
+        dinero: 0,
+        productos: 0,
+        pv: 0,
+        qp: 0,
+        cr: 0
+      });
+    }
+
+    const row = rows.get(key);
+    if (!row.fecha || new Date(movimiento.fechaRegistro) < new Date(row.fecha)) {
+      row.fecha = movimiento.fechaRegistro;
+    }
+    if (movimiento.compra) {
+      row.compra = movimiento.compra;
+      row.concepto = `Compra #${movimiento.compra.id}`;
+    }
+
+    const monto = Number(movimiento.monto || 0);
+    if (movimiento.tipo === "DINERO") row.dinero += monto;
+    if (movimiento.tipo === "PRODUCTOS") row.productos += monto;
+    if (movimiento.tipo === "PV") row.pv += monto;
+    if (movimiento.tipo === "QP") row.qp += monto;
+    if (movimiento.tipo === "CR") row.cr += monto;
+  });
+
+  return Array.from(rows.values()).sort((left, right) => new Date(right.fecha || 0) - new Date(left.fecha || 0));
+});
 const productosDisponiblesRetiro = computed(() => Number(selectedWallet.value?.productosRecompensasDisponible || 0));
 const selectedProducto = computed(() =>
   productos.value.find((producto) => Number(producto.id) === Number(selectedProductoId.value))
@@ -487,12 +527,17 @@ function tipoMovimientoLabel(tipo) {
   return labels[tipo] || tipo || "Movimiento";
 }
 
-function movimientosPorTipo(tipo) {
-  return detalleMovimientos.value.filter((movimiento) => movimiento.tipo === tipo && Number(movimiento.monto || 0) !== 0);
+function origenLabel(row) {
+  if (row.compra) return `Compra #${row.compra.id}`;
+  if (row.referenciaTipo && row.referenciaId) return `${row.referenciaTipo} #${row.referenciaId}`;
+  return row.concepto || "Movimiento";
 }
 
-function totalMovimientosPorTipo(tipo) {
-  return movimientosPorTipo(tipo).reduce((sum, movimiento) => sum + Number(movimiento.monto || 0), 0);
+function compraDetalleTexto(compra) {
+  if (!compra?.detalles?.length) return "";
+  return compra.detalles
+    .map((detalle) => `${detalle.cantidad || 0} x ${detalle.productoNombre || "Producto"}${detalle.productoSku ? ` (${detalle.productoSku})` : ""}`)
+    .join(", ");
 }
 
 async function openSaldoDetalle(saldo) {
@@ -980,26 +1025,48 @@ onBeforeUnmount(() => {
                 </div>
               </section>
 
-              <section v-for="tipo in ['DINERO', 'PRODUCTOS', 'PV', 'QP', 'CR']" :key="tipo" class="cash-breakdown">
+              <section class="cash-breakdown source-table-section">
                 <header>
                   <div>
-                    <small>{{ tipoMovimientoLabel(tipo) }}</small>
-                    <strong>Movimientos que alimentan este saldo</strong>
+                    <small>Detalle por origen</small>
+                    <strong>Eventos que generaron los valores de la tabla</strong>
                   </div>
-                  <b>{{ tipo === "DINERO" || tipo === "PRODUCTOS" ? "Bs. " : "" }}{{ money(totalMovimientosPorTipo(tipo)) }}</b>
+                  <b>{{ detalleOrigenRows.length }} registros</b>
                 </header>
-                <div v-for="movimiento in movimientosPorTipo(tipo)" :key="movimiento.id" class="breakdown-row detail-source-row">
-                  <span>
-                    <strong>{{ movimiento.concepto }}</strong>
-                    <small>
-                      {{ formatDateTime(movimiento.fechaRegistro) }}
-                      <template v-if="movimiento.referenciaTipo"> - {{ movimiento.referenciaTipo }} #{{ movimiento.referenciaId || "" }}</template>
-                    </small>
-                  </span>
-                  <b>{{ tipo === "DINERO" || tipo === "PRODUCTOS" ? "Bs. " : "" }}{{ money(movimiento.monto) }}</b>
-                </div>
-                <div v-if="!movimientosPorTipo(tipo).length" class="breakdown-empty">
-                  No hay movimientos de este tipo para el periodo seleccionado.
+                <div class="source-table-wrap">
+                  <table class="source-table">
+                    <thead>
+                      <tr>
+                        <th>Origen</th>
+                        <th>Detalle</th>
+                        <th>Efectivo</th>
+                        <th>Productos</th>
+                        <th>PV</th>
+                        <th>QP</th>
+                        <th>CR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in detalleOrigenRows" :key="row.key">
+                        <td>
+                          <strong>{{ origenLabel(row) }}</strong>
+                          <small>{{ formatDateTime(row.fecha) }}</small>
+                        </td>
+                        <td>
+                          <strong>{{ row.compra?.estadoCompra || row.concepto }}</strong>
+                          <small>{{ compraDetalleTexto(row.compra) || row.concepto }}</small>
+                        </td>
+                        <td>Bs. {{ money(row.dinero) }}</td>
+                        <td>Bs. {{ money(row.productos) }}</td>
+                        <td>{{ money(row.pv) }}</td>
+                        <td>{{ money(row.qp) }}</td>
+                        <td>{{ money(row.cr) }}</td>
+                      </tr>
+                      <tr v-if="!detalleOrigenRows.length">
+                        <td colspan="7">No hay movimientos para el periodo seleccionado.</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </template>
@@ -1260,6 +1327,12 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .breakdown-row b { white-space: nowrap; font-size: 14px; font-weight: 950; }
 .detail-source-row strong, .detail-source-row small { overflow-wrap: anywhere; }
 .breakdown-empty { padding: 12px 14px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
+.source-table-section { background: var(--vy-surface); }
+.source-table-wrap { overflow-x: auto; }
+.source-table { min-width: 860px; }
+.source-table th, .source-table td { padding: 11px 12px; }
+.source-table td:nth-child(n + 3) { white-space: nowrap; font-weight: 900; }
+.source-table td strong, .source-table td small { overflow-wrap: anywhere; }
 .readonly-total { min-height: 42px; display: flex; align-items: center; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); font-weight: 900; }
 .max-button { width: fit-content; min-height: 36px; padding: 0 13px; border-radius: 10px; background: rgba(242, 135, 5, 0.1); color: var(--vy-orange-deep); font-size: 12px; font-weight: 900; }
 .product-withdrawal { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
