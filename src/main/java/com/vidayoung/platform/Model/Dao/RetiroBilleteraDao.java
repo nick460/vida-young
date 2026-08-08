@@ -14,7 +14,11 @@ public interface RetiroBilleteraDao extends JpaRepository<RetiroBilletera, Long>
 
     List<RetiroBilletera> findByPersonaIdAndPeriodoIdOrderByFechaRetiroDesc(Long personaId, Long periodoId);
 
+    List<RetiroBilletera> findByPersonaIdAndPeriodoIdAndReferenciaTipoIsNullOrderByFechaRetiroDesc(Long personaId, Long periodoId);
+
     boolean existsByPersonaIdAndPeriodoId(Long personaId, Long periodoId);
+
+    boolean existsByPersonaIdAndPeriodoIdAndReferenciaTipoIsNull(Long personaId, Long periodoId);
 
     @Query("""
             select r from RetiroBilletera r
@@ -39,4 +43,15 @@ public interface RetiroBilleteraDao extends JpaRepository<RetiroBilletera, Long>
             order by r.fechaRetiro desc
             """)
     List<RetiroBilletera> findByPeriodoIdWithPersonaOrderByFechaRetiroDesc(@Param("periodoId") Long periodoId);
+
+    @Query("""
+            select r from RetiroBilletera r
+            join fetch r.persona p
+            left join fetch r.periodo periodo
+            left join fetch periodo.gestion
+            where r.periodo.id = :periodoId
+              and r.referenciaTipo is null
+            order by r.fechaRetiro desc
+            """)
+    List<RetiroBilletera> findByPeriodoIdAndReferenciaTipoIsNullWithPersonaOrderByFechaRetiroDesc(@Param("periodoId") Long periodoId);
 }

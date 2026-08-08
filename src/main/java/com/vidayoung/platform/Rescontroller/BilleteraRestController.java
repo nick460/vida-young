@@ -69,7 +69,7 @@ public class BilleteraRestController {
         movimientoBilleteraDao.findByPeriodoIdWithPersona(periodoConsultaId).forEach(movimiento -> {
             Billetera billetera = movimiento.getBilletera();
             Persona persona = billetera.getPersona();
-            if (persona == null || persona.getId() == null || retiroBilleteraDao.existsByPersonaIdAndPeriodoId(persona.getId(), periodoConsultaId)) {
+            if (persona == null || persona.getId() == null || retiroBilleteraDao.existsByPersonaIdAndPeriodoIdAndReferenciaTipoIsNull(persona.getId(), periodoConsultaId)) {
                 return;
             }
             PeriodoSaldo saldo = saldosPeriodo.computeIfAbsent(persona.getId(), id -> new PeriodoSaldo(persona, billetera.getId()));
@@ -82,7 +82,7 @@ public class BilleteraRestController {
                 .filter(recompensa -> recompensa.getBeneficiario() != null && recompensa.getBeneficiario().getId() != null)
                 .filter(recompensa -> recompensa.getPeriodo() != null && periodoConsultaId.equals(recompensa.getPeriodo().getId()))
                 .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
-                .filter(recompensa -> !retiroBilleteraDao.existsByPersonaIdAndPeriodoId(recompensa.getBeneficiario().getId(), periodoConsultaId))
+                .filter(recompensa -> !retiroBilleteraDao.existsByPersonaIdAndPeriodoIdAndReferenciaTipoIsNull(recompensa.getBeneficiario().getId(), periodoConsultaId))
                 .forEach(recompensa -> {
                     Billetera billetera = billeteraService.asegurarBilletera(recompensa.getBeneficiario());
                     PeriodoSaldo saldo = saldosPeriodo.computeIfAbsent(recompensa.getBeneficiario().getId(), id -> new PeriodoSaldo(recompensa.getBeneficiario(), billetera.getId()));
@@ -148,7 +148,7 @@ public class BilleteraRestController {
         if (periodoConsultaId == null) {
             return ResponseEntity.ok(List.of());
         }
-        return ResponseEntity.ok(retiroBilleteraDao.findByPeriodoIdWithPersonaOrderByFechaRetiroDesc(periodoConsultaId).stream()
+        return ResponseEntity.ok(retiroBilleteraDao.findByPeriodoIdAndReferenciaTipoIsNullWithPersonaOrderByFechaRetiroDesc(periodoConsultaId).stream()
                 .map(this::retiroResponse)
                 .toList());
     }
@@ -164,7 +164,7 @@ public class BilleteraRestController {
             return ResponseEntity.ok(List.of());
         }
 
-        return ResponseEntity.ok(retiroBilleteraDao.findByPersonaIdAndPeriodoIdOrderByFechaRetiroDesc(personaId, periodoConsultaId).stream()
+        return ResponseEntity.ok(retiroBilleteraDao.findByPersonaIdAndPeriodoIdAndReferenciaTipoIsNullOrderByFechaRetiroDesc(personaId, periodoConsultaId).stream()
                 .map(this::retiroResponse)
                 .toList());
     }
