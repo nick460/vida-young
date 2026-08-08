@@ -1329,7 +1329,7 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .detail-source-row strong, .detail-source-row small { overflow-wrap: anywhere; }
 .breakdown-empty { padding: 12px 14px; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
 .source-table-section { background: var(--vy-surface); }
-.source-table-wrap { max-height: 360px; overflow: auto; }
+.source-table-wrap { overflow-x: auto; overflow-y: visible; }
 .source-table { min-width: 860px; }
 .source-table th, .source-table td { padding: 11px 12px; }
 .source-table th { position: sticky; top: 0; z-index: 1; background: #fff; }
