@@ -60,6 +60,55 @@ const movimientos = computed(() => walletSummary.value?.movimientos || []);
 const membresias = computed(() => (walletSummary.value?.membresias || []).filter(membershipInSelectedPeriod));
 const cierres = computed(() => (walletSummary.value?.cierresMensuales || []).filter(cierreInSelectedPeriod));
 const periodoActivo = computed(() => selectedPeriodo.value || walletSummary.value?.periodoActivo || null);
+const movimientoGroups = computed(() => {
+  const groups = new Map();
+
+  movimientos.value.forEach((movimiento) => {
+    const referenciaTipo = movimiento.referenciaTipo || "MOVIMIENTO";
+    const referenciaId = movimiento.referenciaId || movimiento.id;
+    const key = `${referenciaTipo}-${referenciaId}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        referenciaTipo,
+        referenciaId,
+        title: movimientoTitle(movimiento),
+        concepts: new Set(),
+        date: movimiento.fechaRegistro,
+        compra: movimiento.compra || null,
+        dinero: 0,
+        pv: 0,
+        qp: 0,
+        cr: 0,
+        productos: 0
+      });
+    }
+
+    const group = groups.get(key);
+    group.date = newestDate(group.date, movimiento.fechaRegistro);
+    group.compra = group.compra || movimiento.compra || null;
+    if (movimiento.concepto) {
+      group.concepts.add(movimiento.concepto);
+    }
+
+    const amount = Number(movimiento.monto || 0);
+    if (movimiento.tipo === "DINERO") group.dinero += amount;
+    if (movimiento.tipo === "PV") group.pv += amount;
+    if (movimiento.tipo === "QP") group.qp += amount;
+    if (movimiento.tipo === "CR") group.cr += amount;
+    if (movimiento.tipo === "PRODUCTOS") group.productos += amount;
+  });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      subtitle: group.compra
+        ? compraProductosMovimiento(group.compra) || Array.from(group.concepts).join(" / ")
+        : Array.from(group.concepts).join(" / ")
+    }))
+    .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
+});
 
 const walletCards = computed(() => [
   { label: "Dinero", value: `Bs. ${money(billetera.value.saldoDinero)}` },
@@ -122,12 +171,12 @@ const timeline = computed(() => {
       date: membresia.fechaInicio || membresia.fechaRegistro,
       icon: BadgeCheck
     })),
-    ...movimientos.value.map((movimiento) => ({
-      id: `movimiento-${movimiento.id}`,
-      type: movimiento.tipo || "Movimiento",
-      title: movimiento.concepto || "Movimiento de billetera",
-      subtitle: `${movimiento.referenciaTipo || "Billetera"} - ${money(movimiento.monto)}`,
-      date: movimiento.fechaRegistro,
+    ...movimientoGroups.value.map((group) => ({
+      id: `movimiento-${group.key}`,
+      type: group.referenciaTipo || "Movimiento",
+      title: group.title,
+      subtitle: movementGroupSummary(group),
+      date: group.date,
       icon: WalletCards
     }))
   ];
@@ -228,6 +277,42 @@ function compraProductos(compra) {
   return (compra.detalles || [])
     .map((detalle) => `${detalle.producto?.nombre || "Producto"} x${detalle.cantidad || 0}`)
     .join(", ");
+}
+
+function compraProductosMovimiento(compra) {
+  return (compra.detalles || [])
+    .map((detalle) => `${detalle.productoNombre || detalle.producto?.nombre || "Producto"} x${detalle.cantidad || 0}`)
+    .join(", ");
+}
+
+function newestDate(left, right) {
+  if (!left) return right;
+  if (!right) return left;
+  return new Date(right) > new Date(left) ? right : left;
+}
+
+function movimientoTitle(movimiento) {
+  const reference = movimiento.referenciaId ? ` #${movimiento.referenciaId}` : "";
+  const labels = {
+    COMPRA: "Compra interna",
+    VENTA_PUBLICA: "Venta publica",
+    REFERIDO_AFILIACION: "Afiliacion",
+    RECOMPENSA: "Recompensa",
+    RETIRO_BILLETERA: "Retiro de billetera",
+    CIERRE_MENSUAL: "Cierre mensual",
+    MOVIMIENTO: "Movimiento de billetera"
+  };
+  return `${labels[movimiento.referenciaTipo] || movimiento.referenciaTipo || "Movimiento de billetera"}${reference}`;
+}
+
+function movementGroupSummary(group) {
+  return [
+    group.dinero ? `Dinero Bs. ${money(group.dinero)}` : "",
+    group.productos ? `Productos Bs. ${money(group.productos)}` : "",
+    group.pv ? `PV ${money(group.pv)}` : "",
+    group.qp ? `QP ${money(group.qp)}` : "",
+    group.cr ? `CR ${money(group.cr)}` : ""
+  ].filter(Boolean).join(" - ") || group.subtitle || "Sin valores";
 }
 
 async function loadPeriodos() {
@@ -423,6 +508,47 @@ onMounted(loadBaseData);
                 <span>{{ card.label }}</span>
                 <strong>{{ card.value }}</strong>
               </article>
+            </section>
+
+            <section class="vy-card history-card">
+              <header>
+                <h3>Movimientos de billetera</h3>
+                <span>{{ movimientoGroups.length }} eventos agrupados</span>
+              </header>
+              <div class="table-wrap">
+                <table class="movement-table">
+                  <thead>
+                    <tr>
+                      <th>Movimiento</th>
+                      <th>Detalle</th>
+                      <th>Fecha</th>
+                      <th>Efectivo</th>
+                      <th>Productos</th>
+                      <th>PV</th>
+                      <th>QP</th>
+                      <th>CR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="group in movimientoGroups" :key="group.key">
+                      <td>
+                        <strong>{{ group.title }}</strong>
+                        <small>{{ group.referenciaTipo }} #{{ group.referenciaId }}</small>
+                      </td>
+                      <td>{{ group.subtitle || "Sin detalle" }}</td>
+                      <td>{{ formatDateTime(group.date) }}</td>
+                      <td>Bs. {{ money(group.dinero) }}</td>
+                      <td>Bs. {{ money(group.productos) }}</td>
+                      <td>{{ money(group.pv) }}</td>
+                      <td>{{ money(group.qp) }}</td>
+                      <td>{{ money(group.cr) }}</td>
+                    </tr>
+                    <tr v-if="!movimientoGroups.length">
+                      <td colspan="8">No hay movimientos de billetera para el mes seleccionado.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
 
             <section class="content-grid">
@@ -661,6 +787,11 @@ table { width: 100%; border-collapse: collapse; min-width: 760px; }
 th, td { padding: 11px 10px; border-bottom: 1px solid var(--vy-line-2); text-align: left; font-size: 12px; vertical-align: top; }
 th { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; background: var(--vy-surface-2); }
 td { color: var(--vy-ink-2); font-weight: 700; }
+.movement-table { min-width: 980px; }
+.movement-table td:first-child strong, .movement-table td:first-child small { display: block; }
+.movement-table td:first-child strong { color: var(--vy-ink); font-weight: 900; }
+.movement-table td:first-child small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.movement-table td:nth-child(n + 4) { white-space: nowrap; font-weight: 900; }
 .status-pill { padding: 4px 9px; border-radius: 999px; background: rgba(63, 143, 92, 0.12); color: var(--vy-success); font-size: 11px; font-weight: 900; }
 .timeline-item { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
 .timeline-icon { width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: var(--vy-ink); color: #fff; }
