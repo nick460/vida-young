@@ -525,7 +525,9 @@ onBeforeUnmount(() => {
   }
 
   .login-hero {
-    min-height: 260px;
+    min-height: auto;
+    aspect-ratio: 4 / 1;
+    max-height: 260px;
     padding: 20px;
   }
 
@@ -549,7 +551,9 @@ onBeforeUnmount(() => {
     width: 100%;
     height: 100%;
     display: block;
-    object-fit: cover;
+    object-fit: contain;
+    object-position: center center;
+    background: linear-gradient(135deg, var(--vy-orange) 0%, var(--vy-orange-deep) 100%);
   }
 
   .hero-photo-mobile + .hero-background,
@@ -580,7 +584,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 560px) {
   .login-hero {
-    min-height: 220px;
+    aspect-ratio: 4 / 1;
     padding: 16px;
   }
 

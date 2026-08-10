@@ -351,17 +351,16 @@ async function refreshAll() {
 }
 
 async function loadPersonaDetail() {
-  walletSummary.value = null;
-  compras.value = [];
-  recompensas.value = [];
-  retiros.value = [];
-
   if (!selectedPersonaId.value) return;
 
   detailLoading.value = true;
   error.value = "";
 
   try {
+    if (!selectedPeriodoId.value) {
+      await loadPeriodos();
+    }
+
     const queryString = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
     const [walletResult, comprasResult, recompensasResult, retirosResult] = await Promise.allSettled([
       apiRequest(`/api/billeteras/persona/${selectedPersonaId.value}${queryString}`),
@@ -370,10 +369,18 @@ async function loadPersonaDetail() {
       apiRequest(`/api/billeteras/persona/${selectedPersonaId.value}/retiros${queryString}`)
     ]);
 
-    walletSummary.value = walletResult.status === "fulfilled" ? walletResult.value : null;
-    compras.value = comprasResult.status === "fulfilled" && Array.isArray(comprasResult.value) ? comprasResult.value : [];
-    recompensas.value = recompensasResult.status === "fulfilled" && Array.isArray(recompensasResult.value) ? recompensasResult.value : [];
-    retiros.value = retirosResult.status === "fulfilled" && Array.isArray(retirosResult.value) ? retirosResult.value : [];
+    if (walletResult.status === "fulfilled") {
+      walletSummary.value = walletResult.value || null;
+    }
+    if (comprasResult.status === "fulfilled") {
+      compras.value = Array.isArray(comprasResult.value) ? comprasResult.value : [];
+    }
+    if (recompensasResult.status === "fulfilled") {
+      recompensas.value = Array.isArray(recompensasResult.value) ? recompensasResult.value : [];
+    }
+    if (retirosResult.status === "fulfilled") {
+      retiros.value = Array.isArray(retirosResult.value) ? retirosResult.value : [];
+    }
 
     if ([walletResult, comprasResult, recompensasResult, retirosResult].some((result) => result.status === "rejected")) {
       error.value = "Algunos datos no se pudieron cargar, pero la consulta disponible se mantiene visible.";
@@ -535,7 +542,7 @@ onMounted(loadBaseData);
             </section>
 
             <section class="content-grid">
-              <article class="vy-card info-card">
+              <article class="vy-card info-card network-tree-card">
                 <header>
                   <h3>Red</h3>
                   <span>{{ directos.length }} directos - {{ networkRows.length }} en estructura</span>
@@ -755,6 +762,7 @@ onMounted(loadBaseData);
 .wallet-card { border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
 .wallet-card strong { font-size: 20px; }
 .info-card, .history-card { padding: 18px; min-width: 0; }
+.network-tree-card { grid-column: 1 / -1; }
 .info-card header, .history-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .info-card h3, .history-card h3 { font-size: 16px; font-weight: 900; }
 .info-card header span, .history-card header span { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
@@ -762,7 +770,7 @@ onMounted(loadBaseData);
 .info-row strong, .stack-row strong { display: block; margin-top: 4px; font-size: 13px; font-weight: 900; }
 .stack-list, .metrics-list { display: grid; gap: 8px; }
 .stack-row small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
-.consult-tree-stage { margin-top: 10px; overflow: auto; padding: 8px 4px 12px; max-height: 520px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); scrollbar-width: thin; scrollbar-color: rgba(242, 135, 5, 0.52) rgba(214, 204, 188, 0.35); }
+.consult-tree-stage { width: 100%; max-width: 100%; margin-top: 10px; overflow: auto; padding: 8px 4px 12px; max-height: 420px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); scrollbar-width: thin; scrollbar-color: rgba(242, 135, 5, 0.52) rgba(214, 204, 188, 0.35); }
 .consult-tree-canvas { width: max-content; min-width: 100%; display: flex; flex-direction: column; align-items: center; padding: 4px 0 8px; }
 .consult-root-row { width: 100%; min-width: max-content; display: flex; justify-content: center; margin-bottom: 28px; position: relative; }
 .consult-root-row::after { content: ""; position: absolute; left: 50%; bottom: -28px; height: 22px; border-left: 1px solid rgba(242, 135, 5, 0.62); }
