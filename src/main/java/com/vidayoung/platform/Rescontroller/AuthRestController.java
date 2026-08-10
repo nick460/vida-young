@@ -9,6 +9,7 @@ import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.Usuario;
 import com.vidayoung.platform.Model.Service.UsuarioService;
+import com.vidayoung.platform.Security.CustomUserDetailsService;
 import com.vidayoung.platform.Security.JwtService;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -22,12 +23,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -51,6 +55,7 @@ public class AuthRestController {
     private final UsuarioDao usuarioDao;
     private final ReferidoDao referidoDao;
     private final UsuarioService usuarioService;
+    private final CustomUserDetailsService userDetailsService;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
@@ -60,6 +65,33 @@ public class AuthRestController {
 
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         Usuario usuario = usuarioDao.findByUsername(userDetails.getUsername()).orElseThrow();
+        String token = jwtService.generarToken(userDetails);
+        List<String> roles = userDetails.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .toList();
+
+        return ResponseEntity.ok(new LoginResponse(
+                token,
+                "Bearer",
+                usuario.getId(),
+                usuario.getUsername(),
+                roles
+        ));
+    }
+
+    @PostMapping("/impersonate/{usuarioId}")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<LoginResponse> impersonate(@PathVariable Long usuarioId) {
+        Usuario usuario = usuarioDao.findById(usuarioId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .filter(item -> Boolean.TRUE.equals(item.getActivo()))
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado o inactivo."));
+
+        if (usuario.getRoles() == null || usuario.getRoles().isEmpty()) {
+            throw new IllegalArgumentException("El usuario no tiene roles asignados.");
+        }
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(usuario.getUsername());
         String token = jwtService.generarToken(userDetails);
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -105,6 +137,11 @@ public class AuthRestController {
 
         Usuario actualizado = usuarioService.actualizarFotoPerfil(usuario.getId(), "/uploads/perfiles/" + fileName);
         return ResponseEntity.ok(toProfileResponse(actualizado));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<String> manejarValidacion(IllegalArgumentException exception) {
+        return ResponseEntity.badRequest().body(exception.getMessage());
     }
 
     private Usuario buscarUsuarioAutenticado(UserDetails userDetails) {

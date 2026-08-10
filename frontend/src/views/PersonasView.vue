@@ -5,6 +5,7 @@ import "sweetalert2/dist/sweetalert2.min.css";
 import {
   CircleMinus,
   KeyRound,
+  LogIn,
   Pencil,
   Plus,
   RefreshCw,
@@ -25,6 +26,7 @@ const openMenuId = ref(null);
 const searchTerm = ref("");
 const currentPage = ref(1);
 const pageSize = ref(10);
+const impersonatingUserId = ref(null);
 
 const personaModalOpen = ref(false);
 const usuarioModalOpen = ref(false);
@@ -85,6 +87,10 @@ function toggleMenu(id) {
 
 function userRoles(usuario) {
   return usuario?.roles?.map((rol) => rol.nombre).join(", ") || "Sin usuario";
+}
+
+function canEnterAs(usuario) {
+  return Boolean(usuario?.id && usuario.activo !== false && usuario.roles?.length);
 }
 
 function normalize(value) {
@@ -217,6 +223,55 @@ async function saveUsuario() {
     await loadAll();
   } catch (exception) {
     await showError(exception.message || "No se pudo guardar el usuario.");
+  }
+}
+
+async function enterAsUser(persona, usuario) {
+  openMenuId.value = null;
+
+  if (!canEnterAs(usuario)) {
+    await showError("La persona debe tener usuario activo y al menos un rol asignado.");
+    return;
+  }
+
+  const result = await Swal.fire({
+    title: "Ingresar como usuario",
+    text: `Se cerrara la sesion actual en esta pestana e ingresaras como ${usuario.username}.`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Ingresar",
+    cancelButtonText: "Cancelar",
+    reverseButtons: true,
+    confirmButtonColor: "#F28705",
+    cancelButtonColor: "#1F1A14"
+  });
+
+  if (!result.isConfirmed) {
+    return;
+  }
+
+  impersonatingUserId.value = usuario.id;
+  try {
+    const response = await apiRequest(`/api/auth/impersonate/${usuario.id}`, { method: "POST" });
+    localStorage.setItem("vy_token", response.token);
+    localStorage.setItem("vy_usuario", JSON.stringify({
+      id: response.usuarioId,
+      username: response.username,
+      roles: response.roles || [],
+      persona: {
+        id: persona.id,
+        nombres: persona.nombres,
+        apellidos: persona.apellidos,
+        documento: persona.documento,
+        email: persona.email,
+        telefono: persona.telefono
+      }
+    }));
+    window.location.assign("/dashboard");
+  } catch (exception) {
+    await showError(exception.message || "No se pudo ingresar con el usuario seleccionado.");
+  } finally {
+    impersonatingUserId.value = null;
   }
 }
 
@@ -412,6 +467,10 @@ watch(totalPages, (pages) => {
                   <button type="button" @click="openUsuarioModal(persona)">
                     <KeyRound :size="14" stroke-width="2" />
                     {{ usuario ? "Editar usuario" : "Crear usuario" }}
+                  </button>
+                  <button v-if="canEnterAs(usuario)" type="button" :disabled="impersonatingUserId === usuario.id" @click="enterAsUser(persona, usuario)">
+                    <LogIn :size="14" stroke-width="2" />
+                    {{ impersonatingUserId === usuario.id ? "Ingresando..." : "Ingresar" }}
                   </button>
                   <button type="button" class="danger" @click="removePersona(persona)">
                     <CircleMinus :size="14" stroke-width="2" />
@@ -880,6 +939,11 @@ td {
 .row-menu button:hover {
   background: var(--vy-surface-2);
   color: var(--vy-ink);
+}
+
+.row-menu button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .row-menu button svg {
