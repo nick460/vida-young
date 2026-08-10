@@ -4,6 +4,7 @@ import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.CompraDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
+import com.vidayoung.platform.Model.Dao.RangoDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDetalleDao;
@@ -16,12 +17,14 @@ import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Persona;
+import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Recompensa;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import com.vidayoung.platform.Model.Entity.RetiroBilleteraDetalle;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +53,7 @@ public class BilleteraRestController {
     private final CompraDao compraDao;
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
+    private final RangoDao rangoDao;
     private final RecompensaDao recompensaDao;
     private final RetiroBilleteraDao retiroBilleteraDao;
     private final RetiroBilleteraDetalleDao retiroBilleteraDetalleDao;
@@ -88,6 +92,8 @@ public class BilleteraRestController {
                     PeriodoSaldo saldo = saldosPeriodo.computeIfAbsent(recompensa.getBeneficiario().getId(), id -> new PeriodoSaldo(recompensa.getBeneficiario(), billetera.getId()));
                     saldo.efectivoRecompensas = saldo.efectivoRecompensas.add(efectivoDisponible(recompensa));
                 });
+
+        saldosPeriodo.values().forEach(this::asignarRangoPeriodo);
 
         return ResponseEntity.ok(saldosPeriodo.values().stream()
                 .filter(PeriodoSaldo::tieneSaldo)
@@ -344,6 +350,10 @@ public class BilleteraRestController {
 
         private final BigDecimal saldoQp;
 
+        private final String rangoNombre;
+
+        private final BigDecimal rangoQpMinimo;
+
         private final BigDecimal saldoCr;
 
         private final BigDecimal saldoProductos;
@@ -373,6 +383,8 @@ public class BilleteraRestController {
                     zeroIfNullStatic(billetera.getSaldoDinero()),
                     zeroIfNullStatic(billetera.getSaldoPv()),
                     zeroIfNullStatic(billetera.getSaldoQp()),
+                    billetera.getPersona().getRangoActual() == null ? null : billetera.getPersona().getRangoActual().getNombre(),
+                    billetera.getPersona().getRangoActual() == null ? null : zeroIfNullStatic(billetera.getPersona().getRangoActual().getQpMinimo()),
                     zeroIfNullStatic(billetera.getSaldoCr()),
                     BigDecimal.ZERO,
                     zeroIfNullStatic(efectivoRecompensasDisponible),
@@ -394,6 +406,8 @@ public class BilleteraRestController {
                     zeroIfNullStatic(cierre.getSaldoDinero()),
                     zeroIfNullStatic(cierre.getSaldoPv()),
                     zeroIfNullStatic(cierre.getSaldoQp()),
+                    cierre.getRangoNombre(),
+                    zeroIfNullStatic(cierre.getRangoQpMinimo()),
                     zeroIfNullStatic(cierre.getSaldoCr()),
                     zeroIfNullStatic(cierre.getSaldoProductos()),
                     BigDecimal.ZERO,
@@ -415,6 +429,8 @@ public class BilleteraRestController {
                     zeroIfNullStatic(saldo.saldoDinero).max(BigDecimal.ZERO),
                     zeroIfNullStatic(saldo.saldoPv).max(BigDecimal.ZERO),
                     zeroIfNullStatic(saldo.saldoQp).max(BigDecimal.ZERO),
+                    saldo.rangoNombre,
+                    zeroIfNullStatic(saldo.rangoQpMinimo),
                     zeroIfNullStatic(saldo.saldoCr).max(BigDecimal.ZERO),
                     zeroIfNullStatic(saldo.saldoProductos).max(BigDecimal.ZERO),
                     zeroIfNullStatic(saldo.efectivoRecompensas).max(BigDecimal.ZERO),
@@ -440,6 +456,10 @@ public class BilleteraRestController {
         private BigDecimal saldoPv = BigDecimal.ZERO;
 
         private BigDecimal saldoQp = BigDecimal.ZERO;
+
+        private String rangoNombre;
+
+        private BigDecimal rangoQpMinimo = BigDecimal.ZERO;
 
         private BigDecimal saldoCr = BigDecimal.ZERO;
 
@@ -490,6 +510,10 @@ public class BilleteraRestController {
         private final String apellidos;
 
         private final String documento;
+
+        private final String rangoNombre;
+
+        private final BigDecimal rangoQpMinimo;
 
         private final BigDecimal montoDinero;
 
@@ -736,13 +760,52 @@ public class BilleteraRestController {
                 .orElse(BigDecimal.ZERO);
     }
 
+    private void asignarRangoPeriodo(PeriodoSaldo saldo) {
+        Rango rango = rangoAlcanzadoPorQp(saldo.saldoQp).orElse(null);
+        saldo.rangoNombre = rango == null ? null : rango.getNombre();
+        saldo.rangoQpMinimo = rango == null ? BigDecimal.ZERO : zeroIfNull(rango.getQpMinimo());
+    }
+
+    private java.util.Optional<Rango> rangoAlcanzadoPorQp(BigDecimal qp) {
+        BigDecimal qpActual = zeroIfNull(qp).max(BigDecimal.ZERO);
+        return rangoDao.findAll().stream()
+                .filter(rango -> Auditoria.ESTADO_ACTIVO.equals(rango.getEstado()))
+                .filter(rango -> qpActual.compareTo(zeroIfNull(rango.getQpMinimo())) >= 0)
+                .max(Comparator.comparing(rango -> zeroIfNull(rango.getQpMinimo())));
+    }
+
+    private RangoPeriodo rangoPeriodoPorPersona(Long personaId, PeriodoGestion periodo) {
+        if (personaId == null || periodo == null || periodo.getId() == null) {
+            return new RangoPeriodo(null, BigDecimal.ZERO);
+        }
+
+        java.util.Optional<CierreMensualBilletera> cierre = cierreMensualBilleteraDao.findByPersonaIdOrderByPeriodoDesc(personaId).stream()
+                .filter(item -> item.getPeriodoGestion() != null && periodo.getId().equals(item.getPeriodoGestion().getId()))
+                .findFirst();
+        if (cierre.isPresent()) {
+            return new RangoPeriodo(cierre.get().getRangoNombre(), zeroIfNull(cierre.get().getRangoQpMinimo()));
+        }
+
+        BigDecimal qpPeriodo = movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodo.getId()).stream()
+                .filter(movimiento -> MovimientoBilletera.TIPO_QP.equals(movimiento.getTipo()))
+                .map(MovimientoBilletera::getMonto)
+                .map(this::zeroIfNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Rango rango = rangoAlcanzadoPorQp(qpPeriodo).orElse(null);
+        return new RangoPeriodo(rango == null ? null : rango.getNombre(), rango == null ? BigDecimal.ZERO : zeroIfNull(rango.getQpMinimo()));
+    }
+
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private record RangoPeriodo(String nombre, BigDecimal qpMinimo) {
     }
 
     private RetiroBilleteraResponse retiroResponse(RetiroBilletera retiro) {
         Persona persona = retiro.getPersona();
         PeriodoGestion periodo = retiro.getPeriodo();
+        RangoPeriodo rangoPeriodo = rangoPeriodoPorPersona(persona == null ? null : persona.getId(), periodo);
         BigDecimal desdeBilletera = movimientoBilleteraDao
                 .findByReferenciaTipoAndReferenciaIdAndTipo("RETIRO_BILLETERA", retiro.getId(), MovimientoBilletera.TIPO_DINERO)
                 .stream()
@@ -762,6 +825,8 @@ public class BilleteraRestController {
                 persona == null ? null : persona.getNombres(),
                 persona == null ? null : persona.getApellidos(),
                 persona == null ? null : persona.getDocumento(),
+                rangoPeriodo.nombre(),
+                rangoPeriodo.qpMinimo(),
                 montoDinero,
                 zeroIfNull(retiro.getMontoProductos()),
                 desdeBilletera,

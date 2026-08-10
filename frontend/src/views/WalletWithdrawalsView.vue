@@ -62,6 +62,8 @@ const retiroRows = computed(() =>
     nombres: retiro.nombres,
     apellidos: retiro.apellidos,
     documento: retiro.documento,
+    rangoNombre: retiro.rangoNombre,
+    rangoQpMinimo: retiro.rangoQpMinimo,
     saldoDinero: retiro.montoDinero,
     efectivoRecompensasDisponible: 0,
     saldoProductos: retiro.montoProductos,
@@ -897,6 +899,7 @@ onBeforeUnmount(() => {
               <tr>
                 <th>Persona</th>
                 <th>Documento</th>
+                <th>Rango</th>
                 <th>Efectivo</th>
                 <th>Productos</th>
                 <th>PV</th>
@@ -916,6 +919,10 @@ onBeforeUnmount(() => {
                   </small>
                 </td>
                 <td>{{ saldo.documento || "Sin documento" }}</td>
+                <td>
+                  <span class="rank-pill">{{ saldo.rangoNombre || "Sin rango" }}</span>
+                  <small v-if="saldo.rangoQpMinimo">QP min. {{ money(saldo.rangoQpMinimo) }}</small>
+                </td>
                 <td>Bs. {{ money(Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0)) }}</td>
                 <td>Bs. {{ money(saldo.saldoProductos) }}</td>
                 <td>{{ money(saldo.saldoPv) }}</td>
@@ -941,7 +948,7 @@ onBeforeUnmount(() => {
                 </td>
               </tr>
               <tr v-if="!allRows.length && !loading">
-                <td colspan="9">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
+                <td colspan="10">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
               </tr>
             </tbody>
           </table>
@@ -1276,6 +1283,7 @@ th, td { padding: 13px 12px; border-bottom: 1px solid var(--vy-line-2); text-ali
 th { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 td strong, td small { display: block; }
 td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.rank-pill { width: fit-content; min-height: 26px; padding: 0 9px; border-radius: 999px; background: #fff3df; color: var(--vy-orange-deep); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 950; white-space: nowrap; }
 .actions-cell { text-align: right; }
 .row-withdraw-button { min-height: 36px; padding: 0 12px; border: 1px solid rgba(31, 26, 20, 0.12); border-radius: 10px; background: #1f1a14; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 950; white-space: nowrap; box-shadow: 0 8px 18px rgba(31, 26, 20, 0.16); }
 .row-withdraw-button:hover:not(:disabled) { background: #f28705; color: #1f1a14; transform: translateY(-1px); }
