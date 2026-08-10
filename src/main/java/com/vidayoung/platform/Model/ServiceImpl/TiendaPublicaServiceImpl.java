@@ -330,6 +330,7 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                     "Ingreso por venta publica #" + compra.getId()
             );
             acreditarGananciaDistribuidor(compra);
+            acreditarVolumenDistribuidor(compra);
         }
 
         return compra;
@@ -512,6 +513,66 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                 .monto(ganancia)
                 .saldoResultado(billetera.getSaldoDinero())
                 .build());
+    }
+
+    private void acreditarVolumenDistribuidor(CompraPublica compra) {
+        BigDecimal totalPv = totalVolumen(compra, MovimientoBilletera.TIPO_PV);
+        BigDecimal totalQp = totalVolumen(compra, MovimientoBilletera.TIPO_QP);
+        Billetera billetera = billeteraService.asegurarBilletera(compra.getDistribuidor());
+
+        if (totalPv.compareTo(BigDecimal.ZERO) > 0
+                && !movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
+                REFERENCIA_VENTA_PUBLICA,
+                compra.getId(),
+                MovimientoBilletera.TIPO_PV
+        )) {
+            billetera.setSaldoPv(zeroIfNull(billetera.getSaldoPv()).add(totalPv));
+            billetera = billeteraDao.save(billetera);
+            movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                    .billetera(billetera)
+                    .periodo(compra.getPeriodo())
+                    .tipo(MovimientoBilletera.TIPO_PV)
+                    .concepto("PV por venta publica #" + compra.getId())
+                    .referenciaTipo(REFERENCIA_VENTA_PUBLICA)
+                    .referenciaId(compra.getId())
+                    .monto(totalPv)
+                    .saldoResultado(billetera.getSaldoPv())
+                    .build());
+            billeteraService.activarMembresiaPorPv(compra.getDistribuidor(), billetera.getSaldoPv(), compra.getPeriodo());
+        }
+
+        if (totalQp.compareTo(BigDecimal.ZERO) > 0
+                && !movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
+                REFERENCIA_VENTA_PUBLICA,
+                compra.getId(),
+                MovimientoBilletera.TIPO_QP
+        )) {
+            billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(totalQp));
+            billetera = billeteraDao.save(billetera);
+            billeteraService.actualizarRangoActual(compra.getDistribuidor(), billetera.getSaldoQp());
+            movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                    .billetera(billetera)
+                    .periodo(compra.getPeriodo())
+                    .tipo(MovimientoBilletera.TIPO_QP)
+                    .concepto("QP por venta publica #" + compra.getId())
+                    .referenciaTipo(REFERENCIA_VENTA_PUBLICA)
+                    .referenciaId(compra.getId())
+                    .monto(totalQp)
+                    .saldoResultado(billetera.getSaldoQp())
+                    .build());
+        }
+    }
+
+    private BigDecimal totalVolumen(CompraPublica compra, String tipo) {
+        return compra.getDetalles().stream()
+                .map(detalle -> {
+                    Producto producto = detalle.getProducto();
+                    BigDecimal unitario = MovimientoBilletera.TIPO_PV.equals(tipo)
+                            ? zeroIfNull(producto == null ? null : producto.getPv())
+                            : zeroIfNull(producto == null ? null : producto.getQp());
+                    return unitario.multiply(BigDecimal.valueOf(detalle.getCantidad() == null ? 0 : detalle.getCantidad()));
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal zeroIfNull(BigDecimal value) {
