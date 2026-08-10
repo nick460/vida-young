@@ -68,6 +68,8 @@ const selectedPublicDistributorId = ref("");
 const publicProductQuery = ref("");
 const publicVentaItems = ref([]);
 const publicSaleSubmitted = ref(false);
+const searchingPublicClient = ref(false);
+const publicClientLookupMessage = ref("");
 const publicTouched = reactive({
   distribuidor: false,
   tipoClienteCodigo: false,
@@ -289,6 +291,19 @@ function resetPublicTouched() {
     publicTouched[field] = false;
   });
   publicSaleSubmitted.value = false;
+}
+
+function applyPublicClientLookup(cliente) {
+  publicForm.clienteNombres = cliente.nombres || "";
+  publicForm.clienteApellidos = cliente.apellidos || "";
+  publicForm.clienteDocumento = cliente.documento || publicForm.clienteDocumento;
+  publicForm.clienteEmail = cliente.email || "";
+  publicForm.clienteTelefono = cliente.telefono || "";
+  publicForm.envioRequiere = Boolean(cliente.envioRequiere);
+  publicForm.envioDireccion = cliente.envioDireccion || "";
+  publicForm.envioCiudad = cliente.envioCiudad || "";
+  publicForm.envioReferencia = cliente.envioReferencia || "";
+  ["clienteNombres", "clienteDocumento", "clienteEmail", "envioCiudad", "envioDireccion"].forEach(touchPublicField);
 }
 
 function firstPublicValidationError() {
@@ -548,6 +563,8 @@ function resetPublicSaleForm() {
   resetPublicTouched();
   selectedPublicDistributorId.value = "";
   publicProductQuery.value = "";
+  publicClientLookupMessage.value = "";
+  searchingPublicClient.value = false;
   productosPublicos.value = [];
   publicVentaItems.value = [];
   publicCajaCode.value = generateCajaCode();
@@ -1110,6 +1127,36 @@ async function loadPublicProductsForSale() {
     productosPublicos.value = Array.isArray(data) ? data : [];
   } catch (exception) {
     await showError("No se cargaron productos", exception.message || "No se pudieron cargar los productos publicos del distribuidor.");
+  }
+}
+
+async function searchPublicClientByDocument() {
+  publicClientLookupMessage.value = "";
+  touchPublicField("distribuidor");
+  touchPublicField("clienteDocumento");
+
+  if (!selectedPublicDistributorUsername.value) {
+    publicClientLookupMessage.value = "Selecciona primero un distribuidor con tienda publica.";
+    return;
+  }
+
+  const documento = publicForm.clienteDocumento.trim();
+  if (!documento) {
+    publicClientLookupMessage.value = "Ingresa el documento para buscar datos guardados.";
+    return;
+  }
+
+  searchingPublicClient.value = true;
+  try {
+    const cliente = await apiRequest(
+      `/api/public/tiendas/${encodeURIComponent(selectedPublicDistributorUsername.value)}/clientes/documento/${encodeURIComponent(documento)}`
+    );
+    applyPublicClientLookup(cliente);
+    publicClientLookupMessage.value = "Datos encontrados y cargados en el formulario.";
+  } catch {
+    publicClientLookupMessage.value = "No encontramos datos para ese documento. Puedes completar el formulario manualmente.";
+  } finally {
+    searchingPublicClient.value = false;
   }
 }
 
@@ -1969,8 +2016,20 @@ onMounted(() => {
                   </label>
                   <label class="field" :class="{ invalid: publicFieldError('clienteDocumento') }">
                     <span>Documento</span>
-                    <input v-model.trim="publicForm.clienteDocumento" placeholder="CI / NIT" @blur="touchPublicField('clienteDocumento')" @input="touchPublicField('clienteDocumento')" />
+                    <div class="public-document-search">
+                      <input
+                        v-model.trim="publicForm.clienteDocumento"
+                        placeholder="CI / NIT"
+                        @blur="touchPublicField('clienteDocumento')"
+                        @input="touchPublicField('clienteDocumento'); publicClientLookupMessage = ''"
+                        @keyup.enter.prevent="searchPublicClientByDocument"
+                      />
+                      <button type="button" :disabled="searchingPublicClient" @click="searchPublicClientByDocument">
+                        {{ searchingPublicClient ? "Buscando..." : "Buscar" }}
+                      </button>
+                    </div>
                     <small v-if="publicFieldError('clienteDocumento')" class="field-error">{{ publicFieldError("clienteDocumento") }}</small>
+                    <small v-else-if="publicClientLookupMessage" class="lookup-message">{{ publicClientLookupMessage }}</small>
                   </label>
                   <label class="field">
                     <span>Telefono</span>
@@ -2522,6 +2581,10 @@ onMounted(() => {
 .public-sale-panel { min-width: 0; padding: 16px; border: 1px solid var(--vy-line); border-radius: 16px; background: #fff; }
 .public-client-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .public-client-wide { grid-column: 1 / -1; }
+.public-document-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.public-document-search button { min-height: 42px; padding: 0 12px; border-radius: 12px; background: var(--vy-ink); color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; }
+.public-document-search button:disabled { cursor: wait; opacity: .72; }
+.lookup-message { display: block; margin-top: 7px; color: var(--vy-success); font-size: 11px; font-weight: 900; line-height: 1.3; }
 .toggle-field { margin-top: 14px; min-height: 42px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 9px; color: var(--vy-ink-2); font-size: 13px; font-weight: 900; }
 .toggle-field input { width: 17px; height: 17px; accent-color: var(--vy-success); }
 .public-product-picker { max-height: 250px; }
@@ -2616,6 +2679,8 @@ onMounted(() => {
   .skeleton-row { grid-template-columns: 1fr; gap: 9px; min-height: 132px; padding: 14px; border: 1px solid var(--vy-line-2); border-radius: 14px; }
   .skeleton-row .skeleton-block:nth-child(n + 5) { display: none; }
   .person-list, .sale-footer, .sale-item, .public-sale-grid, .public-client-grid, .public-sale-footer { grid-template-columns: 1fr; }
+  .public-document-search { grid-template-columns: 1fr; }
+  .public-document-search button { width: 100%; }
   .discount-grid { grid-template-columns: 1fr; }
   .sale-item b { text-align: left; }
   .quantity-stepper, .sale-item > button { width: 100%; }
