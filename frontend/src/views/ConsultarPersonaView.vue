@@ -7,9 +7,11 @@ import {
   Network,
   RefreshCw,
   UserRound,
+  Wallet
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { VyAvatar } from "../components/ui.js";
+import NetworkTreeNode from "../components/NetworkTreeNode.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -46,6 +48,8 @@ const patrocinador = computed(() => referido.value?.patrocinador || null);
 const directos = computed(() =>
   referidos.value.filter((item) => Number(item.patrocinador?.id) === Number(selectedPersonaId.value))
 );
+const networkTree = computed(() => buildTree(selectedPersonaId.value));
+const networkRows = computed(() => flattenTree(networkTree.value));
 
 const selectedPeriodo = computed(() =>
   periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value)) || null
@@ -148,6 +152,39 @@ function fullName(persona) {
 
 function usuarioDePersona(persona) {
   return usuarios.value.find((item) => Number(item.persona?.id) === Number(persona?.id)) || null;
+}
+
+function childrenOf(personaId) {
+  if (!personaId) return [];
+  return referidos.value.filter((item) => Number(item.patrocinador?.id) === Number(personaId));
+}
+
+function buildTree(rootPersonaId, visited = new Set()) {
+  const personaId = Number(rootPersonaId || 0);
+  if (!personaId || visited.has(personaId)) return [];
+  visited.add(personaId);
+
+  return childrenOf(personaId).map((item) => ({
+    ...item,
+    children: buildTree(item.persona?.id, new Set(visited))
+  }));
+}
+
+function flattenTree(nodes, level = 1) {
+  return nodes.flatMap((node) => [
+    {
+      ...node,
+      level,
+      directCount: node.children?.length || 0
+    },
+    ...flattenTree(node.children || [], level + 1)
+  ]);
+}
+
+function selectTreePerson(node) {
+  const personaId = node?.persona?.id;
+  if (!personaId || Number(personaId) === Number(selectedPersonaId.value)) return;
+  router.push({ name: "consultar-detalle", params: { personaId } });
 }
 
 function photoUrl(persona) {
@@ -501,19 +538,37 @@ onMounted(loadBaseData);
               <article class="vy-card info-card">
                 <header>
                   <h3>Red</h3>
-                  <span>{{ directos.length }} directos</span>
+                  <span>{{ directos.length }} directos - {{ networkRows.length }} en estructura</span>
                 </header>
                 <div class="info-row">
                   <small>Patrocinador</small>
                   <strong>{{ patrocinador ? fullName(patrocinador) : "Sin patrocinador" }}</strong>
                 </div>
-                <div class="direct-list">
-                  <div v-for="item in directos.slice(0, 8)" :key="item.id" class="direct-row">
-                    <strong>{{ fullName(item.persona) }}</strong>
-                    <small>{{ item.persona?.documento || "Sin documento" }} - {{ item.plan?.nombre || "Sin plan" }}</small>
+                <div v-if="directos.length" class="consult-tree-stage">
+                  <div class="consult-tree-canvas">
+                    <div class="consult-root-row">
+                      <article class="consult-root-node">
+                        <span class="root-label">Raiz</span>
+                        <img v-if="selectedPersonaPhoto" :src="selectedPersonaPhoto" :alt="fullName(selectedPersona)" />
+                        <VyAvatar v-else :name="fullName(selectedPersona).slice(0, 2).toUpperCase()" :size="42" bg="var(--vy-orange)" color="#fff" />
+                        <div>
+                          <strong>{{ fullName(selectedPersona) }}</strong>
+                          <small>{{ referido?.plan?.nombre || "Sin plan" }} - {{ directos.length }} directos</small>
+                        </div>
+                      </article>
+                    </div>
+                    <ul class="consult-tree-root">
+                      <NetworkTreeNode
+                        v-for="node in networkTree"
+                        :key="node.id"
+                        :node="node"
+                        :level="1"
+                        @open-details="selectTreePerson"
+                      />
+                    </ul>
                   </div>
-                  <div v-if="!directos.length" class="empty-box compact">No tiene referidos directos.</div>
                 </div>
+                <div v-else class="empty-box compact">No tiene referidos directos.</div>
               </article>
 
               <article class="vy-card info-card">
@@ -703,10 +758,27 @@ onMounted(loadBaseData);
 .info-card header, .history-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .info-card h3, .history-card h3 { font-size: 16px; font-weight: 900; }
 .info-card header span, .history-card header span { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
-.info-row, .direct-row, .stack-row { padding: 12px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
-.info-row strong, .direct-row strong, .stack-row strong { display: block; margin-top: 4px; font-size: 13px; font-weight: 900; }
-.direct-list, .stack-list, .metrics-list { display: grid; gap: 8px; }
-.direct-row small, .stack-row small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.info-row, .stack-row { padding: 12px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
+.info-row strong, .stack-row strong { display: block; margin-top: 4px; font-size: 13px; font-weight: 900; }
+.stack-list, .metrics-list { display: grid; gap: 8px; }
+.stack-row small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.consult-tree-stage { margin-top: 10px; overflow: auto; padding: 8px 4px 12px; max-height: 520px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); scrollbar-width: thin; scrollbar-color: rgba(242, 135, 5, 0.52) rgba(214, 204, 188, 0.35); }
+.consult-tree-canvas { width: max-content; min-width: 100%; display: flex; flex-direction: column; align-items: center; padding: 4px 0 8px; }
+.consult-root-row { width: 100%; min-width: max-content; display: flex; justify-content: center; margin-bottom: 28px; position: relative; }
+.consult-root-row::after { content: ""; position: absolute; left: 50%; bottom: -28px; height: 22px; border-left: 1px solid rgba(242, 135, 5, 0.62); }
+.consult-root-node { width: 300px; min-height: 76px; padding: 12px; border-radius: 8px; background: var(--vy-ink); color: #fff; display: flex; align-items: center; gap: 10px; box-shadow: 0 12px 24px rgba(31, 26, 20, 0.1); }
+.consult-root-node img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.78); background: var(--vy-surface-2); }
+.consult-root-node > div { min-width: 0; flex: 1; }
+.consult-root-node strong, .consult-root-node small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.consult-root-node strong { font-size: 13px; font-weight: 900; }
+.consult-root-node small { margin-top: 2px; color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 800; }
+.root-label { align-self: flex-start; padding: 3px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.82); font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.consult-tree-root { display: flex; justify-content: center; gap: 16px; min-width: max-content; margin: 0; padding: 24px 0 0; list-style: none; position: relative; }
+.consult-tree-root > :deep(.tree-item)::before { content: ""; position: absolute; top: -24px; left: 50%; height: 24px; border-left: 1px solid rgba(242, 135, 5, 0.5); }
+.consult-tree-root > :deep(.tree-item)::after { content: ""; position: absolute; top: -24px; left: 0; right: 0; border-top: 1px solid rgba(242, 135, 5, 0.5); }
+.consult-tree-root > :deep(.tree-item:first-child)::after { left: 50%; }
+.consult-tree-root > :deep(.tree-item:last-child)::after { right: 50%; }
+.consult-tree-root > :deep(.tree-item:only-child)::after { display: none; }
 .metrics-list div { padding: 12px; border: 1px solid var(--vy-line); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--vy-surface-2); }
 .metrics-list span { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
 .metrics-list strong { font-size: 13px; font-weight: 900; text-align: right; }
