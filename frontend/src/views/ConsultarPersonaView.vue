@@ -4,13 +4,9 @@ import { useRoute, useRouter } from "vue-router";
 import {
   BadgeCheck,
   CalendarClock,
-  Gift,
   Network,
   RefreshCw,
-  ShoppingBag,
-  Wallet,
   UserRound,
-  WalletCards
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { VyAvatar } from "../components/ui.js";
@@ -136,56 +132,6 @@ const retiroMensual = computed(() => ({
   productos: totals.value.retirosProductos,
   ultimo: retiros.value[0] || null
 }));
-
-const timeline = computed(() => {
-  const items = [
-    ...compras.value.map((compra) => ({
-      id: `compra-${compra.id}`,
-      type: "Compra",
-      title: `Compra #${compra.id}`,
-      subtitle: `${compra.estadoCompra || "Sin estado"} - Bs. ${money(compra.subtotal)}`,
-      date: compra.fechaCompra,
-      icon: ShoppingBag
-    })),
-    ...recompensas.value.map((recompensa) => ({
-      id: `recompensa-${recompensa.id}`,
-      type: "Recompensa",
-      title: `Recompensa nivel ${recompensa.nivelGenerado || "-"}`,
-      subtitle: `${recompensa.planIngreso?.nombre || "Plan"} - Bs. ${money(recompensa.montoEfectivo)} efectivo`,
-      date: recompensa.fechaRegistro,
-      icon: Gift
-    })),
-    ...retiros.value.map((retiro) => ({
-      id: `retiro-${retiro.id}`,
-      type: "Retiro",
-      title: `Retiro #${retiro.id}`,
-      subtitle: `${retiro.estadoRetiro || "Procesado"} - Bs. ${money(retiro.montoDinero)} efectivo / Bs. ${money(retiro.montoProductos)} productos`,
-      date: retiro.fechaRetiro,
-      icon: Wallet
-    })),
-    ...membresias.value.map((membresia) => ({
-      id: `membresia-${membresia.id}`,
-      type: "Membresia",
-      title: membershipName(membresia),
-      subtitle: `${membresia.estadoMembresia || "Sin estado"} hasta ${formatDate(membresia.fechaFin)}`,
-      date: membresia.fechaInicio || membresia.fechaRegistro,
-      icon: BadgeCheck
-    })),
-    ...movimientoGroups.value.map((group) => ({
-      id: `movimiento-${group.key}`,
-      type: group.referenciaTipo || "Movimiento",
-      title: group.title,
-      subtitle: movementGroupSummary(group),
-      date: group.date,
-      icon: WalletCards
-    }))
-  ];
-
-  return items
-    .filter((item) => item.date)
-    .sort((left, right) => new Date(right.date) - new Date(left.date))
-    .slice(0, 80);
-});
 
 function normalize(value) {
   return String(value || "")
@@ -712,24 +658,6 @@ onMounted(loadBaseData);
                 </div>
               </article>
             </section>
-
-            <section class="vy-card timeline-card">
-              <header>
-                <h3>Linea de tiempo</h3>
-                <span>{{ timeline.length }} eventos recientes</span>
-              </header>
-              <div class="timeline-list">
-                <article v-for="item in timeline" :key="item.id" class="timeline-item">
-                  <span class="timeline-icon"><component :is="item.icon" :size="16" /></span>
-                  <div>
-                    <small>{{ item.type }} - {{ formatDateTime(item.date) }}</small>
-                    <strong>{{ item.title }}</strong>
-                    <p>{{ item.subtitle }}</p>
-                  </div>
-                </article>
-                <div v-if="!timeline.length" class="empty-box compact">No hay actividad historica.</div>
-              </div>
-            </section>
           </template>
       </section>
     </main>
@@ -771,13 +699,13 @@ onMounted(loadBaseData);
 .summary-card.warning strong { color: var(--vy-danger); }
 .wallet-card { border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
 .wallet-card strong { font-size: 20px; }
-.info-card, .history-card, .timeline-card { padding: 18px; min-width: 0; }
-.info-card header, .history-card header, .timeline-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.info-card h3, .history-card h3, .timeline-card h3 { font-size: 16px; font-weight: 900; }
-.info-card header span, .history-card header span, .timeline-card header span { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
+.info-card, .history-card { padding: 18px; min-width: 0; }
+.info-card header, .history-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.info-card h3, .history-card h3 { font-size: 16px; font-weight: 900; }
+.info-card header span, .history-card header span { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
 .info-row, .direct-row, .stack-row { padding: 12px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
 .info-row strong, .direct-row strong, .stack-row strong { display: block; margin-top: 4px; font-size: 13px; font-weight: 900; }
-.direct-list, .stack-list, .metrics-list, .timeline-list { display: grid; gap: 8px; }
+.direct-list, .stack-list, .metrics-list { display: grid; gap: 8px; }
 .direct-row small, .stack-row small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
 .metrics-list div { padding: 12px; border: 1px solid var(--vy-line); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--vy-surface-2); }
 .metrics-list span { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
@@ -793,11 +721,6 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .movement-table td:first-child small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
 .movement-table td:nth-child(n + 4) { white-space: nowrap; font-weight: 900; }
 .status-pill { padding: 4px 9px; border-radius: 999px; background: rgba(63, 143, 92, 0.12); color: var(--vy-success); font-size: 11px; font-weight: 900; }
-.timeline-item { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
-.timeline-icon { width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: var(--vy-ink); color: #fff; }
-.timeline-item small { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
-.timeline-item strong { display: block; margin-top: 4px; font-size: 13px; font-weight: 900; }
-.timeline-item p { margin-top: 3px; color: var(--vy-ink-2); font-size: 12px; line-height: 1.35; }
 .empty-state { min-height: 360px; padding: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--vy-ink-3); }
 .empty-state h2 { margin-top: 12px; color: var(--vy-ink); font-size: 22px; font-weight: 900; }
 .empty-state p { max-width: 420px; margin-top: 7px; font-size: 13px; line-height: 1.45; }

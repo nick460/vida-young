@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiRequest } from "../services/api.js";
 import { useAuthStore } from "../stores/authStore.js";
-import { VyAvatar, VyDonut, VyIcon } from "../components/ui.js";
+import { VyAvatar, VyDonut, VyIcon, VySparkline } from "../components/ui.js";
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -23,6 +23,13 @@ const user = computed(() => ({
   avatar: (authStore.usuario?.username || "AV").slice(0, 2).toUpperCase(),
   level: authStore.usuario?.roles?.[0] || "ADMIN"
 }));
+
+const sparks = [
+  [320, 340, 360, 355, 380, 410, 420, 460, 472, 480, 510, 528],
+  [80, 95, 90, 110, 120, 145, 160, 155, 168, 175, 180, 195],
+  [12, 18, 16, 24, 22, 30, 36, 32, 40, 44, 46, 48],
+  [80, 92, 100, 108, 115, 122, 128, 130, 134, 136, 137, 138]
+];
 
 const personaId = computed(() => authStore.usuario?.persona?.id || "");
 const wallet = computed(() => walletSummary.value.billetera || {});
@@ -218,7 +225,7 @@ onMounted(loadDashboardSummary);
         <p v-if="summaryError" class="summary-error">{{ summaryError }}</p>
 
         <section class="kpi-grid">
-          <article v-for="kpi in dashboardKpis" :key="kpi.label" class="vy-card kpi-card">
+          <article v-for="(kpi, index) in dashboardKpis" :key="kpi.label" class="vy-card kpi-card">
             <header>
               <span>{{ kpi.label }}</span>
               <small class="vy-chip vy-chip-success">
@@ -228,6 +235,7 @@ onMounted(loadDashboardSummary);
             <strong>{{ kpi.value }}</strong>
             <footer>
               <span>{{ kpi.hint }}</span>
+              <VySparkline :data="sparks[index]" :width="80" :height="28" />
             </footer>
           </article>
         </section>
