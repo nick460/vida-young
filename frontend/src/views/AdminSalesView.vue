@@ -2112,10 +2112,6 @@ onMounted(() => {
 
                 <footer class="sale-footer public-sale-footer">
                   <div>
-                    <small>Codigo de caja</small>
-                    <strong class="cash-code">{{ publicCajaCode }}</strong>
-                  </div>
-                  <div>
                     <small>Total cliente</small>
                     <strong>Bs. {{ money(publicSaleSubtotal) }}</strong>
                     <span>Empresa Bs. {{ money(publicSaleEmpresa) }} - Desc. Bs. {{ money(publicSaleDescuento) }} - Gan. Bs. {{ money(publicSaleGanancia) }}</span>
@@ -2581,9 +2577,13 @@ onMounted(() => {
 .public-sale-panel { min-width: 0; padding: 16px; border: 1px solid var(--vy-line); border-radius: 16px; background: #fff; }
 .public-client-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .public-client-wide { grid-column: 1 / -1; }
-.public-document-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
-.public-document-search button { min-height: 42px; padding: 0 12px; border-radius: 12px; background: var(--vy-ink); color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; }
+.public-document-search { min-height: 42px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.public-document-search:focus-within { border-color: var(--vy-orange); box-shadow: 0 0 0 3px rgba(242, 135, 5, .12); background: #fff; }
+.public-document-search input { width: 100%; min-width: 0; min-height: 42px; padding: 0 12px; border: 0; background: transparent; color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }
+.public-document-search button { min-height: 42px; padding: 0 15px; border-left: 1px solid var(--vy-line); border-radius: 0; background: var(--vy-ink); color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; transition: background .15s ease, color .15s ease; }
+.public-document-search button:hover:not(:disabled) { background: var(--vy-orange); }
 .public-document-search button:disabled { cursor: wait; opacity: .72; }
+.field.invalid .public-document-search { border-color: var(--vy-danger); background: rgba(196, 69, 42, 0.06); }
 .lookup-message { display: block; margin-top: 7px; color: var(--vy-success); font-size: 11px; font-weight: 900; line-height: 1.3; }
 .toggle-field { margin-top: 14px; min-height: 42px; padding: 0 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); display: flex; align-items: center; gap: 9px; color: var(--vy-ink-2); font-size: 13px; font-weight: 900; }
 .toggle-field input { width: 17px; height: 17px; accent-color: var(--vy-success); }
@@ -2591,7 +2591,7 @@ onMounted(() => {
 .inline-empty { padding: 14px; border: 1px dashed var(--vy-line); border-radius: 12px; color: var(--vy-ink-3); background: var(--vy-surface-2); font-size: 13px; font-weight: 800; text-align: center; }
 .public-products-error { margin-top: 10px; }
 .public-sale-item { grid-template-columns: minmax(0, 1fr) 136px 112px 34px; }
-.public-sale-footer { grid-template-columns: auto minmax(0, 1fr) auto; }
+.public-sale-footer { grid-template-columns: minmax(0, 1fr) auto; }
 .public-review-backdrop { position: fixed; inset: 0; z-index: 121; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.55); backdrop-filter: blur(7px); }
 .public-review-modal { width: min(1080px, 100%); max-height: calc(100vh - 40px); padding: 20px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); overflow: hidden; display: flex; flex-direction: column; }
 .public-review-modal > header, .public-review-modal > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
