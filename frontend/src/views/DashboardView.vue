@@ -14,6 +14,7 @@ const walletSummary = ref({
 });
 const rewards = ref([]);
 const rangos = ref([]);
+const activePeriodo = ref(null);
 const showRanksModal = ref(false);
 
 const user = computed(() => ({
@@ -35,6 +36,7 @@ const wallet = computed(() => walletSummary.value.billetera || {});
 const walletMovements = computed(() => walletSummary.value.movimientos || []);
 const recentMovements = computed(() => walletMovements.value.slice(0, 5));
 const currentQp = computed(() => Number(wallet.value.saldoQp || 0));
+const activePeriodLabel = computed(() => activePeriodo.value?.nombre || "periodo activo");
 const redeemableProducts = computed(() =>
   rewards.value
     .filter((reward) => reward.cobrable !== false)
@@ -73,7 +75,7 @@ const rankSummary = computed(() => {
     return "Aun no alcanzas el primer rango configurado.";
   }
 
-  return `Rango alcanzado con ${money(currentQp.value)} QP acumulados.`;
+  return `Rango alcanzado con ${money(currentQp.value)} QP del mes.`;
 });
 const welcomeRankMessage = computed(() => {
   if (!orderedRanks.value.length) {
@@ -91,25 +93,25 @@ const dashboardKpis = computed(() => [
   {
     label: "Efectivo por cobrar",
     value: `Bs. ${money(wallet.value.saldoDinero)}`,
-    hint: "Disponible en tu billetera",
+    hint: `Disponible en ${activePeriodLabel.value}`,
     state: loadingSummary.value ? "Actualizando" : "Disponible"
   },
   {
     label: "Canjeable en productos",
     value: `Bs. ${money(redeemableProducts.value)}`,
-    hint: "Valor acumulado para productos",
+    hint: `Valor de ${activePeriodLabel.value}`,
     state: loadingSummary.value ? "Actualizando" : "Canjeable"
   },
   {
-    label: "PV acumulados",
+    label: "PV del mes",
     value: money(wallet.value.saldoPv),
     hint: "Puntos de volumen del periodo",
     state: loadingSummary.value ? "Actualizando" : "PV"
   },
   {
-    label: "QP acumulados",
+    label: "QP del mes",
     value: money(wallet.value.saldoQp),
-    hint: "Puntos calificables activos",
+    hint: "Puntos calificables del periodo",
     state: loadingSummary.value ? "Actualizando" : "QP"
   }
 ]);
@@ -160,9 +162,13 @@ async function loadDashboardSummary() {
       return;
     }
 
+    const periodoResponse = await apiRequest("/api/gestiones/periodos/activo");
+    activePeriodo.value = periodoResponse || null;
+    const periodQuery = activePeriodo.value?.id ? `?periodoId=${activePeriodo.value.id}` : "";
+
     const [walletResponse, rewardsResponse, rangosResponse] = await Promise.all([
-      apiRequest(`/api/billeteras/persona/${personaId.value}`),
-      apiRequest(`/api/recompensas/persona/${personaId.value}`),
+      apiRequest(`/api/billeteras/persona/${personaId.value}${periodQuery}`),
+      apiRequest(`/api/recompensas/persona/${personaId.value}${periodQuery}`),
       apiRequest("/api/rangos")
     ]);
 
@@ -212,6 +218,7 @@ onMounted(loadDashboardSummary);
             <div class="vy-eyebrow">Hola {{ user.short }}, sábado 9 de mayo</div>
             <h1>Tu bienestar financiero, hoy</h1>
             <p>{{ welcomeRankMessage }}</p>
+            <strong v-if="activePeriodo" class="active-period-label">Mostrando {{ activePeriodo.nombre }}</strong>
           </div>
         </section>
 
@@ -307,7 +314,7 @@ onMounted(loadDashboardSummary);
             <div>
               <div class="vy-eyebrow">Rangos Vidayoung</div>
               <h2 id="rank-modal-title">Escala de rangos</h2>
-              <p>Avance calculado con tus QP acumulados: <b>{{ money(currentQp) }} QP</b>.</p>
+              <p>Avance calculado con tus QP del mes: <b>{{ money(currentQp) }} QP</b>.</p>
             </div>
             <button type="button" aria-label="Cerrar" @click="showRanksModal = false">X</button>
           </header>
@@ -447,6 +454,17 @@ onMounted(loadDashboardSummary);
   font-size: 14px;
   color: var(--vy-ink-2);
   margin-top: 4px;
+}
+
+.active-period-label {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: rgba(242, 135, 5, 0.12);
+  color: var(--vy-orange-dark);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .kpi-grid {

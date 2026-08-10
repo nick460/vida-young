@@ -682,11 +682,11 @@ public class BilleteraRestController {
         Billetera reconstruida = new Billetera();
         reconstruida.setId(billetera.getId());
         reconstruida.setPersona(billetera.getPersona());
-        reconstruida.setSaldoDinero(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_DINERO));
-        reconstruida.setSaldoPv(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_PV));
-        reconstruida.setSaldoQp(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_QP));
-        reconstruida.setSaldoCr(ultimoSaldoPorTipo(movimientos, MovimientoBilletera.TIPO_CR));
-        reconstruida.setSaldoProductos(BigDecimal.ZERO);
+        reconstruida.setSaldoDinero(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_DINERO).max(BigDecimal.ZERO));
+        reconstruida.setSaldoPv(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PV).max(BigDecimal.ZERO));
+        reconstruida.setSaldoQp(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_QP).max(BigDecimal.ZERO));
+        reconstruida.setSaldoCr(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_CR).max(BigDecimal.ZERO));
+        reconstruida.setSaldoProductos(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PRODUCTOS).max(BigDecimal.ZERO));
         return reconstruida;
     }
 
@@ -751,13 +751,12 @@ public class BilleteraRestController {
         );
     }
 
-    private BigDecimal ultimoSaldoPorTipo(List<MovimientoBilletera> movimientos, String tipo) {
+    private BigDecimal totalMovimientoPorTipo(List<MovimientoBilletera> movimientos, String tipo) {
         return movimientos.stream()
                 .filter(movimiento -> tipo.equals(movimiento.getTipo()))
-                .findFirst()
-                .map(MovimientoBilletera::getSaldoResultado)
+                .map(MovimientoBilletera::getMonto)
                 .map(this::zeroIfNull)
-                .orElse(BigDecimal.ZERO);
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private void asignarRangoPeriodo(PeriodoSaldo saldo) {
