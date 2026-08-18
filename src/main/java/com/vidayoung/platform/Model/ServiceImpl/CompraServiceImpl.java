@@ -38,6 +38,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class CompraServiceImpl implements CompraService {
+    private static final String REFERENCIA_COMPRA_BONO_REFERIDO = "COMPRA_BONO_REFERIDO";
+
 
     private static final Set<String> ESTADOS_COMPRA_VALIDOS = Set.of(
             Compra.ESTADO_COMPRA_PENDIENTE,
@@ -90,6 +92,7 @@ public class CompraServiceImpl implements CompraService {
                 .subtotal(BigDecimal.ZERO)
                 .totalPv(BigDecimal.ZERO)
                 .totalQp(BigDecimal.ZERO)
+                .totalQpBonoReferido(BigDecimal.ZERO)
                 .totalCr(BigDecimal.ZERO)
                 .build();
         compra = compraDao.save(compra);
@@ -378,6 +381,7 @@ public class CompraServiceImpl implements CompraService {
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal totalPv = BigDecimal.ZERO;
         BigDecimal totalQp = BigDecimal.ZERO;
+        BigDecimal totalQpBonoReferido = BigDecimal.ZERO;
         BigDecimal totalCr = BigDecimal.ZERO;
 
         for (ItemCompraRequest item : items) {
@@ -393,6 +397,7 @@ public class CompraServiceImpl implements CompraService {
             BigDecimal precio = zeroIfNull(producto.getPrecio());
             BigDecimal pv = zeroIfNull(producto.getPv());
             BigDecimal qp = zeroIfNull(producto.getQp());
+            BigDecimal qpBonoReferido = zeroIfNull(producto.getQpBonoReferido());
             BigDecimal cr = zeroIfNull(producto.getCr());
             BigDecimal detalleSubtotal = precio.multiply(BigDecimal.valueOf(cantidad));
 
@@ -403,6 +408,7 @@ public class CompraServiceImpl implements CompraService {
                     .precioUnitario(precio)
                     .pvUnitario(pv)
                     .qpUnitario(qp)
+                    .qpBonoReferidoUnitario(qpBonoReferido)
                     .crUnitario(cr)
                     .subtotal(detalleSubtotal)
                     .build());
@@ -410,6 +416,7 @@ public class CompraServiceImpl implements CompraService {
             subtotal = subtotal.add(detalleSubtotal);
             totalPv = totalPv.add(pv.multiply(BigDecimal.valueOf(cantidad)));
             totalQp = totalQp.add(qp.multiply(BigDecimal.valueOf(cantidad)));
+            totalQpBonoReferido = totalQpBonoReferido.add(qpBonoReferido.multiply(BigDecimal.valueOf(cantidad)));
             totalCr = totalCr.add(cr.multiply(BigDecimal.valueOf(cantidad)));
         }
 
@@ -430,6 +437,7 @@ public class CompraServiceImpl implements CompraService {
         compra.setDescuentoConcepto(descuentoConcepto);
         compra.setTotalPv(totalPv);
         compra.setTotalQp(totalQp);
+        compra.setTotalQpBonoReferido(totalQpBonoReferido);
         compra.setTotalCr(totalCr);
     }
 
@@ -447,10 +455,46 @@ public class CompraServiceImpl implements CompraService {
         );
         Billetera billeteraComprador = acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()), zeroIfNull(compra.getTotalCr()));
         billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPv(), compra.getPeriodo());
+        acreditarQpBonoReferido(compra);
 
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {
             generarBeneficiosActivacion(compra, totalProductos);
         }
+    }
+
+    private void acreditarQpBonoReferido(Compra compra) {
+        BigDecimal totalQpBonoReferido = zeroIfNull(compra.getTotalQpBonoReferido());
+        if (totalQpBonoReferido.compareTo(BigDecimal.ZERO) <= 0
+                || movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
+                REFERENCIA_COMPRA_BONO_REFERIDO,
+                compra.getId(),
+                MovimientoBilletera.TIPO_QP
+        )) {
+            return;
+        }
+
+        Persona patrocinador = referidoDao.findByPersonaId(compra.getPersona().getId())
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .map(Referido::getPatrocinador)
+                .orElse(null);
+        if (patrocinador == null) {
+            return;
+        }
+
+        Billetera billetera = billeteraService.asegurarBilletera(patrocinador);
+        billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(totalQpBonoReferido));
+        billetera = billeteraDao.save(billetera);
+        billeteraService.actualizarRangoActual(patrocinador, billetera.getSaldoQp());
+        movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                .billetera(billetera)
+                .periodo(compra.getPeriodo())
+                .tipo(MovimientoBilletera.TIPO_QP)
+                .concepto("QP bono referido por compra #" + compra.getId())
+                .referenciaTipo(REFERENCIA_COMPRA_BONO_REFERIDO)
+                .referenciaId(compra.getId())
+                .monto(totalQpBonoReferido)
+                .saldoResultado(billetera.getSaldoQp())
+                .build());
     }
 
     private Billetera acreditarVolumenComprador(Persona comprador, Compra compra, BigDecimal totalPv, BigDecimal totalQp, BigDecimal totalCr) {

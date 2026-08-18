@@ -203,11 +203,10 @@ function closeUsuarioModal() {
 }
 
 async function saveUsuario() {
-  const existingUser = usuarios.value.find((item) => item.id === editingUsuarioId.value);
   const isEditing = Boolean(editingUsuarioId.value);
   const payload = {
     username: usuarioForm.username,
-    password: usuarioForm.password || existingUser?.password,
+    password: usuarioForm.password,
     activo: true,
     personaId: selectedPersona.value.id,
     rolIds: usuarioForm.rolIds.map((id) => Number(id))

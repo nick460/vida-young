@@ -34,35 +34,40 @@ public class UsuarioRestController {
     private final RolDao rolDao;
 
     @GetMapping
-    public ResponseEntity<List<Usuario>> listar() {
-        return ResponseEntity.ok(usuarioService.listar());
+    public ResponseEntity<List<UsuarioResponse>> listar() {
+        return ResponseEntity.ok(usuarioService.listar().stream()
+                .map(UsuarioResponse::desdeUsuario)
+                .toList());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Usuario> buscarPorId(@PathVariable Long id) {
+    public ResponseEntity<UsuarioResponse> buscarPorId(@PathVariable Long id) {
         return usuarioService.buscarPorId(id)
+                .map(UsuarioResponse::desdeUsuario)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/username/{username}")
-    public ResponseEntity<Usuario> buscarPorUsername(@PathVariable String username) {
+    public ResponseEntity<UsuarioResponse> buscarPorUsername(@PathVariable String username) {
         return usuarioService.buscarPorUsername(username)
+                .map(UsuarioResponse::desdeUsuario)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<Usuario> guardar(@RequestBody UsuarioRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(usuarioService.guardar(toUsuario(new Usuario(), request)));
+    public ResponseEntity<UsuarioResponse> guardar(@RequestBody UsuarioRequest request) {
+        Usuario usuario = usuarioService.guardar(toUsuario(new Usuario(), request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(UsuarioResponse.desdeUsuario(usuario));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Usuario> actualizar(@PathVariable Long id, @RequestBody UsuarioRequest request) {
+    public ResponseEntity<UsuarioResponse> actualizar(@PathVariable Long id, @RequestBody UsuarioRequest request) {
         return usuarioService.buscarPorId(id)
-                .map(usuarioActual -> {
-                    return ResponseEntity.ok(usuarioService.guardar(toUsuario(usuarioActual, request)));
-                })
+                .map(usuarioActual -> ResponseEntity.ok(UsuarioResponse.desdeUsuario(
+                        usuarioService.guardar(toUsuario(usuarioActual, request))
+                )))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -105,5 +110,65 @@ public class UsuarioRestController {
         private Boolean activo;
         private Long personaId;
         private List<Long> rolIds;
+    }
+
+    public record UsuarioResponse(
+            Long id,
+            String username,
+            Boolean activo,
+            String fotoPerfil,
+            PersonaBasicaResponse persona,
+            List<RolBasicoResponse> roles
+    ) {
+        static UsuarioResponse desdeUsuario(Usuario usuario) {
+            return new UsuarioResponse(
+                    usuario.getId(),
+                    usuario.getUsername(),
+                    usuario.getActivo(),
+                    usuario.getFotoPerfil(),
+                    PersonaBasicaResponse.desdePersona(usuario.getPersona()),
+                    usuario.getRoles().stream()
+                            .map(RolBasicoResponse::desdeRol)
+                            .toList()
+            );
+        }
+    }
+
+    public record PersonaBasicaResponse(
+            Long id,
+            String nombres,
+            String apellidos,
+            String documento,
+            String email,
+            String telefono
+    ) {
+        static PersonaBasicaResponse desdePersona(Persona persona) {
+            if (persona == null) {
+                return null;
+            }
+
+            return new PersonaBasicaResponse(
+                    persona.getId(),
+                    persona.getNombres(),
+                    persona.getApellidos(),
+                    persona.getDocumento(),
+                    persona.getEmail(),
+                    persona.getTelefono()
+            );
+        }
+    }
+
+    public record RolBasicoResponse(
+            Long id,
+            String nombre,
+            String descripcion
+    ) {
+        static RolBasicoResponse desdeRol(Rol rol) {
+            return new RolBasicoResponse(
+                    rol.getId(),
+                    rol.getNombre(),
+                    rol.getDescripcion()
+            );
+        }
     }
 }

@@ -79,6 +79,10 @@ public class ProductoServiceIplem implements ProductoService {
             producto.setQp(BigDecimal.ZERO);
         }
 
+        if (producto.getQpBonoReferido() == null) {
+            producto.setQpBonoReferido(BigDecimal.ZERO);
+        }
+
         if (producto.getCr() == null) {
             producto.setCr(BigDecimal.ZERO);
         }

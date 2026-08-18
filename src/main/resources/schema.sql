@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS productos (
     precio NUMERIC(12, 2) NOT NULL,
     pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     imagen_url VARCHAR(255),
     imagen_publica_url VARCHAR(255),
@@ -182,6 +183,7 @@ CREATE TABLE IF NOT EXISTS productos (
 ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS precio_publico NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS imagen_publica_url VARCHAR(255),
@@ -775,6 +777,7 @@ CREATE TABLE IF NOT EXISTS compras (
     descuento_concepto VARCHAR(180),
     total_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado_compra VARCHAR(30) NOT NULL DEFAULT 'CONFIRMADA',
     usuario_validacion VARCHAR(80),
@@ -814,6 +817,7 @@ ALTER TABLE compras
     ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80),
     ADD COLUMN IF NOT EXISTS descuento_monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS descuento_concepto VARCHAR(180),
+    ADD COLUMN IF NOT EXISTS total_qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
@@ -825,6 +829,7 @@ CREATE TABLE IF NOT EXISTS compras_detalles (
     precio_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     pv_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     qp_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    qp_bono_referido_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     cr_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
@@ -835,6 +840,7 @@ CREATE TABLE IF NOT EXISTS compras_detalles (
 );
 
 ALTER TABLE compras_detalles
+    ADD COLUMN IF NOT EXISTS qp_bono_referido_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS cr_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS beneficios_activacion_compras (

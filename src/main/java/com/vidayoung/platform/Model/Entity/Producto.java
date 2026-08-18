@@ -57,6 +57,10 @@ public class Producto extends Auditoria {
     @Builder.Default
     private BigDecimal qp = BigDecimal.ZERO;
 
+    @Column(name = "qp_bono_referido", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal qpBonoReferido = BigDecimal.ZERO;
+
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal cr = BigDecimal.ZERO;
