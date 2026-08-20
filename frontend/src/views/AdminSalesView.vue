@@ -61,6 +61,7 @@ const activeActionMenu = ref("");
 const ventasPage = ref(1);
 const publicVentasPage = ref(1);
 const pageSize = 8;
+const ventanillaQuery = ref("");
 
 const cajaCode = ref(generateCajaCode());
 const publicCajaCode = ref(generateCajaCode());
@@ -147,13 +148,47 @@ const selectedPublicDistributorUsername = computed(() =>
   selectedPublicDistributorUser.value?.username || ""
 );
 
-const visibleCompras = computed(() =>
-  compras.value.filter((compra) => ["PENDIENTE", "VALIDADA", "ANULADA"].includes(compra.estadoCompra))
-);
+const visibleCompras = computed(() => {
+  const text = ventanillaQuery.value.trim().toLowerCase();
+  return compras.value
+    .filter((compra) => ["PENDIENTE", "VALIDADA", "ANULADA"].includes(compra.estadoCompra))
+    .filter((compra) => {
+      if (!text) return true;
+      const persona = compra.persona || {};
+      return [
+        compra.id,
+        compra.codigoPago,
+        compra.metodoPago,
+        compra.estadoCompra,
+        persona.nombres,
+        persona.apellidos,
+        persona.documento,
+        persona.email
+      ].some((value) => String(value ?? "").toLowerCase().includes(text));
+    });
+});
 
-const visibleComprasPublicas = computed(() =>
-  comprasPublicas.value.filter((compra) => ["PENDIENTE", "VALIDADA"].includes(compra.estadoCompra))
-);
+const visibleComprasPublicas = computed(() => {
+  const text = ventanillaQuery.value.trim().toLowerCase();
+  return comprasPublicas.value
+    .filter((compra) => ["PENDIENTE", "VALIDADA"].includes(compra.estadoCompra))
+    .filter((compra) => {
+      if (!text) return true;
+      const distribuidor = compra.distribuidor || {};
+      return [
+        compra.id,
+        compra.estadoCompra,
+        compra.clienteNombres,
+        compra.clienteApellidos,
+        compra.clienteTelefono,
+        compra.clienteEmail,
+        compra.tipoCliente?.nombre,
+        distribuidor.nombres,
+        distribuidor.apellidos,
+        distribuidor.documento
+      ].some((value) => String(value ?? "").toLowerCase().includes(text));
+    });
+});
 
 const ventasTotalPages = computed(() => totalPages(visibleCompras.value.length));
 const publicVentasTotalPages = computed(() => totalPages(visibleComprasPublicas.value.length));
@@ -1425,6 +1460,11 @@ watch(selectedPeriodoId, (value) => {
   }
 });
 
+watch(ventanillaQuery, () => {
+  ventasPage.value = 1;
+  publicVentasPage.value = 1;
+});
+
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleActionMenuDocumentClick);
   unlockPageScroll();
@@ -1453,6 +1493,13 @@ onMounted(() => {
           </p>
         </div>
         <div class="header-actions">
+          <label class="period-filter search-filter">
+            <span>Buscar</span>
+            <div class="input-icon">
+              <Search :size="15" />
+              <input v-model.trim="ventanillaQuery" placeholder="Compra, cliente, documento o estado..." />
+            </div>
+          </label>
           <label class="period-filter">
             <span>Mes</span>
             <select ref="periodoSelect" v-model="selectedPeriodoId">
@@ -2342,6 +2389,8 @@ onMounted(() => {
 .page-header p strong { color: var(--vy-orange-deep); font-weight: 900; }
 .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .period-filter { display: grid; gap: 6px; min-width: 260px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.search-filter { min-width: 320px; flex: 1 1 320px; }
+.search-filter .input-icon input::placeholder { font-weight: 800; }
 .period-filter select { width: 100%; }
 .refresh-action {
   min-height: 42px;
