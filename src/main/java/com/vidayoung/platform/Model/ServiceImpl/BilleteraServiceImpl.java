@@ -1,11 +1,13 @@
 package com.vidayoung.platform.Model.ServiceImpl;
 
 import com.vidayoung.platform.Model.Dao.BilleteraDao;
+import com.vidayoung.platform.Model.Dao.BeneficioActivacionCompraDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
+import com.vidayoung.platform.Model.Dao.PlanActivacionNivelDao;
 import com.vidayoung.platform.Model.Dao.PlanDao;
 import com.vidayoung.platform.Model.Dao.ProductoDao;
 import com.vidayoung.platform.Model.Dao.RangoDao;
@@ -14,6 +16,7 @@ import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDetalleDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
+import com.vidayoung.platform.Model.Entity.BeneficioActivacionCompra;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
@@ -23,6 +26,7 @@ import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Plan;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
+import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
 import com.vidayoung.platform.Model.Entity.Producto;
 import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Recompensa;
@@ -58,11 +62,13 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final HistorialMembresiaDao historialMembresiaDao;
     private final PersonaDao personaDao;
     private final PlanActivacionDao planActivacionDao;
+    private final PlanActivacionNivelDao planActivacionNivelDao;
     private final PlanDao planDao;
     private final ProductoDao productoDao;
     private final RangoDao rangoDao;
     private final RecompensaDao recompensaDao;
     private final ReferidoDao referidoDao;
+    private final BeneficioActivacionCompraDao beneficioActivacionCompraDao;
     private final CarteraEmpresaService carteraEmpresaService;
     private final GestionPeriodoService gestionPeriodoService;
     private final RetiroBilleteraDao retiroBilleteraDao;
@@ -287,6 +293,8 @@ public class BilleteraServiceImpl implements BilleteraService {
                 "wallet"
         );
 
+        recalcularBeneficiosActivacion(persona);
+
         return historial;
     }
 
@@ -361,6 +369,121 @@ public class BilleteraServiceImpl implements BilleteraService {
                 throw exception;
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public void recalcularBeneficiosActivacion(Persona persona) {
+        recalcularBeneficiosActivacion(persona, true);
+    }
+
+    @Override
+    @Transactional
+    public void recalcularBeneficiosActivacion(Persona persona, boolean notificar) {
+        if (persona == null || persona.getId() == null) {
+            return;
+        }
+
+        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
+        List<BeneficioActivacionCompra> beneficios = beneficioActivacionCompraDao
+                .findByBeneficiarioIdAndPeriodoId(persona.getId(), periodoActivo.getId()).stream()
+                .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))
+                .toList();
+        if (beneficios.isEmpty()) {
+            return;
+        }
+
+        Billetera billetera = billeteraDao.findByPersonaId(persona.getId()).orElse(null);
+        if (billetera == null) {
+            return;
+        }
+
+        Optional<PlanActivacion> planActivo = obtenerPlanActivacionPorPv(billetera.getSaldoPv());
+        boolean membresiaActiva = membresiaActiva(persona, periodoActivo);
+
+        for (BeneficioActivacionCompra beneficio : beneficios) {
+            Integer nivel = beneficio.getNivelGenerado();
+            PlanActivacionNivel nivelConfig = planActivo
+                    .map(PlanActivacion::getId)
+                    .flatMap(planId -> planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(planId, nivel))
+                    .orElse(null);
+            BigDecimal nuevoMontoPorProducto = nivelConfig == null
+                    ? BigDecimal.ZERO
+                    : zeroIfNull(nivelConfig.getMontoPorProducto());
+            BigDecimal nuevoMontoTotal = nuevoMontoPorProducto
+                    .multiply(BigDecimal.valueOf(beneficio.getCantidadProductos()));
+            boolean pagaNuevo = planActivo.isPresent()
+                    && membresiaActiva
+                    && nuevoMontoTotal.compareTo(BigDecimal.ZERO) > 0;
+            BigDecimal montoAnterior = zeroIfNull(beneficio.getMontoTotal());
+            BigDecimal diferencia = pagaNuevo
+                    ? nuevoMontoTotal.subtract(montoAnterior)
+                    : montoAnterior.negate();
+
+            if (diferencia.compareTo(BigDecimal.ZERO) == 0
+                    && Boolean.TRUE.equals(beneficio.getPaga()) == pagaNuevo) {
+                continue;
+            }
+
+            if (diferencia.compareTo(BigDecimal.ZERO) > 0) {
+                billetera.setSaldoDinero(zeroIfNull(billetera.getSaldoDinero()).add(diferencia));
+                billetera = billeteraDao.save(billetera);
+            } else if (diferencia.compareTo(BigDecimal.ZERO) < 0) {
+                BigDecimal nuevoSaldoDinero = zeroIfNull(billetera.getSaldoDinero()).add(diferencia);
+                if (nuevoSaldoDinero.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new IllegalArgumentException("No se puede ajustar el beneficio de activacion porque el saldo en dinero ya fue utilizado.");
+                }
+                billetera.setSaldoDinero(nuevoSaldoDinero);
+                billetera = billeteraDao.save(billetera);
+            }
+
+            beneficio.setPlanActivacion(planActivo.orElse(null));
+            beneficio.setMontoPorProducto(pagaNuevo ? nuevoMontoPorProducto : BigDecimal.ZERO);
+            beneficio.setMontoTotal(pagaNuevo ? nuevoMontoTotal : BigDecimal.ZERO);
+            beneficio.setPaga(pagaNuevo);
+            beneficio.setMotivo(pagaNuevo ? "" : (membresiaActiva
+                    ? "No corresponde por activacion o nivel del plan"
+                    : "No corresponde porque la membresia no esta activa"));
+            beneficioActivacionCompraDao.save(beneficio);
+
+            if (diferencia.compareTo(BigDecimal.ZERO) != 0) {
+                movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                        .billetera(billetera)
+                        .periodo(periodoActivo)
+                        .tipo(MovimientoBilletera.TIPO_DINERO)
+                        .concepto("Ajuste retroactivo de beneficio de activacion #" + beneficio.getId()
+                                + (diferencia.compareTo(BigDecimal.ZERO) > 0
+                                ? " por membresia superior"
+                                : " por membresia no activa"))
+                        .referenciaTipo("ACTUALIZACION_BENEFICIO_ACTIVACION")
+                        .referenciaId(beneficio.getId())
+                        .monto(diferencia)
+                        .saldoResultado(billetera.getSaldoDinero())
+                        .build());
+                if (notificar) {
+                    notificacionService.notificarPersona(
+                            persona.getId(),
+                            Notificacion.TIPO_MEMBRESIA,
+                            "Actualizacion de beneficios",
+                            "Tus beneficios de activacion fueron actualizados segun tu membresia actual.",
+                            "wallet"
+                    );
+                }
+            }
+        }
+    }
+
+    private boolean membresiaActiva(Persona persona, PeriodoGestion periodoActivo) {
+        if (persona == null || persona.getId() == null) {
+            return false;
+        }
+
+        return referidoDao.findByPersonaId(persona.getId())
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .map(referido -> Boolean.TRUE.equals(referido.getMembresiaActiva())
+                        && referido.getFechaFinMembresia() != null
+                        && !referido.getFechaFinMembresia().toLocalDate().isBefore(periodoActivo.getFechaFin()))
+                .orElse(false);
     }
 
     @Override

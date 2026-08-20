@@ -28,4 +28,6 @@ public interface MovimientoBilleteraDao extends JpaRepository<MovimientoBilleter
     List<MovimientoBilletera> findByReferenciaTipoAndReferenciaId(String referenciaTipo, Long referenciaId);
 
     boolean existsByReferenciaTipoAndReferenciaIdAndTipo(String referenciaTipo, Long referenciaId, String tipo);
+
+    boolean existsByBilleteraIdAndReferenciaTipoAndReferenciaIdAndTipo(Long billeteraId, String referenciaTipo, Long referenciaId, String tipo);
 }

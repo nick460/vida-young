@@ -34,6 +34,10 @@ public interface BilleteraService {
 
     void activarMembresiaPorPv(Persona persona, BigDecimal pvActual, PeriodoGestion periodo);
 
+    void recalcularBeneficiosActivacion(Persona persona);
+
+    void recalcularBeneficiosActivacion(Persona persona, boolean notificar);
+
     RetiroBilletera registrarRetiro(Long personaId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);
 
     RetiroBilletera registrarRetiro(Long personaId, Long periodoId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);

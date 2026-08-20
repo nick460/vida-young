@@ -30,6 +30,7 @@ import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import com.vidayoung.platform.Model.Service.NotificacionService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -243,8 +244,33 @@ public class CompraServiceImpl implements CompraService {
     }
 
     private void revertirMovimientosCompra(Compra compra) {
+        revertirMovimientosBilletera(compra, "COMPRA");
+        revertirMovimientosBilletera(compra, REFERENCIA_COMPRA_BONO_REFERIDO);
+
+        List<MovimientoCarteraEmpresa> movimientosCartera = movimientoCarteraEmpresaDao
+                .findByReferenciaTipoAndReferenciaId("VENTA_INTERNA", compra.getId());
+        BigDecimal importe = movimientosCartera.stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .map(MovimientoCarteraEmpresa::getMonto)
+                .map(this::zeroIfNull)
+                .map(BigDecimal::abs)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (importe.compareTo(BigDecimal.ZERO) > 0) {
+            carteraEmpresaService.registrarEgreso(
+                    "ANULACION_COMPRA", compra.getId(), importe,
+                    "Anulacion de venta interna #" + compra.getId());
+            movimientosCartera.stream()
+                    .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                    .forEach(movimiento -> {
+                        movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
+                        movimientoCarteraEmpresaDao.save(movimiento);
+                    });
+        }
+    }
+
+    private void revertirMovimientosBilletera(Compra compra, String referenciaTipo) {
         List<MovimientoBilletera> movimientos = movimientoBilleteraDao
-                .findByReferenciaTipoAndReferenciaId("COMPRA", compra.getId());
+                .findByReferenciaTipoAndReferenciaId(referenciaTipo, compra.getId());
         for (MovimientoBilletera movimiento : movimientos) {
             if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
                 continue;
@@ -270,26 +296,6 @@ public class CompraServiceImpl implements CompraService {
                     .monto(zeroIfNull(movimiento.getMonto()).negate())
                     .saldoResultado(nuevoSaldo)
                     .build());
-        }
-
-        List<MovimientoCarteraEmpresa> movimientosCartera = movimientoCarteraEmpresaDao
-                .findByReferenciaTipoAndReferenciaId("VENTA_INTERNA", compra.getId());
-        BigDecimal importe = movimientosCartera.stream()
-                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
-                .map(MovimientoCarteraEmpresa::getMonto)
-                .map(this::zeroIfNull)
-                .map(BigDecimal::abs)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (importe.compareTo(BigDecimal.ZERO) > 0) {
-            carteraEmpresaService.registrarEgreso(
-                    "ANULACION_COMPRA", compra.getId(), importe,
-                    "Anulacion de venta interna #" + compra.getId());
-            movimientosCartera.stream()
-                    .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
-                    .forEach(movimiento -> {
-                        movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
-                        movimientoCarteraEmpresaDao.save(movimiento);
-                    });
         }
     }
 
@@ -353,6 +359,21 @@ public class CompraServiceImpl implements CompraService {
             case MovimientoBilletera.TIPO_DINERO -> billetera.setSaldoDinero(saldo);
             default -> throw new IllegalArgumentException("Tipo de movimiento no reversible: " + tipo);
         }
+    }
+
+    @Override
+    @Transactional(rollbackOn = Exception.class)
+    public int reprocesarQpBonoReferido(Long compraId, boolean notificar) {
+        Compra compra = compraDao.findById(compraId)
+                .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                .orElse(null);
+        if (compra == null
+                || !Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra())
+                || zeroIfNull(compra.getTotalQpBonoReferido()).compareTo(BigDecimal.ZERO) <= 0) {
+            return 0;
+        }
+
+        return acreditarQpBonoReferido(compra, notificar);
     }
 
     private void registrarAuditoriaEstado(Compra compra, String estadoNuevo, String usuarioOperacion) {
@@ -467,7 +488,8 @@ public class CompraServiceImpl implements CompraService {
         );
         Billetera billeteraComprador = acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()), zeroIfNull(compra.getTotalCr()));
         billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPv(), compra.getPeriodo());
-        acreditarQpBonoReferido(compra);
+        billeteraService.recalcularBeneficiosActivacion(compra.getPersona());
+        acreditarQpBonoReferido(compra, true);
 
         notificacionService.notificarPersona(
                 compra.getPersona().getId(),
@@ -482,47 +504,87 @@ public class CompraServiceImpl implements CompraService {
         }
     }
 
-    private void acreditarQpBonoReferido(Compra compra) {
+    private int acreditarQpBonoReferido(Compra compra, boolean notificar) {
         BigDecimal totalQpBonoReferido = zeroIfNull(compra.getTotalQpBonoReferido());
-        if (totalQpBonoReferido.compareTo(BigDecimal.ZERO) <= 0
-                || movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
-                REFERENCIA_COMPRA_BONO_REFERIDO,
-                compra.getId(),
-                MovimientoBilletera.TIPO_QP
-        )) {
-            return;
+        if (totalQpBonoReferido.compareTo(BigDecimal.ZERO) <= 0) {
+            return 0;
         }
 
-        Persona patrocinador = referidoDao.findByPersonaId(compra.getPersona().getId())
+        int maxAlcance = planActivacionDao.findAll().stream()
+                .filter(plan -> Auditoria.ESTADO_ACTIVO.equals(plan.getEstado()))
+                .map(PlanActivacion::getNivelesAlcance)
+                .filter(value -> value != null)
+                .max(Integer::compareTo)
+                .orElse(0);
+        if (maxAlcance < 1) {
+            return 0;
+        }
+
+        Persona beneficiario = referidoDao.findByPersonaId(compra.getPersona().getId())
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
                 .map(Referido::getPatrocinador)
                 .orElse(null);
-        if (patrocinador == null) {
-            return;
+        int nivel = 1;
+        int creditados = 0;
+
+        while (beneficiario != null && nivel <= maxAlcance) {
+            Billetera billetera = billeteraService.asegurarBilletera(beneficiario);
+            boolean nivelAlcanza = obtenerPlanActivacionVigente(billetera, nivel).isPresent();
+            Optional<Referido> beneficiarioReferido = referidoDao.findByPersonaId(beneficiario.getId())
+                    .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
+            boolean beneficiarioActivo = beneficiarioReferido
+                    .map(this::membresiaActivaReferido)
+                    .orElse(false);
+            boolean cobrable = nivel == 1 || beneficiarioActivo;
+
+            if (nivelAlcanza && cobrable
+                    && !movimientoBilleteraDao.existsByBilleteraIdAndReferenciaTipoAndReferenciaIdAndTipo(
+                    billetera.getId(),
+                    REFERENCIA_COMPRA_BONO_REFERIDO,
+                    compra.getId(),
+                    MovimientoBilletera.TIPO_QP
+            )) {
+                billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(totalQpBonoReferido));
+                billetera = billeteraDao.save(billetera);
+                billeteraService.actualizarRangoActual(beneficiario, billetera.getSaldoQp());
+                movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                        .billetera(billetera)
+                        .periodo(compra.getPeriodo())
+                        .tipo(MovimientoBilletera.TIPO_QP)
+                        .concepto("QP bono referido nivel " + nivel + " por compra #" + compra.getId())
+                        .referenciaTipo(REFERENCIA_COMPRA_BONO_REFERIDO)
+                        .referenciaId(compra.getId())
+                        .monto(totalQpBonoReferido)
+                        .saldoResultado(billetera.getSaldoQp())
+                        .build());
+
+                if (notificar) {
+                    notificacionService.notificarPersona(
+                            beneficiario.getId(),
+                            Notificacion.TIPO_COMPRA,
+                            "QP bono referido",
+                            "Recibiste " + totalQpBonoReferido + " QP por el bono referido nivel " + nivel
+                                    + " de la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
+                            "wallet"
+                    );
+                }
+                creditados++;
+            }
+
+            beneficiario = beneficiarioReferido
+                    .map(Referido::getPatrocinador)
+                    .orElse(null);
+            nivel++;
         }
 
-        Billetera billetera = billeteraService.asegurarBilletera(patrocinador);
-        billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(totalQpBonoReferido));
-        billetera = billeteraDao.save(billetera);
-        billeteraService.actualizarRangoActual(patrocinador, billetera.getSaldoQp());
-        movimientoBilleteraDao.save(MovimientoBilletera.builder()
-                .billetera(billetera)
-                .periodo(compra.getPeriodo())
-                .tipo(MovimientoBilletera.TIPO_QP)
-                .concepto("QP bono referido por compra #" + compra.getId())
-                .referenciaTipo(REFERENCIA_COMPRA_BONO_REFERIDO)
-                .referenciaId(compra.getId())
-                .monto(totalQpBonoReferido)
-                .saldoResultado(billetera.getSaldoQp())
-                .build());
+        return creditados;
+    }
 
-        notificacionService.notificarPersona(
-                patrocinador.getId(),
-                Notificacion.TIPO_COMPRA,
-                "QP bono referido",
-                "Recibiste " + totalQpBonoReferido + " QP por el bono referido de la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
-                "wallet"
-        );
+    private boolean membresiaActivaReferido(Referido referido) {
+        LocalDate fechaFinPeriodoActivo = gestionPeriodoService.obtenerPeriodoActivo().getFechaFin();
+        return Boolean.TRUE.equals(referido.getMembresiaActiva())
+                && referido.getFechaFinMembresia() != null
+                && !referido.getFechaFinMembresia().toLocalDate().isBefore(fechaFinPeriodoActivo);
     }
 
     private Billetera acreditarVolumenComprador(Persona comprador, Compra compra, BigDecimal totalPv, BigDecimal totalQp, BigDecimal totalCr) {
@@ -600,13 +662,20 @@ public class CompraServiceImpl implements CompraService {
 
         while (beneficiario != null && nivel <= maxAlcance) {
             Billetera billetera = billeteraService.asegurarBilletera(beneficiario);
+            Optional<Referido> beneficiarioReferido = referidoDao.findByPersonaId(beneficiario.getId())
+                    .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
             PlanActivacion plan = obtenerPlanActivacionVigente(billetera, nivel).orElse(null);
             PlanActivacionNivel nivelConfig = plan == null
                     ? null
                     : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(plan.getId(), nivel).orElse(null);
             BigDecimal montoPorProducto = nivelConfig == null ? BigDecimal.ZERO : zeroIfNull(nivelConfig.getMontoPorProducto());
             BigDecimal montoTotal = montoPorProducto.multiply(BigDecimal.valueOf(totalProductos));
-            boolean paga = plan != null && montoTotal.compareTo(BigDecimal.ZERO) > 0;
+            boolean membresiaActiva = beneficiarioReferido
+                    .map(this::membresiaActivaReferido)
+                    .orElse(false);
+            boolean paga = plan != null
+                    && membresiaActiva
+                    && montoTotal.compareTo(BigDecimal.ZERO) > 0;
 
             BeneficioActivacionCompra beneficio = beneficioActivacionCompraDao.save(BeneficioActivacionCompra.builder()
                     .compra(compra)
@@ -618,7 +687,9 @@ public class CompraServiceImpl implements CompraService {
                     .montoPorProducto(paga ? montoPorProducto : BigDecimal.ZERO)
                     .montoTotal(paga ? montoTotal : BigDecimal.ZERO)
                     .paga(paga)
-                    .motivo(paga ? "" : "No corresponde por activacion o nivel del plan")
+                    .motivo(paga ? "" : (membresiaActiva
+                            ? "No corresponde por activacion o nivel del plan"
+                            : "No corresponde porque la membresia no esta activa"))
                     .build());
 
             if (paga) {

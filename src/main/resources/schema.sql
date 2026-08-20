@@ -696,8 +696,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_historial_membresias_referencia
     ON historial_membresias (referencia_tipo, referencia_id, tipo)
     WHERE referencia_tipo IS NOT NULL AND referencia_id IS NOT NULL;
 
+-- Unico por billetera: permite el bono referido multi-nivel (varias billeteras
+-- reciben el mismo QP por una misma compra) e impide duplicados para una misma billetera.
+DROP INDEX IF EXISTS uk_movimientos_billetera_referencia;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_billetera_referencia
-    ON movimientos_billetera (referencia_tipo, referencia_id, tipo)
+    ON movimientos_billetera (billetera_id, referencia_tipo, referencia_id, tipo)
     WHERE referencia_tipo IS NOT NULL AND referencia_id IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_cartera_empresa_referencia
