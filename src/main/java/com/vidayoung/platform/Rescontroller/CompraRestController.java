@@ -109,6 +109,11 @@ public class CompraRestController {
         return ResponseEntity.ok(compraService.listarBeneficiosPorCompra(compraId));
     }
 
+    @GetMapping("/{compraId}/movimientos")
+    public ResponseEntity<List<CompraService.MovimientoCompraResumen>> listarMovimientos(@PathVariable Long compraId) {
+        return ResponseEntity.ok(compraService.listarMovimientosCompra(compraId));
+    }
+
     @PutMapping("/{compraId}/estado")
     public ResponseEntity<Compra> cambiarEstado(
             @PathVariable Long compraId,

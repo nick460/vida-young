@@ -32,6 +32,8 @@ import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -374,6 +376,109 @@ public class CompraServiceImpl implements CompraService {
         }
 
         return acreditarQpBonoReferido(compra, notificar);
+    }
+
+    @Override
+    public List<MovimientoCompraResumen> listarMovimientosCompra(Long compraId) {
+        Compra compra = compraDao.findById(compraId)
+                .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                .orElse(null);
+        if (compra == null) {
+            throw new IllegalArgumentException("Compra no encontrada.");
+        }
+
+        List<MovimientoCompraResumen> resumen = new ArrayList<>();
+
+        for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaId("COMPRA", compra.getId())) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                continue;
+            }
+            resumen.add(desdeBilletera(movimiento, "VOLUMEN_COMPRADOR", null));
+        }
+
+        for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaId(REFERENCIA_COMPRA_BONO_REFERIDO, compra.getId())) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                continue;
+            }
+            resumen.add(desdeBilletera(movimiento, "BONO_REFERIDO", null));
+        }
+
+        for (BeneficioActivacionCompra beneficio : beneficioActivacionCompraDao.findByCompraId(compra.getId())) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado())) {
+                continue;
+            }
+            Long beneficioId = beneficio.getId();
+            for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                    .findByReferenciaTipoAndReferenciaId("BENEFICIO_ACTIVACION_COMPRA", beneficioId)) {
+                if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                    continue;
+                }
+                resumen.add(desdeBilletera(movimiento, "BENEFICIO_ACTIVACION", beneficio.getNivelGenerado()));
+            }
+            for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                    .findByReferenciaTipoAndReferenciaId("ACTUALIZACION_BENEFICIO_ACTIVACION", beneficioId)) {
+                if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                    continue;
+                }
+                resumen.add(desdeBilletera(movimiento, "AJUSTE_BENEFICIO", beneficio.getNivelGenerado()));
+            }
+            for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                    .findByReferenciaTipoAndReferenciaId("ANULACION_BENEFICIO_COMPRA", beneficioId)) {
+                if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                    continue;
+                }
+                resumen.add(desdeBilletera(movimiento, "ANULACION", beneficio.getNivelGenerado()));
+            }
+        }
+
+        for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaId("ANULACION_COMPRA", compra.getId())) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                continue;
+            }
+            resumen.add(desdeBilletera(movimiento, "ANULACION", null));
+        }
+
+        for (MovimientoCarteraEmpresa movimiento : movimientoCarteraEmpresaDao
+                .findByReferenciaTipoAndReferenciaId("VENTA_INTERNA", compra.getId())) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                continue;
+            }
+            resumen.add(new MovimientoCompraResumen(
+                    "CARTERA_EMPRESA",
+                    null,
+                    "Empresa",
+                    "",
+                    movimiento.getTipo(),
+                    movimiento.getConcepto(),
+                    movimiento.getMonto(),
+                    movimiento.getSaldoResultado(),
+                    movimiento.getFechaRegistro(),
+                    null
+            ));
+        }
+
+        resumen.sort(Comparator.comparing(MovimientoCompraResumen::fechaRegistro,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        return resumen;
+    }
+
+    private MovimientoCompraResumen desdeBilletera(MovimientoBilletera movimiento, String origen, Integer nivel) {
+        Persona persona = movimiento.getBilletera().getPersona();
+        return new MovimientoCompraResumen(
+                origen,
+                persona.getId(),
+                persona.getNombres(),
+                persona.getApellidos(),
+                movimiento.getTipo(),
+                movimiento.getConcepto(),
+                movimiento.getMonto(),
+                movimiento.getSaldoResultado(),
+                movimiento.getFechaRegistro(),
+                nivel
+        );
     }
 
     private void registrarAuditoriaEstado(Compra compra, String estadoNuevo, String usuarioOperacion) {

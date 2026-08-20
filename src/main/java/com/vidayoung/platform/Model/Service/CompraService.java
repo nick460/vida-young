@@ -28,7 +28,23 @@ public interface CompraService {
 
     int reprocesarQpBonoReferido(Long compraId, boolean notificar);
 
+    List<MovimientoCompraResumen> listarMovimientosCompra(Long compraId);
+
     record ItemCompraRequest(Long productoId, Integer cantidad) {
+    }
+
+    record MovimientoCompraResumen(
+            String origen,
+            Long personaId,
+            String personaNombres,
+            String personaApellidos,
+            String tipo,
+            String concepto,
+            java.math.BigDecimal monto,
+            java.math.BigDecimal saldoResultado,
+            java.time.LocalDateTime fechaRegistro,
+            Integer nivel
+    ) {
     }
 
     record PagoCompraRequest(

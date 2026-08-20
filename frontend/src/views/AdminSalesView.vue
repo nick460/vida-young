@@ -11,6 +11,7 @@ import {
   CircleX,
   Ban,
   ClipboardCheck,
+  ClipboardList,
   FileText,
   MoreVertical,
   PackageCheck,
@@ -57,6 +58,10 @@ const publicTipoClienteSelect = ref(null);
 const proofModalCompra = ref(null);
 const receiptModalCompra = ref(null);
 const publicReviewModalCompra = ref(null);
+const detalleModalCompra = ref(null);
+const detalleMovimientos = ref([]);
+const detalleLoading = ref(false);
+const detalleError = ref("");
 const activeActionMenu = ref("");
 const ventasPage = ref(1);
 const publicVentasPage = ref(1);
@@ -377,6 +382,78 @@ function openReceiptModal(compra) {
 function closeReceiptModal() {
   receiptModalCompra.value = null;
 }
+
+function openDetallesModal(compra) {
+  detalleModalCompra.value = compra;
+  detalleMovimientos.value = [];
+  detalleError.value = "";
+  cargarMovimientosCompra(compra.id);
+}
+
+function closeDetallesModal() {
+  detalleModalCompra.value = null;
+  detalleMovimientos.value = [];
+  detalleError.value = "";
+}
+
+async function cargarMovimientosCompra(compraId) {
+  detalleLoading.value = true;
+  detalleError.value = "";
+  try {
+    const data = await apiRequest(`/api/compras/${compraId}/movimientos`);
+    detalleMovimientos.value = Array.isArray(data) ? data : [];
+  } catch (exception) {
+    detalleError.value = exception.message || "No se pudieron cargar los movimientos.";
+  } finally {
+    detalleLoading.value = false;
+  }
+}
+
+const MOVIMIENTO_LABELS = {
+  VOLUMEN_COMPRADOR: "Volumen del comprador",
+  BONO_REFERIDO: "QP bono referido (hacia arriba)",
+  BENEFICIO_ACTIVACION: "Beneficios de activacion",
+  AJUSTE_BENEFICIO: "Ajustes retroactivos",
+  CARTERA_EMPRESA: "Cartera de la empresa",
+  ANULACION: "Anulaciones"
+};
+
+const MOVIMIENTO_ORDEN = [
+  "VOLUMEN_COMPRADOR",
+  "BONO_REFERIDO",
+  "BENEFICIO_ACTIVACION",
+  "AJUSTE_BENEFICIO",
+  "CARTERA_EMPRESA",
+  "ANULACION"
+];
+
+function movimientoLabel(origen) {
+  return MOVIMIENTO_LABELS[origen] || origen || "Movimientos";
+}
+
+const movimientosAgrupados = computed(() => {
+  const grupos = [];
+  for (const origen of MOVIMIENTO_ORDEN) {
+    const items = detalleMovimientos.value.filter((mov) => mov.origen === origen);
+    if (!items.length) continue;
+    grupos.push({
+      origen,
+      label: movimientoLabel(origen),
+      items,
+      total: items.reduce((acc, mov) => acc + Number(mov.monto || 0), 0)
+    });
+  }
+  const otros = detalleMovimientos.value.filter((mov) => !MOVIMIENTO_ORDEN.includes(mov.origen));
+  if (otros.length) {
+    grupos.push({
+      origen: "OTROS",
+      label: "Otros movimientos",
+      items: otros,
+      total: otros.reduce((acc, mov) => acc + Number(mov.monto || 0), 0)
+    });
+  }
+  return grupos;
+});
 
 function toggleActionMenu(key) {
   activeActionMenu.value = activeActionMenu.value === key ? "" : key;
@@ -1589,6 +1666,9 @@ onMounted(() => {
                         <MoreVertical :size="17" />
                       </button>
                       <div v-if="activeActionMenu === `venta-${compra.id}`" class="action-menu-panel">
+                        <button type="button" @click="closeActionMenu(); openDetallesModal(compra)">
+                          <ClipboardList :size="15" /> Detalles
+                        </button>
                         <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
                           <FileText :size="15" /> Ver pago
                         </button>
@@ -1687,6 +1767,9 @@ onMounted(() => {
                         <MoreVertical :size="17" />
                       </button>
                       <div v-if="activeActionMenu === `publica-${compra.id}`" class="action-menu-panel">
+                        <button type="button" @click="closeActionMenu(); openDetallesModal(compra)">
+                          <ClipboardList :size="15" /> Detalles
+                        </button>
                         <button v-if="compra.comprobantePagoUrl" type="button" @click="closeActionMenu(); openProofModal(compra)">
                           <FileText :size="15" /> Ver pago
                         </button>
@@ -2377,6 +2460,97 @@ onMounted(() => {
           </footer>
         </article>
       </div>
+
+      <div v-if="detalleModalCompra" class="receipt-modal-backdrop" @click.self="closeDetallesModal">
+        <article class="receipt-modal detalle-modal">
+          <header>
+            <div>
+              <span class="vy-eyebrow">Detalle completo</span>
+              <h2>Compra #{{ detalleModalCompra.id }}</h2>
+              <p>{{ detalleModalCompra.estadoCompra }} · {{ fullName(detalleModalCompra.persona) }} · {{ formatDateTime(detalleModalCompra.fechaCompra) }}</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="closeDetallesModal">
+              <X :size="18" />
+            </button>
+          </header>
+
+          <section class="detalle-modal-body">
+            <div class="detalle-block">
+              <h3>Productos de la compra</h3>
+              <div class="receipt-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>SKU</th>
+                      <th>Cant.</th>
+                      <th>Precio</th>
+                      <th>Volumen</th>
+                      <th>Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="detalle in detalleModalCompra.detalles || []" :key="detalle.id">
+                      <td>{{ detalle.producto?.nombre || "Producto" }}</td>
+                      <td>{{ detalle.producto?.sku || "" }}</td>
+                      <td>{{ detalle.cantidad }}</td>
+                      <td>Bs. {{ money(detalle.precioUnitario) }}</td>
+                      <td>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</td>
+                      <td>Bs. {{ money(detalle.subtotal) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="detalle-block">
+              <h3>Movimientos que genero la compra</h3>
+              <p v-if="detalleLoading" class="detalle-loading">Cargando movimientos...</p>
+              <div v-else-if="detalleError" class="detalle-error">{{ detalleError }}</div>
+              <div v-else-if="!detalleMovimientos.length" class="detalle-empty">Esta compra no genero movimientos.</div>
+              <template v-else>
+                <section v-for="grupo in movimientosAgrupados" :key="grupo.origen" class="detalle-grupo">
+                  <header>
+                    <strong>{{ grupo.label }}</strong>
+                    <span>Total {{ money(grupo.total) }}</span>
+                  </header>
+                  <div class="receipt-table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Persona</th>
+                          <th>Tipo</th>
+                          <th>Concepto</th>
+                          <th>Monto</th>
+                          <th>Saldo</th>
+                          <th>Fecha</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(mov, index) in grupo.items" :key="`${grupo.origen}-${index}`">
+                          <td>
+                            <strong>{{ mov.personaNombres }} {{ mov.personaApellidos }}</strong>
+                            <small v-if="mov.nivel">Nivel {{ mov.nivel }}</small>
+                          </td>
+                          <td>{{ mov.tipo }}</td>
+                          <td>{{ mov.concepto }}</td>
+                          <td>{{ money(mov.monto) }}</td>
+                          <td>{{ money(mov.saldoResultado) }}</td>
+                          <td>{{ formatDateTime(mov.fechaRegistro) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </template>
+            </div>
+          </section>
+
+          <footer>
+            <button class="vy-btn vy-btn-primary" type="button" @click="closeDetallesModal">Cerrar</button>
+          </footer>
+        </article>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -2709,6 +2883,17 @@ onMounted(() => {
 .receipt-totals div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--vy-line-2); }
 .receipt-totals div:last-child { border-bottom: 0; background: var(--vy-orange); color: #fff; font-size: 18px; font-weight: 900; }
 .receipt-modal > footer { justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--vy-line-2); }
+.detalle-modal { width: min(1040px, 100%); }
+.detalle-modal-body { margin: 16px 0; padding-right: 4px; overflow: auto; display: grid; gap: 20px; }
+.detalle-block h3 { margin-bottom: 10px; font-size: 15px; font-weight: 900; color: var(--vy-ink); }
+.detalle-grupo { border: 1px solid var(--vy-line); border-radius: 16px; overflow: hidden; background: var(--vy-surface-2); }
+.detalle-grupo > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: #fffaf0; border-bottom: 1px solid var(--vy-line-2); }
+.detalle-grupo > header strong { font-size: 14px; font-weight: 900; color: var(--vy-ink); }
+.detalle-grupo > header span { font-size: 12px; font-weight: 900; color: var(--vy-orange-deep); }
+.detalle-grupo .receipt-table-wrap { margin-top: 0; background: #fff; }
+.detalle-grupo td small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.detalle-loading, .detalle-empty { padding: 18px; color: var(--vy-ink-3); font-weight: 800; }
+.detalle-error { padding: 18px; color: var(--vy-danger); font-weight: 800; }
 @media (max-width: 1120px) {
   .shell-grid { grid-template-columns: 1fr; }
 }
