@@ -72,8 +72,9 @@ public class DataInitializer {
             persona.setUsuario(usuario);
             persona.setEstado(Auditoria.ESTADO_ACTIVO);
             rol.setEstado(Auditoria.ESTADO_ACTIVO);
-            rol = rolDao.save(rol);
+rol = rolDao.save(rol);
             asignarMenuLogs(rol);
+            asignarMenuNotificaciones(rol);
 
             usuarioDao.save(usuario);
         };
@@ -97,6 +98,27 @@ public class DataInitializer {
                 "INSERT INTO roles_menus (rol_id, menu_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
                 rol.getId(),
                 logsMenu.getId()
+        );
+    }
+
+    private void asignarMenuNotificaciones(Rol rol) {
+        MenuSistema menu = menuSistemaDao.findByMenuId("notificaciones")
+                .orElseGet(() -> MenuSistema.builder()
+                        .menuId("notificaciones")
+                        .label("Notificaciones")
+                        .icon("BellRing")
+                        .custom(false)
+                        .orden(95)
+                        .build());
+
+        menu.setEstado(Auditoria.ESTADO_ACTIVO);
+        menu.setCustom(false);
+        menu = menuSistemaDao.save(menu);
+
+        jdbcTemplate.update(
+                "INSERT INTO roles_menus (rol_id, menu_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                rol.getId(),
+                menu.getId()
         );
     }
 

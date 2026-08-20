@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
+    "@stomp/stompjs": "^7.3.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/compiler-dom": "^3.5.40",
     "jquery": "^4.0.0",
@@ -16,6 +17,7 @@
     "lucide-vue-next": "^1.0.0",
     "pinia": "^2.1.7",
     "select2": "^4.1.0",
+    "sockjs-client": "^1.6.1",
     "sweetalert2": "^11.26.24",
     "vite": "^7.0.0",
     "vue": "^3.4.27",

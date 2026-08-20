@@ -7,6 +7,7 @@ import com.vidayoung.platform.Model.Dao.RecompensaDao;
 import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
+import com.vidayoung.platform.Model.Entity.Notificacion;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Plan;
@@ -15,6 +16,7 @@ import com.vidayoung.platform.Model.Entity.Recompensa;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
+import com.vidayoung.platform.Model.Service.NotificacionService;
 import com.vidayoung.platform.Model.Service.ReferidoService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
@@ -41,6 +43,7 @@ public class ReferidoServiceImpl implements ReferidoService {
     private final BilleteraService billeteraService;
     private final GestionPeriodoService gestionPeriodoService;
     private final UsuarioDao usuarioDao;
+    private final NotificacionService notificacionService;
 
     @Override
     public List<Referido> listar() {
@@ -86,6 +89,15 @@ public class ReferidoServiceImpl implements ReferidoService {
         Referido referido = referidoDao.save(buildReferido(existente.orElseGet(Referido::new), personaId, patrocinadorId, planId));
         billeteraService.registrarAfiliacionInicial(referido);
         regenerarRecompensas(referido);
+        if (referido.getPatrocinador() != null) {
+            notificacionService.notificarPersona(
+                    referido.getPatrocinador().getId(),
+                    Notificacion.TIPO_MEMBRESIA,
+                    "Nuevo afiliado en tu red",
+                    nombreCompleto(referido.getPersona()) + " se afilio al plan " + referido.getPlan().getNombre() + ".",
+                    "network"
+            );
+        }
         return referido;
     }
 
@@ -316,6 +328,16 @@ public class ReferidoServiceImpl implements ReferidoService {
 
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private String nombreCompleto(Persona persona) {
+        if (persona == null) {
+            return "persona";
+        }
+
+        String nombreCompleto = ((persona.getNombres() == null ? "" : persona.getNombres()) + " "
+                + (persona.getApellidos() == null ? "" : persona.getApellidos())).trim();
+        return nombreCompleto.isBlank() ? "persona" : nombreCompleto;
     }
 
     private Referido hidratarFotos(Referido referido) {

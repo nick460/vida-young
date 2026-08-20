@@ -17,6 +17,7 @@ import com.vidayoung.platform.Model.Entity.Compra;
 import com.vidayoung.platform.Model.Entity.CompraDetalle;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.MovimientoCarteraEmpresa;
+import com.vidayoung.platform.Model.Entity.Notificacion;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
@@ -26,6 +27,7 @@ import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.CompraService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
+import com.vidayoung.platform.Model.Service.NotificacionService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -62,6 +64,7 @@ public class CompraServiceImpl implements CompraService {
     private final BilleteraService billeteraService;
     private final CarteraEmpresaService carteraEmpresaService;
     private final GestionPeriodoService gestionPeriodoService;
+    private final NotificacionService notificacionService;
 
     @Override
     @Transactional(rollbackOn = Exception.class)
@@ -98,8 +101,17 @@ public class CompraServiceImpl implements CompraService {
         compra = compraDao.save(compra);
 
         recalcularCompra(compra, items, pago);
+        compra = compraDao.save(compra);
 
-        return compraDao.save(compra);
+        notificacionService.notificarPersona(
+                comprador.getId(),
+                Notificacion.TIPO_COMPRA,
+                "Compra registrada",
+                "Tu compra #" + compra.getId() + " por S/ " + zeroIfNull(compra.getSubtotal()) + " fue registrada y esta pendiente de validacion.",
+                "shop"
+        );
+
+        return compra;
     }
 
     @Override
@@ -457,6 +469,14 @@ public class CompraServiceImpl implements CompraService {
         billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPv(), compra.getPeriodo());
         acreditarQpBonoReferido(compra);
 
+        notificacionService.notificarPersona(
+                compra.getPersona().getId(),
+                Notificacion.TIPO_COMPRA,
+                "Compra validada",
+                "Tu compra #" + compra.getId() + " fue validada y tus volumenes fueron acreditados.",
+                "shop"
+        );
+
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {
             generarBeneficiosActivacion(compra, totalProductos);
         }
@@ -495,6 +515,14 @@ public class CompraServiceImpl implements CompraService {
                 .monto(totalQpBonoReferido)
                 .saldoResultado(billetera.getSaldoQp())
                 .build());
+
+        notificacionService.notificarPersona(
+                patrocinador.getId(),
+                Notificacion.TIPO_COMPRA,
+                "QP bono referido",
+                "Recibiste " + totalQpBonoReferido + " QP por el bono referido de la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
+                "wallet"
+        );
     }
 
     private Billetera acreditarVolumenComprador(Persona comprador, Compra compra, BigDecimal totalPv, BigDecimal totalQp, BigDecimal totalCr) {
@@ -606,6 +634,13 @@ public class CompraServiceImpl implements CompraService {
                         .monto(montoTotal)
                         .saldoResultado(billetera.getSaldoDinero())
                         .build());
+                notificacionService.notificarPersona(
+                        beneficiario.getId(),
+                        Notificacion.TIPO_RECOMPENSA,
+                        "Beneficio de activacion",
+                        "Recibiste S/ " + montoTotal + " por el beneficio de activacion nivel " + nivel + " de la compra #" + compra.getId() + ".",
+                        "wallet"
+                );
             }
 
             beneficiario = referidoDao.findByPersonaId(beneficiario.getId())
@@ -627,6 +662,16 @@ public class CompraServiceImpl implements CompraService {
 
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private String nombreCompleto(Persona persona) {
+        if (persona == null) {
+            return "persona";
+        }
+
+        String nombreCompleto = ((persona.getNombres() == null ? "" : persona.getNombres()) + " "
+                + (persona.getApellidos() == null ? "" : persona.getApellidos())).trim();
+        return nombreCompleto.isBlank() ? "persona" : nombreCompleto;
     }
 
     private String normalizarTexto(String value) {

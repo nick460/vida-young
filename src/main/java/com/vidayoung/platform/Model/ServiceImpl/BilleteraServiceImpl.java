@@ -18,6 +18,7 @@ import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
+import com.vidayoung.platform.Model.Entity.Notificacion;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Plan;
@@ -31,6 +32,7 @@ import com.vidayoung.platform.Model.Entity.RetiroBilleteraDetalle;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
+import com.vidayoung.platform.Model.Service.NotificacionService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -65,6 +67,7 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final GestionPeriodoService gestionPeriodoService;
     private final RetiroBilleteraDao retiroBilleteraDao;
     private final RetiroBilleteraDetalleDao retiroBilleteraDetalleDao;
+    private final NotificacionService notificacionService;
 
     @Override
     @Transactional
@@ -131,6 +134,16 @@ public class BilleteraServiceImpl implements BilleteraService {
         if (!java.util.Objects.equals(rangoActualId, nuevoRangoId)) {
             persistente.setRangoActual(rango);
             personaDao.save(persistente);
+
+            if (rango != null) {
+                notificacionService.notificarPersona(
+                        persona.getId(),
+                        Notificacion.TIPO_RANGO,
+                        "Felicitaciones, subiste de rango",
+                        "Tu nuevo rango es " + rango.getNombre() + ".",
+                        "wallet"
+                );
+            }
         }
     }
 
@@ -195,6 +208,13 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .saldoResultado(billetera.getSaldoQp())
                     .periodo(periodoActivo)
                     .build());
+            notificacionService.notificarPersona(
+                    referido.getPatrocinador().getId(),
+                    Notificacion.TIPO_MEMBRESIA,
+                    "QP por afiliacion",
+                    "Recibiste " + qpPlan + " QP por afiliar a " + nombreCompleto(referido.getPersona()) + " al plan " + referido.getPlan().getNombre() + ".",
+                    "wallet"
+            );
         }
     }
 
@@ -259,6 +279,14 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .build());
         }
 
+        notificacionService.notificarPersona(
+                persona.getId(),
+                Notificacion.TIPO_MEMBRESIA,
+                "Membresia activada",
+                "Tu membresia al plan " + plan.getNombre() + " fue activada hasta el " + fechaFin.toLocalDate() + ".",
+                "wallet"
+        );
+
         return historial;
     }
 
@@ -294,6 +322,13 @@ public class BilleteraServiceImpl implements BilleteraService {
         referido.setMembresiaActiva(true);
         referidoDao.save(referido);
         actualizarRecompensasCobrables(persona, true);
+        notificacionService.notificarPersona(
+                persona.getId(),
+                Notificacion.TIPO_MEMBRESIA,
+                "Membresia activada por PV",
+                "Tu membresia fue activada automaticamente por alcanzar el plan de activacion " + planActivacion.getNombre() + ".",
+                "wallet"
+        );
 
         if (historialMembresiaDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
                 REFERENCIA_PV_ACTIVACION,
@@ -455,6 +490,14 @@ public class BilleteraServiceImpl implements BilleteraService {
         billetera.setSaldoProductos(zeroIfNull(billetera.getSaldoProductos()).subtract(saldoProductosPeriodo).max(BigDecimal.ZERO));
         billeteraDao.save(billetera);
         actualizarRangoActual(persona, billetera.getSaldoQp());
+
+        notificacionService.notificarPersona(
+                persona.getId(),
+                Notificacion.TIPO_RECOMPENSA,
+                "Retiro procesado",
+                "Tu retiro #" + retiro.getId() + " por S/ " + dinero + " fue procesado correctamente.",
+                "wallet"
+        );
 
         return retiro;
     }

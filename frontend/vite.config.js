@@ -3,6 +3,12 @@ import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    global: "window"
+  },
+  optimizeDeps: {
+    exclude: ["lucide-vue-next"]
+  },
   preview: {
     allowedHosts: ["rubina-solutions.tech", "www.vidayoung.online", "vidayoung.online"]
   },

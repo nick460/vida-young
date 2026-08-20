@@ -25,6 +25,7 @@ export const BASE_MENU_ITEMS = [
   { id: "retiros-billeteras", label: "Retiros billeteras", icon: "ArrowDownToLine", roles: [ROLE_ADMIN] },
   { id: "retiros-nivel-1", label: "Bono de Patrocinio", icon: "Gift", roles: [ROLE_ADMIN] },
   { id: "logs", label: "Logs", icon: "Terminal", roles: [ROLE_ADMIN] },
+  { id: "notificaciones", label: "Notificaciones", icon: "BellRing", roles: [ROLE_ADMIN] },
   { id: "wallet", label: "Billetera", icon: "Wallet", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] },
   { id: "shop", label: "Tienda", icon: "ShoppingBag", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] },
   { id: "network", label: "Mi red", icon: "Users", badge: "138", roles: [ROLE_ADMIN, "EMBAJADOR"] },

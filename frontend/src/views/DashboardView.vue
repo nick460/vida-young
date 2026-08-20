@@ -192,26 +192,6 @@ onMounted(loadDashboardSummary);
 <template>
   <div class="vy dashboard-view">
     <section class="workspace">
-      <header class="topbar">
-        <div class="search-box">
-          <VyIcon name="search" :size="16" stroke="var(--vy-ink-3)" />
-          <span>Buscar productos, miembros, transacciones...</span>
-          <kbd>Ctrl K</kbd>
-        </div>
-
-        <button class="vy-btn vy-btn-ghost topbar-button" type="button">
-          <VyIcon name="cog" :size="16" />
-          Ajustes
-        </button>
-        <button class="icon-button" type="button" aria-label="Notificaciones">
-          <VyIcon name="bell" :size="16" />
-          <span></span>
-        </button>
-        <button class="avatar-button" type="button" title="Mi cuenta">
-          <VyAvatar :name="user.avatar" :size="40" bg="var(--vy-orange)" color="#fff" />
-        </button>
-      </header>
-
       <main class="dashboard-content">
         <section class="welcome-row">
           <div>

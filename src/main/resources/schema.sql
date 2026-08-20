@@ -863,3 +863,23 @@ CREATE TABLE IF NOT EXISTS beneficios_activacion_compras (
 
 ALTER TABLE beneficios_activacion_compras
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
+
+CREATE TABLE IF NOT EXISTS notificaciones (
+    id BIGSERIAL PRIMARY KEY,
+    destinatario_id BIGINT REFERENCES personas(id),
+    titulo VARCHAR(120) NOT NULL,
+    mensaje VARCHAR(500) NOT NULL,
+    tipo VARCHAR(30) NOT NULL DEFAULT 'INFO',
+    link VARCHAR(255),
+    leida BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_leida TIMESTAMP,
+    fecha_enviado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE INDEX IF NOT EXISTS idx_notificaciones_destinatario
+    ON notificaciones (destinatario_id, leida, fecha_enviado DESC);

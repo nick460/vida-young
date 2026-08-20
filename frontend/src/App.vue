@@ -1,12 +1,68 @@
 <script setup>
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import Swal from "sweetalert2";
 import AppSidebar from "./components/AppSidebar.vue";
+import NotificationBell from "./components/NotificationBell.vue";
+import { VyAvatar } from "./components/ui.js";
+import { useAuthStore } from "./stores/authStore.js";
+import { useNotificacionesStore } from "./stores/notificacionesStore.js";
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
+const notificacionesStore = useNotificacionesStore();
 
 const showSidebar = computed(() => route.meta.sidebar === true);
+
+const user = computed(() => ({
+  name: authStore.usuario?.username || "Administrador Vidayoung",
+  avatar: (authStore.usuario?.username || "AV").slice(0, 2).toUpperCase()
+}));
+
+let ultimoToastId = null;
+
+function mostrarToastNotificacion(notificacion) {
+  if (!notificacion || notificacion.id === ultimoToastId) {
+    return;
+  }
+  ultimoToastId = notificacion.id;
+  Swal.fire({
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: 5000,
+    timerProgressBar: true,
+    icon: "info",
+    title: notificacion.titulo,
+    text: notificacion.mensaje,
+    background: "#FFFFFF",
+    color: "#1F1A14",
+    customClass: {
+      popup: "vy-swal-popup",
+      title: "vy-swal-title",
+      htmlContainer: "vy-swal-text"
+    }
+  });
+}
+
+watch(
+  () => notificacionesStore.ultimaNotificacion,
+  (notificacion) => mostrarToastNotificacion(notificacion)
+);
+
+watch(
+  () => authStore.isAuthenticated,
+  (autenticado) => {
+    if (autenticado) {
+      notificacionesStore.cargar();
+      notificacionesStore.conectar();
+    } else {
+      notificacionesStore.desconectar();
+    }
+  },
+  { immediate: true }
+);
 
 function nav(id) {
   router.push({ name: id });
@@ -17,7 +73,18 @@ function nav(id) {
 <template>
   <div class="vy app-layout" :class="{ 'with-sidebar': showSidebar }">
     <AppSidebar v-if="showSidebar" />
-    <router-view v-slot="{ Component }">
+    <div v-if="showSidebar" class="app-main">
+      <header class="app-topbar">
+        <NotificationBell />
+        <button class="avatar-button" type="button" title="Mi cuenta" @click="nav('profile')">
+          <VyAvatar :name="user.avatar" :size="40" bg="var(--vy-orange)" color="#fff" />
+        </button>
+      </header>
+      <router-view v-slot="{ Component }">
+        <component :is="Component" @navigate="nav" />
+      </router-view>
+    </div>
+    <router-view v-else v-slot="{ Component }">
       <component :is="Component" @navigate="nav" />
     </router-view>
   </div>
@@ -45,6 +112,41 @@ body {
 
 .app-layout.with-sidebar > :not(.sidebar) {
   min-width: 0;
+}
+
+.app-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 12px 32px;
+  border-bottom: 1px solid var(--vy-line-2);
+  background: rgba(251, 248, 240, 0.85);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.avatar-button {
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+}
+
+@media (max-width: 860px) {
+  .app-topbar {
+    padding: 10px 16px;
+  }
 }
 
 @media (max-width: 860px) {
