@@ -30,6 +30,7 @@ import RangosView from "./views/RangosView.vue";
 import ActivationPlansView from "./views/ActivationPlansView.vue";
 import ReferidosView from "./views/ReferidosView.vue";
 import AdminSalesView from "./views/AdminSalesView.vue";
+import AdminComprasView from "./views/AdminComprasView.vue";
 import AssistantConfigView from "./views/AssistantConfigView.vue";
 import AssistantView from "./views/AssistantView.vue";
 import RegistroReferidoView from "./views/RegistroReferidoView.vue";
@@ -77,6 +78,7 @@ const routes = [
   { path: "/referidos", name: "referidos", component: ReferidosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/inventario", name: "inventario", component: InventoryView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/ventanilla", name: "ventanilla", component: AdminSalesView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/admin/compras", name: "admin-compras", component: AdminComprasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/registro-referido", name: "registro-referido", component: RegistroReferidoView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "ventanilla" } },
   { path: "/herramientas-digitales", name: "herramientas-digitales", component: DigitalToolsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/landings-productos-config", name: "landing-productos-config", component: ProductLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },

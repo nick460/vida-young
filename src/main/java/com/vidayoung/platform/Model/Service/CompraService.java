@@ -30,6 +30,8 @@ public interface CompraService {
 
     List<MovimientoCompraResumen> listarMovimientosCompra(Long compraId);
 
+    Compra reconstruirCompraAdmin(Long compraId, List<ItemCompraRequest> items, PagoCompraRequest pago, String usuarioOperacion);
+
     record ItemCompraRequest(Long productoId, Integer cantidad) {
     }
 

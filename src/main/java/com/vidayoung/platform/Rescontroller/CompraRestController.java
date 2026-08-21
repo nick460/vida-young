@@ -59,6 +59,12 @@ public class CompraRestController {
         return ResponseEntity.ok(periodoId == null ? compraService.listarPorPeriodo(null) : compraService.listarPorPeriodo(periodoId));
     }
 
+    @GetMapping("/admin/todas")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<List<Compra>> listarTodasAdmin() {
+        return ResponseEntity.ok(compraService.listarTodas());
+    }
+
     @GetMapping("/estado/{estadoCompra}")
     public ResponseEntity<List<Compra>> listarPorEstado(@PathVariable String estadoCompra) {
         return ResponseEntity.ok(compraService.listarPorEstado(estadoCompra));
@@ -132,6 +138,25 @@ public class CompraRestController {
     ) {
         String usuarioOperacion = authentication == null ? null : authentication.getName();
         return ResponseEntity.ok(compraService.anularCompra(compraId, request.getMotivo(), usuarioOperacion));
+    }
+
+    @PutMapping("/{compraId}/admin-reconstruir")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<Compra> reconstruirAdmin(
+            @PathVariable Long compraId,
+            @RequestBody CompraRequest request,
+            Authentication authentication
+    ) {
+        String usuarioOperacion = authentication == null ? null : authentication.getName();
+        Compra nueva = compraService.reconstruirCompraAdmin(
+                compraId,
+                request.getItems().stream()
+                        .map(item -> new CompraService.ItemCompraRequest(item.getProductoId(), item.getCantidad()))
+                        .toList(),
+                toPagoRequest(request, null),
+                usuarioOperacion
+        );
+        return ResponseEntity.ok(nueva);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

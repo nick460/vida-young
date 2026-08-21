@@ -18,6 +18,7 @@ import com.vidayoung.platform.Model.Entity.CompraDetalle;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.MovimientoCarteraEmpresa;
 import com.vidayoung.platform.Model.Entity.Notificacion;
+import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
@@ -481,6 +482,90 @@ public class CompraServiceImpl implements CompraService {
         );
     }
 
+    @Override
+    @Transactional(rollbackOn = Exception.class)
+    public Compra reconstruirCompraAdmin(Long compraId, List<ItemCompraRequest> items, PagoCompraRequest pago, String usuarioOperacion) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("La compra debe tener al menos un producto.");
+        }
+
+        Compra vieja = compraDao.findById(compraId)
+                .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Compra no encontrada."));
+
+        if (Compra.ESTADO_COMPRA_ANULADA.equals(vieja.getEstadoCompra())) {
+            throw new IllegalArgumentException("No se puede editar una compra ya anulada.");
+        }
+
+        Persona persona = vieja.getPersona();
+        PeriodoGestion periodo = vieja.getPeriodo();
+        LocalDateTime fechaCompraOrig = vieja.getFechaCompra();
+        LocalDateTime fechaValidacionOrig = vieja.getFechaValidacion();
+        String usuarioValidacionOrig = vieja.getUsuarioValidacion();
+        String estadoOrig = vieja.getEstadoCompra();
+
+        boolean tieneRecompensas = Compra.ESTADO_COMPRA_VALIDADA.equals(estadoOrig)
+                || Compra.ESTADO_COMPRA_CONFIRMADA.equals(estadoOrig);
+
+        // Anulación lógica de la compra vieja
+        if (tieneRecompensas) {
+            revertirMovimientosCompra(vieja);
+            revertirBeneficiosCompra(vieja);
+        }
+        vieja.setEstadoCompra(Compra.ESTADO_COMPRA_ANULADA);
+        vieja.setMotivoAnulacion("Edición administrativa - reemplazada por nueva compra (admin: "
+                + normalizarTexto(usuarioOperacion) + ")");
+        vieja.setUsuarioAnulacion(normalizarTexto(usuarioOperacion) == null ? "SISTEMA" : normalizarTexto(usuarioOperacion));
+        vieja.setFechaAnulacion(LocalDateTime.now());
+        compraDao.save(vieja);
+
+        // Crear nueva compra con mismos datos base (misma fecha y periodo)
+        Compra nueva = Compra.builder()
+                .persona(persona)
+                .periodo(periodo)
+                .fechaCompra(fechaCompraOrig)
+                .estadoCompra(Compra.ESTADO_COMPRA_PENDIENTE)
+                .metodoPago(normalizarTexto(pago != null ? pago.metodoPago() : null) != null
+                        ? normalizarTexto(pago.metodoPago()) : vieja.getMetodoPago())
+                .bancoPago(normalizarTexto(pago != null ? pago.bancoPago() : null) != null
+                        ? normalizarTexto(pago.bancoPago()) : vieja.getBancoPago())
+                .cuentaPago(normalizarTexto(pago != null ? pago.cuentaPago() : null) != null
+                        ? normalizarTexto(pago.cuentaPago()) : vieja.getCuentaPago())
+                .codigoPago(normalizarTexto(pago != null ? pago.codigoPago() : null) != null
+                        ? normalizarTexto(pago.codigoPago()) : vieja.getCodigoPago())
+                .referenciaPago(normalizarTexto(pago != null ? pago.referenciaPago() : null) != null
+                        ? normalizarTexto(pago.referenciaPago()) : vieja.getReferenciaPago())
+                .comprobantePagoUrl(vieja.getComprobantePagoUrl())
+                .comprobantePagoNombre(vieja.getComprobantePagoNombre())
+                .comprobantePagoTipo(vieja.getComprobantePagoTipo())
+                .descuentoMonto(BigDecimal.ZERO)
+                .descuentoConcepto(null)
+                .subtotal(BigDecimal.ZERO)
+                .totalPv(BigDecimal.ZERO)
+                .totalQp(BigDecimal.ZERO)
+                .totalQpBonoReferido(BigDecimal.ZERO)
+                .totalCr(BigDecimal.ZERO)
+                .build();
+        nueva = compraDao.save(nueva);
+
+        recalcularCompra(nueva, items, pago);
+        nueva = compraDao.save(nueva);
+
+        if (tieneRecompensas) {
+            nueva.setEstadoCompra(estadoOrig);
+            nueva.setFechaValidacion(fechaValidacionOrig);
+            nueva.setUsuarioValidacion(usuarioValidacionOrig);
+            nueva = compraDao.save(nueva);
+            procesarCompraValidada(nueva);
+            // Asegurar que no se sobrescribió la fecha/usuario originales
+            nueva.setFechaValidacion(fechaValidacionOrig);
+            nueva.setUsuarioValidacion(usuarioValidacionOrig);
+            nueva = compraDao.save(nueva);
+        }
+
+        return nueva;
+    }
+
     private void registrarAuditoriaEstado(Compra compra, String estadoNuevo, String usuarioOperacion) {
         String usuario = normalizarTexto(usuarioOperacion);
         String operador = usuario == null ? "SISTEMA" : usuario;
@@ -656,7 +741,7 @@ public class CompraServiceImpl implements CompraService {
                         .billetera(billetera)
                         .periodo(compra.getPeriodo())
                         .tipo(MovimientoBilletera.TIPO_QP)
-                        .concepto("QP bono referido nivel " + nivel + " por compra #" + compra.getId())
+                        .concepto("QP bono referido nivel " + nivel + " por compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()))
                         .referenciaTipo(REFERENCIA_COMPRA_BONO_REFERIDO)
                         .referenciaId(compra.getId())
                         .monto(totalQpBonoReferido)
@@ -814,7 +899,7 @@ public class CompraServiceImpl implements CompraService {
                         beneficiario.getId(),
                         Notificacion.TIPO_RECOMPENSA,
                         "Beneficio de activacion",
-                        "Recibiste S/ " + montoTotal + " por el beneficio de activacion nivel " + nivel + " de la compra #" + compra.getId() + ".",
+                        "Recibiste S/ " + montoTotal + " por el beneficio de activacion nivel " + nivel + " de la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
                         "wallet"
                 );
             }

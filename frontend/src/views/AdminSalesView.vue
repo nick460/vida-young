@@ -1391,7 +1391,11 @@ async function updateCompraEstado(compra, estadoCompra) {
       method: "PUT",
       body: JSON.stringify({ estadoCompra })
     });
-    await showSuccess("Compra actualizada", `Compra #${compra.id} actualizada a ${estadoCompra}.`);
+    if (estadoCompra === "VALIDADA") {
+      await showSuccess("Compra validada", `Compra #${compra.id} validada. Se notificó a todas las personas que recibieron QP y beneficios de esta compra.`);
+    } else {
+      await showSuccess("Compra actualizada", `Compra #${compra.id} actualizada a ${estadoCompra}.`);
+    }
     await loadVentasPeriodo();
   } catch (exception) {
     await showError("No se pudo actualizar", exception.message || "No se pudo actualizar la compra.");
