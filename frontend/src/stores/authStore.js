@@ -3,7 +3,7 @@ import { login as loginRequest } from "../services/authService.js";
 import { obtenerPerfil } from "../services/profileService.js";
 import { solicitarPermisoYObtenerToken, registrarServiceWorker } from "../services/fcm-service.js";
 
-export const useAuthStore = define_store("auth", {
+export const useAuthStore = defineStore("auth", {
   state: () => ({
     token: localStorage.getItem("vy_token") || "",
     usuario: JSON.parse(localStorage.getItem("vy_usuario") || "null"),
