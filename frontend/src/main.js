@@ -184,3 +184,6 @@ createApp(App)
   .use(pinia)
   .use(router)
   .mount("#app");
+
+// Registrar Service Worker para Firebase Cloud Messaging después de montar la app
+registrarServiceWorker();

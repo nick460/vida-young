@@ -12,6 +12,7 @@ import {
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { useAuthStore } from "../stores/authStore.js";
+import NotificationBell from "../components/NotificationBell.vue";
 
 const auth = useAuthStore();
 const loading = ref(false);
@@ -243,6 +244,7 @@ onMounted(loadWallet);
             <RefreshCw :class="{ spinning: loading }" :size="16" stroke-width="2.3" />
             <span>{{ loading ? "Actualizando" : "Actualizar" }}</span>
           </button>
+          <NotificationBell />
         </div>
       </header>
 

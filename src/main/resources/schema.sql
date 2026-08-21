@@ -886,3 +886,19 @@ CREATE TABLE IF NOT EXISTS notificaciones (
 
 CREATE INDEX IF NOT EXISTS idx_notificaciones_destinatario
     ON notificaciones (destinatario_id, leida, fecha_enviado DESC);
+
+CREATE TABLE IF NOT EXISTS dispositivos (
+    id BIGSERIAL PRIMARY KEY,
+    persona_id BIGINT NOT NULL REFERENCES personas(id),
+    token VARCHAR(500) NOT NULL UNIQUE,
+    plataforma VARCHAR(20) NOT NULL DEFAULT 'WEB',
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE INDEX IF NOT EXISTS idx_dispositivos_persona ON dispositivos (persona_id);
+CREATE INDEX IF NOT EXISTS idx_dispositivos_token ON dispositivos (token);

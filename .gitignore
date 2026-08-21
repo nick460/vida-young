@@ -49,6 +49,9 @@ frontend/dist/
 .env.local
 .env.*.local
 
+### Firebase ###
+src/main/resources/firebase/serviceAccountKey.json
+
 ### Vite específico ###
 .vite/
 frontend/.vite/

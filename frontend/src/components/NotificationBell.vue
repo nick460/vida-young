@@ -3,9 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { VyIcon } from "./ui.js";
 import { useNotificacionesStore } from "../stores/notificacionesStore.js";
+import { useAuthStore } from "../stores/authStore.js";
 
 const router = useRouter();
-const store = useNotificacionesStore();
+const notifStore = useNotificacionesStore();
+const authStore = useAuthStore();
 const open = ref(false);
 
 const TIPO_CLASE = {
@@ -17,7 +19,17 @@ const TIPO_CLASE = {
   SISTEMA: "sistema"
 };
 
-const badgeVisible = computed(() => store.noLeidas > 0);
+const badgeVisible = computed(() => notifStore.noLeidas > 0);
+const notificacionesHabilitadas = computed(() => authStore.fcmToken !== null);
+const mensajeEstadoNotificaciones = computed(() => {
+  if (!authStore.fcmToken) {
+    return "Notificaciones no habilitadas";
+  }
+  if (authStore.permisoNotificaciones === "denied") {
+    return "Notificaciones desactivadas en configuración";
+  }
+  return "Notificaciones habilitadas";
+});
 
 function alternar() {
   open.value = !open.value;
@@ -30,7 +42,7 @@ function cerrar() {
 function irA(notificacion) {
   cerrar();
   if (!notificacion.leida) {
-    store.marcarLeida(notificacion.id).catch(() => {});
+    notifStore.marcarLeida(notificacion.id).catch(() => {});
   }
   if (notificacion.link) {
     if (String(notificacion.link).startsWith("/")) {
@@ -42,7 +54,7 @@ function irA(notificacion) {
 }
 
 function marcarTodas() {
-  store.marcarTodasLeidas().catch(() => {});
+  notifStore.marcarTodasLeidas().catch(() => {});
 }
 
 function formatearFecha(iso) {
@@ -76,8 +88,9 @@ function clickFuera(event) {
 }
 
 onMounted(() => {
-  store.cargar();
-  store.conectar();
+  notifStore.cargar();
+  notifStore.conectar();
+  authStore.inicializarNotificaciones();
   document.addEventListener("click", clickFuera);
 });
 
@@ -88,9 +101,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="vy-notif-bell">
-    <button type="button" class="icon-button" :aria-label="`Notificaciones (${store.noLeidas} no leidas)`" @click="alternar">
+    <button type="button" class="icon-button" :aria-label="mensajeEstadoNotificaciones" @click="alternar">
       <VyIcon name="bell" :size="16" />
-      <span v-if="badgeVisible" class="vy-notif-badge">{{ store.noLeidas > 99 ? "99+" : store.noLeidas }}</span>
+      <span v-if="!notificacionesHabilitadas" class="vy-notif-badge-info">{{ mensajeEstadoNotificaciones }}</span>
+      <span v-else-if="badgeVisible" class="vy-notif-badge">{{ notificacionesHabilitadas ? (store.noLeidas > 99 ? "99+" : store.noLeidas) : "" }}</span>
     </button>
 
     <transition name="vy-notif-fade">
@@ -98,20 +112,24 @@ onBeforeUnmount(() => {
         <header class="vy-notif-header">
           <div>
             <strong>Notificaciones</strong>
-            <small v-if="store.noLeidas > 0">{{ store.noLeidas }} sin leer</small>
+            <small v-if="notificacionesHabilitadas">Sin leer: {{ notifStore.noLeidas }}</small>
+            <small v-else>Habilite las notificaciones para recibir alertas</small>
           </div>
-          <button v-if="store.noLeidas > 0" type="button" class="vy-notif-mark-all" @click="marcarTodas">
+          <button v-if="notificacionesHabilitadas && noLeidas > 0" type="button" class="vy-notif-mark-all" @click="marcarTodas">
             Marcar todas
+          </button>
+          <button v-else type="button" class="vy-notif-habilitar" @click="authStore.inicializarNotificaciones">
+            Habilitar
           </button>
         </header>
 
         <div class="vy-notif-list">
-          <p v-if="!store.notificaciones.length" class="vy-notif-empty">
+          <p v-if="!notifStore.notificaciones.length" class="vy-notif-empty">
             No tienes notificaciones.
           </p>
 
           <button
-            v-for="notificacion in store.notificaciones"
+            v-for="notificacion in notifStore.notificaciones"
             :key="notificacion.id"
             type="button"
             class="vy-notif-item"
