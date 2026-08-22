@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
+import { registrarServiceWorker } from "./services/fcm-service.js";
 import "./styles/brand.css";
 import DashboardView from "./views/DashboardView.vue";
 import LoginView from "./views/LoginView.vue";

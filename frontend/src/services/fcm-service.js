@@ -20,8 +20,15 @@ export async function solicitarPermisoYObtenerToken() {
   try {
     const permiso = await Notification.requestPermission();
     if (permiso === "granted") {
+      let registro = null;
+      try {
+        registro = await navigator.serviceWorker.ready;
+      } catch (e) {
+        console.warn("⚠️ Service Worker no disponible:", e);
+      }
       const token = await getToken(messaging, {
-        vapidKey: "BFNiZSzfqIJOpcdnJ7dSojccHc0CJcifiDyt6aJxexoMW1Aecgol-TK_TOrfW_thlpWwz--YeJGog6Ne0b3-pzc"
+        vapidKey: "BFNiZSzfqIJOpcdnJ7dSojccHc0CJcifiDyt6aJxexoMW1Aecgol-TK_TOrfW_thlpWwz--YeJGog6Ne0b3-pzc",
+        ...(registro ? { serviceWorkerRegistration: registro } : {})
       });
       console.log("📱 FCM Token obtenido:", token);
       return token;
@@ -53,10 +60,13 @@ export function onMensajeForeground(callback) {
 // Registrar el service worker en el navegador
 export function registrarServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/firebase-messaging-sw.js").then((reg) => {
+    return navigator.serviceWorker.register("/firebase-messaging-sw.js").then((reg) => {
       console.log("✅ Service Worker registrado:", reg.scope);
+      return reg;
     }).catch((err) => {
       console.warn("⚠️ No se pudo registrar el Service Worker:", err);
+      return null;
     });
   }
+  return Promise.resolve(null);
 }

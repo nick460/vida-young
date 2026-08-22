@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { login as loginRequest } from "../services/authService.js";
 import { obtenerPerfil } from "../services/profileService.js";
 import { solicitarPermisoYObtenerToken, registrarServiceWorker } from "../services/fcm-service.js";
+import { apiRequest } from "../services/api.js";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -90,21 +91,16 @@ export const useAuthStore = defineStore("auth", {
       }
       
       try {
-        const response = await fetch("http://localhost:9095/api/dispositivos/vincular", {
+        const response = await apiRequest("/api/dispositivos/vincular", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${this.token}`
-          },
           body: JSON.stringify({
             token: this.fcmToken,
-            personaId: this.usuario.id
+            persona: { id: this.usuario.id }
           })
         });
-        
-        const data = await response.json();
-        console.log("✅ Dispositivo vinculado:", data);
-        return data;
+
+        console.log("✅ Dispositivo vinculado:", response);
+        return response;
       } catch (error) {
         console.error("❌ Error vinculando token FCM:", error);
         return null;

@@ -1,7 +1,8 @@
-import { initializeApp } from "firebase/app";
-import { getMessaging, onBackgroundMessage } from "firebase/messaging";
+/* Service Worker de Firebase Cloud Messaging
+   Los service workers clasicos no soportan "import", se usa importScripts con el SDK compat */
+importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
 
-// Configuración Firebase - misma que en el frontend
 const firebaseConfig = {
   apiKey: "AIzaSyCF8J9BEKa1YWAL68Hl0jHx8wLzgpbeJEE",
   authDomain: "vida-young-7f137.firebaseapp.com",
@@ -12,30 +13,29 @@ const firebaseConfig = {
   measurementId: "G-2QBG34HLGJ"
 };
 
-// Inicializar Firebase en el service worker
-const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
-// Escuchar mensajes entrantes en segundo plano
-self.addEventListener("backgroundmessage", (payload) => {
-  console.log("📲 Mensaje FCM recibido en background:", payload);
+const messaging = firebase.messaging();
 
-  const notificationTitle = payload.notification?.title || "Nueva notificación";
+messaging.onBackgroundMessage((payload) => {
+  console.log("Mensaje FCM recibido en background:", payload);
+
+  const notificationTitle = payload.notification?.title || "Nueva notificacion";
   const notificationOptions = {
-    body: payload.notification?.body || "Tienes una nueva notificación",
+    body: payload.notification?.body || "Tienes una nueva notificacion",
     icon: "/icono.ico",
     data: {
-      link: payload.notification?.link || "/"
+      link: payload.data?.link || "/"
     }
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// Opcional: manejar notificaciones en foreground cuando el SW está activo
-self.addEventListener("message", (event) => {
-  const data = event.data;
-  if (data && data.type === "firebase-messaging-sync") {
-    // Manejo de sincronización posterior si es necesario
-  }
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const link = (event.notification.data && event.notification.data.link) || "/";
+  event.waitUntil(self.clients.openWindow(link));
 });
