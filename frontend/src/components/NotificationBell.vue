@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
     <button type="button" class="icon-button" :aria-label="mensajeEstadoNotificaciones" @click="alternar">
       <VyIcon name="bell" :size="16" />
       <span v-if="!notificacionesHabilitadas" class="vy-notif-badge-info">{{ mensajeEstadoNotificaciones }}</span>
-      <span v-else-if="badgeVisible" class="vy-notif-badge">{{ notificacionesHabilitadas ? (store.noLeidas > 99 ? "99+" : store.noLeidas) : "" }}</span>
+      <span v-else-if="badgeVisible" class="vy-notif-badge">{{ notifStore.noLeidas > 99 ? "99+" : notifStore.noLeidas }}</span>
     </button>
 
     <transition name="vy-notif-fade">
@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
             <small v-if="notificacionesHabilitadas">Sin leer: {{ notifStore.noLeidas }}</small>
             <small v-else>Habilite las notificaciones para recibir alertas</small>
           </div>
-          <button v-if="notificacionesHabilitadas && noLeidas > 0" type="button" class="vy-notif-mark-all" @click="marcarTodas">
+          <button v-if="notificacionesHabilitadas && notifStore.noLeidas > 0" type="button" class="vy-notif-mark-all" @click="marcarTodas">
             Marcar todas
           </button>
           <button v-else type="button" class="vy-notif-habilitar" @click="authStore.inicializarNotificaciones">
