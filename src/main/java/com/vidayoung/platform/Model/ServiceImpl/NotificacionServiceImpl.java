@@ -12,7 +12,6 @@ import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Service.NotificacionService;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
-import com.google.firebase.messaging.Notification;
 import jakarta.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -115,12 +114,12 @@ public class NotificacionServiceImpl implements NotificacionService {
         for (int i = 0; i < tokens.size(); i += batch) {
             for (String token : tokens.subList(i, Math.min(i + batch, tokens.size()))) {
                 try {
+                    // Solo payload data: el service worker construye la notificacion
+                    // (evita la notificacion duplicada automatica de FCM)
                     Message message = Message.builder()
                             .setToken(token)
-                            .setNotification(Notification.builder()
-                                    .setTitle(titulo)
-                                    .setBody(mensaje)
-                                    .build())
+                            .putData("titulo", titulo != null ? titulo : "Nueva notificacion")
+                            .putData("mensaje", mensaje != null ? mensaje : "")
                             .putData("link", link)
                             .putData("tipo", tipo != null ? tipo : "INFO")
                             .build();

@@ -22,12 +22,15 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log("Mensaje FCM recibido en background:", payload);
 
-  const notificationTitle = payload.notification?.title || "Nueva notificacion";
+  const data = payload.data || {};
+  const notificationTitle = data.titulo || "Nueva notificacion";
   const notificationOptions = {
-    body: payload.notification?.body || "Tienes una nueva notificacion",
+    body: data.mensaje || "Tienes una nueva notificacion",
     icon: "/icono.ico",
+    badge: "/icono.ico",
+    tag: "vy-notificacion-" + (data.tipo || "info"),
     data: {
-      link: payload.data?.link || "/"
+      link: data.link || "/"
     }
   };
 
