@@ -21,6 +21,8 @@ public interface DispositivoDao extends JpaRepository<Dispositivo, Long> {
 
     List<Dispositivo> findByPersonaIdAndActivoTrue(Long personaId);
 
+    List<Dispositivo> findByActivoTrue();
+
     void deleteByToken(String token);
 
     boolean existsByToken(String token);

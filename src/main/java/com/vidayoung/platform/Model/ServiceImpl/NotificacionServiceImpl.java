@@ -10,17 +10,16 @@ import com.vidayoung.platform.Model.Entity.Dispositivo;
 import com.vidayoung.platform.Model.Entity.Notificacion;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Service.NotificacionService;
-import com.google.firebase.messaging.Notification;
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.Notification;
 import jakarta.transaction.Transactional;
-import java.time.LocalDateTime;
-import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -73,6 +72,23 @@ public class NotificacionServiceImpl implements NotificacionService {
     public Notificacion notificarBroadcast(String tipo, String titulo, String mensaje, String link) {
         Notificacion notificacion = guardar(null, tipo, titulo, mensaje, link);
         messagingTemplate.convertAndSend(DESTINO_BROADCAST, NotificacionPush.desde(notificacion));
+
+        // Enviar via FCM a todos los dispositivos activos
+        if (firebaseConfig.isEnabled()) {
+            try {
+                List<String> tokens = dispositivoDao.findByActivoTrue().stream()
+                        .map(Dispositivo::getToken)
+                        .toList();
+                if (tokens.isEmpty()) {
+                    System.out.println("⚠️ No hay dispositivos activos para broadcast FCM");
+                } else {
+                    enviarFCMATokens(tokens, titulo, mensaje, link, tipo);
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Error enviando FCM broadcast: " + e.getMessage());
+            }
+        }
+
         return notificacion;
     }
 
@@ -84,36 +100,38 @@ public class NotificacionServiceImpl implements NotificacionService {
                 return;
             }
 
-            // Enviar en batches de 50 tokens (límite de FCM)
             List<String> tokens = dispositivos.stream()
                     .map(Dispositivo::getToken)
                     .toList();
 
-            int batchSize = 50;
-            for (int i = 0; i < tokens.size(); i += batchSize) {
-                List<String> batch = tokens.subList(i, Math.min(i + batchSize, tokens.size()));
-                String[] tokenArray = batch.toArray(new String[0]);
+            enviarFCMATokens(tokens, titulo, mensaje, link, tipo);
+        } catch (Exception e) {
+            System.err.println("❌ Error enviando FCM a persona " + personaId + ": " + e.getMessage());
+        }
+    }
 
-                // Construir mensaje individual por token para evitar límite de multicast
-                for (String token : tokenArray) {
-                    Notification notification = Notification.builder()
-                            .setTitle(titulo)
-                            .setBody(mensaje)
-                            .build();
-
+    private void enviarFCMATokens(List<String> tokens, String titulo, String mensaje, String link, String tipo) {
+        int batch = 50;
+        for (int i = 0; i < tokens.size(); i += batch) {
+            for (String token : tokens.subList(i, Math.min(i + batch, tokens.size()))) {
+                try {
                     Message message = Message.builder()
                             .setToken(token)
-                            .setNotification(notification)
+                            .setNotification(Notification.builder()
+                                    .setTitle(titulo)
+                                    .setBody(mensaje)
+                                    .build())
                             .putData("link", link)
                             .putData("tipo", tipo != null ? tipo : "INFO")
                             .build();
 
-                    String response = com.google.firebase.messaging.FirebaseMessaging.getInstance().send(message);
+                    FirebaseMessaging.getInstance().send(message);
                     System.out.println("✅ FCM enviado a token " + token.substring(0, Math.min(20, token.length())) + "...");
+                } catch (Exception e) {
+                    System.err.println("❌ FCM falló para token "
+                            + token.substring(0, Math.min(20, token.length())) + "...: " + e.getMessage());
                 }
             }
-        } catch (Exception e) {
-            System.err.println("❌ Error enviando FCM a persona " + personaId + ": " + e.getMessage());
         }
     }
 
