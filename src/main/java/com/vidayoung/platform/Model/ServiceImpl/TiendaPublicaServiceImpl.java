@@ -538,7 +538,8 @@ public class TiendaPublicaServiceImpl implements TiendaPublicaService {
                     .monto(totalPv)
                     .saldoResultado(billetera.getSaldoPv())
                     .build());
-            billeteraService.activarMembresiaPorPv(compra.getDistribuidor(), billetera.getSaldoPv(), compra.getPeriodo());
+            // La membresia se activa solo con PV de compras propias, no con ventas publicas
+            billeteraService.activarMembresiaPorPv(compra.getDistribuidor(), billetera.getSaldoPvPropio(), compra.getPeriodo());
         }
 
         if (totalQp.compareTo(BigDecimal.ZERO) > 0

@@ -12,4 +12,6 @@ public interface PlanActivacionNivelDao extends JpaRepository<PlanActivacionNive
     List<PlanActivacionNivel> findByPlanActivacionId(Long planActivacionId);
 
     Optional<PlanActivacionNivel> findByPlanActivacionIdAndNumeroNivel(Long planActivacionId, Integer numeroNivel);
+
+Optional<PlanActivacionNivel> findFirstByPlanActivacionIdOrderByNumeroNivelDesc(Long planActivacionId);
 }

@@ -411,7 +411,7 @@ async function cargarMovimientosCompra(compraId) {
 
 const MOVIMIENTO_LABELS = {
   VOLUMEN_COMPRADOR: "Volumen del comprador",
-  BONO_REFERIDO: "QP bono referido (hacia arriba)",
+  VOLUMEN_RED: "PV/QP de red (10 niveles)",
   BENEFICIO_ACTIVACION: "Beneficios de activacion",
   AJUSTE_BENEFICIO: "Ajustes retroactivos",
   CARTERA_EMPRESA: "Cartera de la empresa",
@@ -420,7 +420,7 @@ const MOVIMIENTO_LABELS = {
 
 const MOVIMIENTO_ORDEN = [
   "VOLUMEN_COMPRADOR",
-  "BONO_REFERIDO",
+  "VOLUMEN_RED",
   "BENEFICIO_ACTIVACION",
   "AJUSTE_BENEFICIO",
   "CARTERA_EMPRESA",

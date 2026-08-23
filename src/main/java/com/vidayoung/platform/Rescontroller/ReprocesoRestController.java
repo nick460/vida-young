@@ -31,6 +31,18 @@ public class ReprocesoRestController {
         return ResponseEntity.ok(reprocesoService.reprocesar(notificar));
     }
 
+    @GetMapping("/recrear-recompensas/dry-run")
+    public ResponseEntity<ReprocesoService.RecreacionResumen> simularRecreacion() {
+        return ResponseEntity.ok(reprocesoService.simularRecreacion());
+    }
+
+    @PostMapping("/recrear-recompensas")
+    public ResponseEntity<ReprocesoService.RecreacionResumen> recrearRecompensas(
+            @RequestParam(defaultValue = "false") boolean notificar
+    ) {
+        return ResponseEntity.ok(reprocesoService.recrearRecompensas(notificar));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> manejarValidacion(IllegalArgumentException exception) {
         return ResponseEntity.badRequest().body(exception.getMessage());

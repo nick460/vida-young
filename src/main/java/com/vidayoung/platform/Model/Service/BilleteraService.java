@@ -6,6 +6,7 @@ import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
+import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import java.math.BigDecimal;
@@ -13,6 +14,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BilleteraService {
+
+    int NIVELES_TOTALES = 10;
+
+    int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan);
 
     Billetera asegurarBilletera(Persona persona);
 

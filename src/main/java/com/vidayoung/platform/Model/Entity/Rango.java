@@ -35,4 +35,8 @@ public class Rango extends Auditoria {
     @Column(name = "qp_minimo", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal qpMinimo = BigDecimal.ZERO;
+
+    @Column(name = "niveles_extra", nullable = false)
+    @Builder.Default
+    private Integer nivelesExtra = 0;
 }

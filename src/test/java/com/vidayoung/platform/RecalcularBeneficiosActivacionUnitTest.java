@@ -184,6 +184,8 @@ class RecalcularBeneficiosActivacionUnitTest {
                 .build();
         when(planActivacionDao.findByPvMinimoMensualLessThanEqualOrderByPvMinimoMensualDesc(any()))
                 .thenReturn(List.of(ultra));
+        when(planActivacionNivelDao.findFirstByPlanActivacionIdOrderByNumeroNivelDesc(2L))
+                .thenReturn(Optional.of(nivel));
         when(planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(2L, 1))
                 .thenReturn(Optional.of(nivel));
     }

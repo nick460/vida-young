@@ -222,13 +222,13 @@ function closeDetallesModal() {
 }
 const MOV_LABELS = {
   VOLUMEN_COMPRADOR: "Volumen del comprador",
-  BONO_REFERIDO: "QP bono referido (hacia arriba)",
+  VOLUMEN_RED: "PV/QP de red (10 niveles)",
   BENEFICIO_ACTIVACION: "Beneficios de activacion",
   AJUSTE_BENEFICIO: "Ajustes retroactivos",
   CARTERA_EMPRESA: "Cartera de la empresa",
   ANULACION: "Anulaciones"
 };
-const MOV_ORDEN = ["VOLUMEN_COMPRADOR","BONO_REFERIDO","BENEFICIO_ACTIVACION","AJUSTE_BENEFICIO","CARTERA_EMPRESA","ANULACION"];
+const MOV_ORDEN = ["VOLUMEN_COMPRADOR","VOLUMEN_RED","BENEFICIO_ACTIVACION","AJUSTE_BENEFICIO","CARTERA_EMPRESA","ANULACION"];
 const movimientosAgrupados = computed(() => {
   const grupos = [];
   for (const origen of MOV_ORDEN) {

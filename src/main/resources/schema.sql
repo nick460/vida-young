@@ -166,7 +166,6 @@ CREATE TABLE IF NOT EXISTS productos (
     precio NUMERIC(12, 2) NOT NULL,
     pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     imagen_url VARCHAR(255),
     imagen_publica_url VARCHAR(255),
@@ -183,7 +182,6 @@ CREATE TABLE IF NOT EXISTS productos (
 ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS precio_publico NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS imagen_publica_url VARCHAR(255),
@@ -402,12 +400,16 @@ CREATE TABLE IF NOT EXISTS rangos (
     id BIGSERIAL PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE,
     qp_minimo NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    niveles_extra INTEGER NOT NULL DEFAULT 0,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
     usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
 );
+
+ALTER TABLE rangos
+    ADD COLUMN IF NOT EXISTS niveles_extra INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE personas
     ADD COLUMN IF NOT EXISTS rango_actual_id BIGINT REFERENCES rangos(id);
@@ -544,6 +546,7 @@ CREATE TABLE IF NOT EXISTS billeteras (
     persona_id BIGINT NOT NULL REFERENCES personas(id),
     saldo_dinero NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    saldo_pv_propio NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     saldo_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -709,6 +712,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_movimientos_cartera_empresa_referencia
 
 ALTER TABLE billeteras
     ADD COLUMN IF NOT EXISTS saldo_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS saldo_pv_propio NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS saldo_productos NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ALTER COLUMN estado SET DEFAULT 'ACTIVO',
     ALTER COLUMN fecha_registro SET DEFAULT CURRENT_TIMESTAMP,
@@ -780,7 +784,6 @@ CREATE TABLE IF NOT EXISTS compras (
     descuento_concepto VARCHAR(180),
     total_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    total_qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado_compra VARCHAR(30) NOT NULL DEFAULT 'CONFIRMADA',
     usuario_validacion VARCHAR(80),
@@ -820,7 +823,6 @@ ALTER TABLE compras
     ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80),
     ADD COLUMN IF NOT EXISTS descuento_monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS descuento_concepto VARCHAR(180),
-    ADD COLUMN IF NOT EXISTS total_qp_bono_referido NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
@@ -832,7 +834,6 @@ CREATE TABLE IF NOT EXISTS compras_detalles (
     precio_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     pv_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     qp_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    qp_bono_referido_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     cr_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
@@ -843,7 +844,6 @@ CREATE TABLE IF NOT EXISTS compras_detalles (
 );
 
 ALTER TABLE compras_detalles
-    ADD COLUMN IF NOT EXISTS qp_bono_referido_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS cr_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS beneficios_activacion_compras (

@@ -52,7 +52,7 @@ const groupedMovimientos = computed(() => {
   const groups = new Map();
 
   filteredMovimientos.value.forEach((movimiento) => {
-    const isCompra = (movimiento.referenciaTipo === "COMPRA" || movimiento.referenciaTipo === "COMPRA_BONO_REFERIDO") && movimiento.referenciaId;
+    const isCompra = (movimiento.referenciaTipo === "COMPRA" || movimiento.referenciaTipo === "COMPRA_BONO_REFERIDO" || movimiento.referenciaTipo === "COMPRA_RED") && movimiento.referenciaId;
     const key = isCompra ? `COMPRA-${movimiento.referenciaId}` : `MOV-${movimiento.id}`;
     if (!groups.has(key)) {
       groups.set(key, {
@@ -350,7 +350,7 @@ onMounted(loadWallet);
                   <span class="vy-chip vy-chip-success">{{ movimiento.tipo }}</span>
                   <strong>{{ movementAmount(movimiento) }}</strong>
                   <small>{{ movimiento.concepto }}</small>
-                  <small v-if="movimiento.referenciaTipo === 'COMPRA_BONO_REFERIDO' && movimiento.compra">
+                  <small v-if="(movimiento.referenciaTipo === 'COMPRA_BONO_REFERIDO' || movimiento.referenciaTipo === 'COMPRA_RED') && movimiento.compra">
                     Compra #{{ movimiento.compra.id }} de {{ movimiento.compra.personaNombres }} {{ movimiento.compra.personaApellidos }}
                   </small>
                 </div>

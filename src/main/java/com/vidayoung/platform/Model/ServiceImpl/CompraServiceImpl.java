@@ -44,8 +44,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class CompraServiceImpl implements CompraService {
-    private static final String REFERENCIA_COMPRA_BONO_REFERIDO = "COMPRA_BONO_REFERIDO";
-
+    private static final String REFERENCIA_COMPRA_RED = "COMPRA_RED";
+    private static final int NIVELES_ALCANCE_RED = 9;
 
     private static final Set<String> ESTADOS_COMPRA_VALIDOS = Set.of(
             Compra.ESTADO_COMPRA_PENDIENTE,
@@ -99,7 +99,6 @@ public class CompraServiceImpl implements CompraService {
                 .subtotal(BigDecimal.ZERO)
                 .totalPv(BigDecimal.ZERO)
                 .totalQp(BigDecimal.ZERO)
-                .totalQpBonoReferido(BigDecimal.ZERO)
                 .totalCr(BigDecimal.ZERO)
                 .build();
         compra = compraDao.save(compra);
@@ -246,9 +245,40 @@ public class CompraServiceImpl implements CompraService {
         return compraDao.save(compra);
     }
 
+    @Override
+    @Transactional(rollbackOn = Exception.class)
+    public int reiniciarRecompensasCompra(Long compraId, boolean notificar) {
+        Compra compra = compraDao.findById(compraId)
+                .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Compra no encontrada."));
+
+        boolean procesada = Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra())
+                || Compra.ESTADO_COMPRA_CONFIRMADA.equals(compra.getEstadoCompra());
+        if (!procesada) {
+            return 0;
+        }
+
+        // 1. Revertir el dinero pagado por beneficios anteriores y marcar sus filas
+        //    como ELIMINADAS (quedan para auditoria).
+        revertirBeneficiosCompra(compra);
+
+        // 2. Regenerar los beneficios con la logica vigente:
+        //    10 niveles, alcance efectivo = plan + rango, montos del plan actual.
+        int totalProductos = compra.getDetalles().stream()
+                .map(CompraDetalle::getCantidad)
+                .filter(value -> value != null)
+                .reduce(0, Integer::sum);
+        generarBeneficiosActivacion(compra, totalProductos);
+
+        // 3. Asegurar el volumen de red (PV+QP a los 9 niveles): idempotente.
+        acreditarVolumenRed(compra);
+
+        return 1;
+    }
+
     private void revertirMovimientosCompra(Compra compra) {
         revertirMovimientosBilletera(compra, "COMPRA");
-        revertirMovimientosBilletera(compra, REFERENCIA_COMPRA_BONO_REFERIDO);
+        revertirMovimientosBilletera(compra, REFERENCIA_COMPRA_RED);
 
         List<MovimientoCarteraEmpresa> movimientosCartera = movimientoCarteraEmpresaDao
                 .findByReferenciaTipoAndReferenciaId("VENTA_INTERNA", compra.getId());
@@ -365,21 +395,6 @@ public class CompraServiceImpl implements CompraService {
     }
 
     @Override
-    @Transactional(rollbackOn = Exception.class)
-    public int reprocesarQpBonoReferido(Long compraId, boolean notificar) {
-        Compra compra = compraDao.findById(compraId)
-                .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
-                .orElse(null);
-        if (compra == null
-                || !Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra())
-                || zeroIfNull(compra.getTotalQpBonoReferido()).compareTo(BigDecimal.ZERO) <= 0) {
-            return 0;
-        }
-
-        return acreditarQpBonoReferido(compra, notificar);
-    }
-
-    @Override
     public List<MovimientoCompraResumen> listarMovimientosCompra(Long compraId) {
         Compra compra = compraDao.findById(compraId)
                 .filter(found -> Auditoria.ESTADO_ACTIVO.equals(found.getEstado()))
@@ -399,11 +414,11 @@ public class CompraServiceImpl implements CompraService {
         }
 
         for (MovimientoBilletera movimiento : movimientoBilleteraDao
-                .findByReferenciaTipoAndReferenciaId(REFERENCIA_COMPRA_BONO_REFERIDO, compra.getId())) {
+                .findByReferenciaTipoAndReferenciaId(REFERENCIA_COMPRA_RED, compra.getId())) {
             if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
                 continue;
             }
-            resumen.add(desdeBilletera(movimiento, "BONO_REFERIDO", null));
+            resumen.add(desdeBilletera(movimiento, "VOLUMEN_RED", null));
         }
 
         for (BeneficioActivacionCompra beneficio : beneficioActivacionCompraDao.findByCompraId(compra.getId())) {
@@ -543,7 +558,6 @@ public class CompraServiceImpl implements CompraService {
                 .subtotal(BigDecimal.ZERO)
                 .totalPv(BigDecimal.ZERO)
                 .totalQp(BigDecimal.ZERO)
-                .totalQpBonoReferido(BigDecimal.ZERO)
                 .totalCr(BigDecimal.ZERO)
                 .build();
         nueva = compraDao.save(nueva);
@@ -604,7 +618,6 @@ public class CompraServiceImpl implements CompraService {
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal totalPv = BigDecimal.ZERO;
         BigDecimal totalQp = BigDecimal.ZERO;
-        BigDecimal totalQpBonoReferido = BigDecimal.ZERO;
         BigDecimal totalCr = BigDecimal.ZERO;
 
         for (ItemCompraRequest item : items) {
@@ -620,7 +633,6 @@ public class CompraServiceImpl implements CompraService {
             BigDecimal precio = zeroIfNull(producto.getPrecio());
             BigDecimal pv = zeroIfNull(producto.getPv());
             BigDecimal qp = zeroIfNull(producto.getQp());
-            BigDecimal qpBonoReferido = zeroIfNull(producto.getQpBonoReferido());
             BigDecimal cr = zeroIfNull(producto.getCr());
             BigDecimal detalleSubtotal = precio.multiply(BigDecimal.valueOf(cantidad));
 
@@ -631,7 +643,6 @@ public class CompraServiceImpl implements CompraService {
                     .precioUnitario(precio)
                     .pvUnitario(pv)
                     .qpUnitario(qp)
-                    .qpBonoReferidoUnitario(qpBonoReferido)
                     .crUnitario(cr)
                     .subtotal(detalleSubtotal)
                     .build());
@@ -639,7 +650,6 @@ public class CompraServiceImpl implements CompraService {
             subtotal = subtotal.add(detalleSubtotal);
             totalPv = totalPv.add(pv.multiply(BigDecimal.valueOf(cantidad)));
             totalQp = totalQp.add(qp.multiply(BigDecimal.valueOf(cantidad)));
-            totalQpBonoReferido = totalQpBonoReferido.add(qpBonoReferido.multiply(BigDecimal.valueOf(cantidad)));
             totalCr = totalCr.add(cr.multiply(BigDecimal.valueOf(cantidad)));
         }
 
@@ -660,7 +670,6 @@ public class CompraServiceImpl implements CompraService {
         compra.setDescuentoConcepto(descuentoConcepto);
         compra.setTotalPv(totalPv);
         compra.setTotalQp(totalQp);
-        compra.setTotalQpBonoReferido(totalQpBonoReferido);
         compra.setTotalCr(totalCr);
     }
 
@@ -677,9 +686,11 @@ public class CompraServiceImpl implements CompraService {
                 "Ingreso por venta interna #" + compra.getId()
         );
         Billetera billeteraComprador = acreditarVolumenComprador(compra.getPersona(), compra, zeroIfNull(compra.getTotalPv()), zeroIfNull(compra.getTotalQp()), zeroIfNull(compra.getTotalCr()));
-        billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPv(), compra.getPeriodo());
+        // La membresia se activa unicamente con el PV de compras propias
+        billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPvPropio(), compra.getPeriodo());
         billeteraService.recalcularBeneficiosActivacion(compra.getPersona());
-        acreditarQpBonoReferido(compra, true);
+        // El PV y QP de la compra sube por la red hasta 9 niveles (comprador + 9 = 10)
+        acreditarVolumenRed(compra);
 
         notificacionService.notificarPersona(
                 compra.getPersona().getId(),
@@ -694,19 +705,10 @@ public class CompraServiceImpl implements CompraService {
         }
     }
 
-    private int acreditarQpBonoReferido(Compra compra, boolean notificar) {
-        BigDecimal totalQpBonoReferido = zeroIfNull(compra.getTotalQpBonoReferido());
-        if (totalQpBonoReferido.compareTo(BigDecimal.ZERO) <= 0) {
-            return 0;
-        }
-
-        int maxAlcance = planActivacionDao.findAll().stream()
-                .filter(plan -> Auditoria.ESTADO_ACTIVO.equals(plan.getEstado()))
-                .map(PlanActivacion::getNivelesAlcance)
-                .filter(value -> value != null)
-                .max(Integer::compareTo)
-                .orElse(0);
-        if (maxAlcance < 1) {
+    private int acreditarVolumenRed(Compra compra) {
+        BigDecimal totalPv = zeroIfNull(compra.getTotalPv());
+        BigDecimal totalQp = zeroIfNull(compra.getTotalQp());
+        if (totalPv.compareTo(BigDecimal.ZERO) <= 0 && totalQp.compareTo(BigDecimal.ZERO) <= 0) {
             return 0;
         }
 
@@ -717,51 +719,69 @@ public class CompraServiceImpl implements CompraService {
         int nivel = 1;
         int creditados = 0;
 
-        while (beneficiario != null && nivel <= maxAlcance) {
+        while (beneficiario != null && nivel <= NIVELES_ALCANCE_RED) {
             Billetera billetera = billeteraService.asegurarBilletera(beneficiario);
-            boolean nivelAlcanza = obtenerPlanActivacionVigente(billetera, nivel).isPresent();
-            Optional<Referido> beneficiarioReferido = referidoDao.findByPersonaId(beneficiario.getId())
-                    .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
-            boolean beneficiarioActivo = beneficiarioReferido
-                    .map(this::membresiaActivaReferido)
-                    .orElse(false);
-            boolean cobrable = nivel == 1 || beneficiarioActivo;
+            boolean acredito = false;
 
-            if (nivelAlcanza && cobrable
+            if (totalPv.compareTo(BigDecimal.ZERO) > 0
                     && !movimientoBilleteraDao.existsByBilleteraIdAndReferenciaTipoAndReferenciaIdAndTipo(
                     billetera.getId(),
-                    REFERENCIA_COMPRA_BONO_REFERIDO,
+                    REFERENCIA_COMPRA_RED,
+                    compra.getId(),
+                    MovimientoBilletera.TIPO_PV
+            )) {
+                billetera.setSaldoPv(zeroIfNull(billetera.getSaldoPv()).add(totalPv));
+                billetera = billeteraDao.save(billetera);
+                movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                        .billetera(billetera)
+                        .periodo(compra.getPeriodo())
+                        .tipo(MovimientoBilletera.TIPO_PV)
+                        .concepto("PV de red nivel " + nivel + " por compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()))
+                        .referenciaTipo(REFERENCIA_COMPRA_RED)
+                        .referenciaId(compra.getId())
+                        .monto(totalPv)
+                        .saldoResultado(billetera.getSaldoPv())
+                        .build());
+                acredito = true;
+            }
+
+            if (totalQp.compareTo(BigDecimal.ZERO) > 0
+                    && !movimientoBilleteraDao.existsByBilleteraIdAndReferenciaTipoAndReferenciaIdAndTipo(
+                    billetera.getId(),
+                    REFERENCIA_COMPRA_RED,
                     compra.getId(),
                     MovimientoBilletera.TIPO_QP
             )) {
-                billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(totalQpBonoReferido));
+                billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).add(totalQp));
                 billetera = billeteraDao.save(billetera);
                 billeteraService.actualizarRangoActual(beneficiario, billetera.getSaldoQp());
                 movimientoBilleteraDao.save(MovimientoBilletera.builder()
                         .billetera(billetera)
                         .periodo(compra.getPeriodo())
                         .tipo(MovimientoBilletera.TIPO_QP)
-                        .concepto("QP bono referido nivel " + nivel + " por compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()))
-                        .referenciaTipo(REFERENCIA_COMPRA_BONO_REFERIDO)
+                        .concepto("QP de red nivel " + nivel + " por compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()))
+                        .referenciaTipo(REFERENCIA_COMPRA_RED)
                         .referenciaId(compra.getId())
-                        .monto(totalQpBonoReferido)
+                        .monto(totalQp)
                         .saldoResultado(billetera.getSaldoQp())
                         .build());
+                acredito = true;
+            }
 
-                if (notificar) {
-                    notificacionService.notificarPersona(
-                            beneficiario.getId(),
-                            Notificacion.TIPO_COMPRA,
-                            "QP bono referido",
-                            "Recibiste " + totalQpBonoReferido + " QP por el bono referido nivel " + nivel
-                                    + " de la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
-                            "wallet"
-                    );
-                }
+            if (acredito) {
+                notificacionService.notificarPersona(
+                        beneficiario.getId(),
+                        Notificacion.TIPO_COMPRA,
+                        "Volumen de red",
+                        "Recibiste " + totalPv + " PV y " + totalQp + " QP de tu red (nivel " + nivel
+                                + ") por la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
+                        "wallet"
+                );
                 creditados++;
             }
 
-            beneficiario = beneficiarioReferido
+            beneficiario = referidoDao.findByPersonaId(beneficiario.getId())
+                    .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
                     .map(Referido::getPatrocinador)
                     .orElse(null);
             nivel++;
@@ -783,6 +803,8 @@ public class CompraServiceImpl implements CompraService {
         if (totalPv.compareTo(BigDecimal.ZERO) > 0
                 && !movimientoBilleteraDao.existsByReferenciaTipoAndReferenciaIdAndTipo("COMPRA", compra.getId(), MovimientoBilletera.TIPO_PV)) {
             billetera.setSaldoPv(zeroIfNull(billetera.getSaldoPv()).add(totalPv));
+            // El PV de compra propia es el unico que activa membresia
+            billetera.setSaldoPvPropio(zeroIfNull(billetera.getSaldoPvPropio()).add(totalPv));
             billetera = billeteraDao.save(billetera);
             movimientoBilleteraDao.save(MovimientoBilletera.builder()
                     .billetera(billetera)
@@ -833,37 +855,37 @@ public class CompraServiceImpl implements CompraService {
     }
 
     private void generarBeneficiosActivacion(Compra compra, int totalProductos) {
-        int maxAlcance = planActivacionDao.findAll().stream()
-                .filter(plan -> Auditoria.ESTADO_ACTIVO.equals(plan.getEstado()))
-                .map(PlanActivacion::getNivelesAlcance)
-                .filter(value -> value != null)
-                .max(Integer::compareTo)
-                .orElse(0);
-
-        if (maxAlcance < 1) {
-            return;
-        }
-
+        // El beneficio de dinero se genera SIEMPRE hasta 10 niveles hacia arriba,
+        // aunque el beneficiario no cobre todavia: queda registrado para el pago
+        // retroactivo cuando active membresia o suba de plan/rango.
         Persona beneficiario = referidoDao.findByPersonaId(compra.getPersona().getId())
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
                 .map(Referido::getPatrocinador)
                 .orElse(null);
         int nivel = 1;
 
-        while (beneficiario != null && nivel <= maxAlcance) {
+        while (beneficiario != null && nivel <= BilleteraService.NIVELES_TOTALES) {
             Billetera billetera = billeteraService.asegurarBilletera(beneficiario);
             Optional<Referido> beneficiarioReferido = referidoDao.findByPersonaId(beneficiario.getId())
                     .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
-            PlanActivacion plan = obtenerPlanActivacionVigente(billetera, nivel).orElse(null);
-            PlanActivacionNivel nivelConfig = plan == null
+            PlanActivacion plan = obtenerPlanActivacionVigente(billetera).orElse(null);
+            boolean nivelAplica = nivel <= billeteraService.calcularAlcanceEfectivo(beneficiario, plan);
+            int maxNivelConfigurado = plan == null
+                    ? 0
+                    : planActivacionNivelDao.findFirstByPlanActivacionIdOrderByNumeroNivelDesc(plan.getId())
+                    .map(PlanActivacionNivel::getNumeroNivel)
+                    .orElse(0);
+            PlanActivacionNivel nivelConfig = plan == null || maxNivelConfigurado < 1
                     ? null
-                    : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(plan.getId(), nivel).orElse(null);
+                    : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(
+                    plan.getId(), Math.min(nivel, maxNivelConfigurado)).orElse(null);
             BigDecimal montoPorProducto = nivelConfig == null ? BigDecimal.ZERO : zeroIfNull(nivelConfig.getMontoPorProducto());
             BigDecimal montoTotal = montoPorProducto.multiply(BigDecimal.valueOf(totalProductos));
             boolean membresiaActiva = beneficiarioReferido
                     .map(this::membresiaActivaReferido)
                     .orElse(false);
             boolean paga = plan != null
+                    && nivelAplica
                     && membresiaActiva
                     && montoTotal.compareTo(BigDecimal.ZERO) > 0;
 
@@ -877,9 +899,11 @@ public class CompraServiceImpl implements CompraService {
                     .montoPorProducto(paga ? montoPorProducto : BigDecimal.ZERO)
                     .montoTotal(paga ? montoTotal : BigDecimal.ZERO)
                     .paga(paga)
-                    .motivo(paga ? "" : (membresiaActiva
+                    .motivo(paga ? "" : (!nivelAplica
+                            ? "No corresponde porque el nivel excede su alcance efectivo"
+                            : (membresiaActiva
                             ? "No corresponde por activacion o nivel del plan"
-                            : "No corresponde porque la membresia no esta activa"))
+                            : "No corresponde porque la membresia no esta activa")))
                     .build());
 
             if (paga) {
@@ -912,12 +936,11 @@ public class CompraServiceImpl implements CompraService {
         }
     }
 
-    private Optional<PlanActivacion> obtenerPlanActivacionVigente(Billetera billetera, int nivel) {
-        BigDecimal pvMensual = zeroIfNull(billetera.getSaldoPv());
+    private Optional<PlanActivacion> obtenerPlanActivacionVigente(Billetera billetera) {
+        BigDecimal pvPropio = zeroIfNull(billetera.getSaldoPvPropio());
 
-        return planActivacionDao.findByPvMinimoMensualLessThanEqualOrderByPvMinimoMensualDesc(pvMensual).stream()
+        return planActivacionDao.findByPvMinimoMensualLessThanEqualOrderByPvMinimoMensualDesc(pvPropio).stream()
                 .filter(plan -> Auditoria.ESTADO_ACTIVO.equals(plan.getEstado()))
-                .filter(plan -> Optional.ofNullable(plan.getNivelesAlcance()).orElse(0) >= nivel)
                 .findFirst();
     }
 

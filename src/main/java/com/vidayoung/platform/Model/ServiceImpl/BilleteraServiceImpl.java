@@ -76,6 +76,17 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final NotificacionService notificacionService;
 
     @Override
+    public int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan) {
+        int base = plan == null || plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
+        int extra = 0;
+        if (persona != null && persona.getRangoActual() != null
+                && persona.getRangoActual().getNivelesExtra() != null) {
+            extra = persona.getRangoActual().getNivelesExtra();
+        }
+        return Math.min(NIVELES_TOTALES, base + extra);
+    }
+
+    @Override
     @Transactional
     public Billetera asegurarBilletera(Persona persona) {
         return billeteraDao.findByPersonaId(persona.getId())
@@ -398,15 +409,22 @@ public class BilleteraServiceImpl implements BilleteraService {
             return;
         }
 
-        Optional<PlanActivacion> planActivo = obtenerPlanActivacionPorPv(billetera.getSaldoPv());
+        Optional<PlanActivacion> planActivo = obtenerPlanActivacionPorPv(billetera.getSaldoPvPropio());
         boolean membresiaActiva = membresiaActiva(persona, periodoActivo);
+        int alcanceEfectivo = calcularAlcanceEfectivo(persona, planActivo.orElse(null));
+        int maxNivelConfigurado = planActivo
+                .flatMap(plan -> planActivacionNivelDao.findFirstByPlanActivacionIdOrderByNumeroNivelDesc(plan.getId()))
+                .map(PlanActivacionNivel::getNumeroNivel)
+                .orElse(0);
 
         for (BeneficioActivacionCompra beneficio : beneficios) {
             Integer nivel = beneficio.getNivelGenerado();
-            PlanActivacionNivel nivelConfig = planActivo
-                    .map(PlanActivacion::getId)
-                    .flatMap(planId -> planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(planId, nivel))
-                    .orElse(null);
+            boolean nivelAplica = nivel != null && nivel >= 1 && nivel <= alcanceEfectivo;
+            int numeroConfig = nivel == null ? 0 : Math.min(nivel, Math.max(maxNivelConfigurado, 0));
+            PlanActivacionNivel nivelConfig = numeroConfig < 1 || planActivo.isEmpty()
+                    ? null
+                    : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(
+                    planActivo.get().getId(), numeroConfig).orElse(null);
             BigDecimal nuevoMontoPorProducto = nivelConfig == null
                     ? BigDecimal.ZERO
                     : zeroIfNull(nivelConfig.getMontoPorProducto());
@@ -414,6 +432,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .multiply(BigDecimal.valueOf(beneficio.getCantidadProductos()));
             boolean pagaNuevo = planActivo.isPresent()
                     && membresiaActiva
+                    && nivelAplica
                     && nuevoMontoTotal.compareTo(BigDecimal.ZERO) > 0;
             BigDecimal montoAnterior = zeroIfNull(beneficio.getMontoTotal());
             BigDecimal diferencia = pagaNuevo
@@ -441,9 +460,11 @@ public class BilleteraServiceImpl implements BilleteraService {
             beneficio.setMontoPorProducto(pagaNuevo ? nuevoMontoPorProducto : BigDecimal.ZERO);
             beneficio.setMontoTotal(pagaNuevo ? nuevoMontoTotal : BigDecimal.ZERO);
             beneficio.setPaga(pagaNuevo);
-            beneficio.setMotivo(pagaNuevo ? "" : (membresiaActiva
+            beneficio.setMotivo(pagaNuevo ? "" : (!nivelAplica
+                    ? "No corresponde porque el nivel excede su alcance efectivo"
+                    : (membresiaActiva
                     ? "No corresponde por activacion o nivel del plan"
-                    : "No corresponde porque la membresia no esta activa"));
+                    : "No corresponde porque la membresia no esta activa")));
             beneficioActivacionCompraDao.save(beneficio);
 
             if (diferencia.compareTo(BigDecimal.ZERO) != 0) {

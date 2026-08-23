@@ -3,6 +3,7 @@ package com.vidayoung.platform.Model.ServiceImpl;
 import com.vidayoung.platform.Model.Dao.BeneficioActivacionCompraDao;
 import com.vidayoung.platform.Model.Dao.BilleteraDao;
 import com.vidayoung.platform.Model.Dao.CompraDao;
+import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionNivelDao;
@@ -11,6 +12,7 @@ import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.BeneficioActivacionCompra;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.Compra;
+import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
@@ -36,14 +38,17 @@ public class ReprocesoServiceImpl implements ReprocesoService {
 
     private static final int MAX_DETALLES = 200;
 
+    private static final String REFERENCIA_COMPRA_RED = "COMPRA_RED";
+
     private final CompraDao compraDao;
+    private final CompraService compraService;
+    private final MovimientoBilleteraDao movimientoBilleteraDao;
     private final BeneficioActivacionCompraDao beneficioActivacionCompraDao;
     private final BilleteraDao billeteraDao;
     private final PersonaDao personaDao;
     private final PlanActivacionDao planActivacionDao;
     private final PlanActivacionNivelDao planActivacionNivelDao;
     private final ReferidoDao referidoDao;
-    private final CompraService compraService;
     private final BilleteraService billeteraService;
     private final GestionPeriodoService gestionPeriodoService;
 
@@ -54,9 +59,6 @@ public class ReprocesoServiceImpl implements ReprocesoService {
         ReprocesoResumen resumen = ejecutar(false);
         return new ReprocesoResumen(
                 true,
-                resumen.comprasProcesadas(),
-                resumen.bonosQpCreditados(),
-                resumen.qpTotalCreditado(),
                 resumen.beneficiariosRecalculados(),
                 resumen.dineroTotalCreditado(),
                 resumen.inactivosOmitidos(),
@@ -71,34 +73,107 @@ public class ReprocesoServiceImpl implements ReprocesoService {
         return ejecutar(notificar);
     }
 
-    private ReprocesoResumen ejecutar(boolean notificar) {
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public RecreacionResumen simularRecreacion() {
+        TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        RecreacionResumen resumen = ejecutarRecreacion(false);
+        return new RecreacionResumen(
+                true,
+                resumen.comprasProcesadas(),
+                resumen.beneficiosGenerados(),
+                resumen.volumenesRedCreditados(),
+                resumen.saldosPvPropioActualizados(),
+                resumen.fallos(),
+                resumen.detalles()
+        );
+    }
+
+    @Override
+    public RecreacionResumen recrearRecompensas(boolean notificar) {
+        return ejecutarRecreacion(notificar);
+    }
+
+    /**
+     * Recrea las recompensas de TODAS las compras validadas/confirmadas con la
+     * logica vigente, compra por compra:
+     * 1. Revierte y elimina los beneficios anteriores (auditoria conservada).
+     * 2. Los regenera con 10 niveles, alcance efectivo plan+rango y montos actuales.
+     * 3. Asegura el volumen de red (PV+QP a 9 niveles), idempotente.
+     * 4. Reconstruye saldo_pv_propio desde los movimientos historicos de compras propias.
+     */
+    private RecreacionResumen ejecutarRecreacion(boolean notificar) {
         List<Compra> compras = compraDao.findAllByOrderByFechaCompraDesc().stream()
                 .filter(compra -> Auditoria.ESTADO_ACTIVO.equals(compra.getEstado()))
-                .filter(compra -> Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra()))
-                .filter(compra -> zeroIfNull(compra.getTotalQpBonoReferido()).compareTo(BigDecimal.ZERO) > 0)
+                .filter(compra -> Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra())
+                        || Compra.ESTADO_COMPRA_CONFIRMADA.equals(compra.getEstadoCompra()))
                 .toList();
 
         int comprasProcesadas = 0;
-        int bonosQpCreditados = 0;
+        int beneficiosGenerados = 0;
+        int volumenesRedCreditados = 0;
         int fallos = 0;
-        BigDecimal qpTotalCreditado = BigDecimal.ZERO;
         List<String> detalles = new ArrayList<>();
 
         for (Compra compra : compras) {
-            comprasProcesadas++;
             try {
-                int creditados = compraService.reprocesarQpBonoReferido(compra.getId(), notificar);
-                bonosQpCreditados += creditados;
-                if (creditados > 0) {
-                    qpTotalCreditado = qpTotalCreditado.add(
-                            zeroIfNull(compra.getTotalQpBonoReferido()).multiply(BigDecimal.valueOf(creditados)));
-                }
+                int beneficiosAntes = contarBeneficiosActivos(compra.getId());
+                int redAntes = contarVolumenesRedActivos(compra.getId());
+
+                compraService.reiniciarRecompensasCompra(compra.getId(), notificar);
+
+                int beneficiosDespues = contarBeneficiosActivos(compra.getId());
+                int redDespues = contarVolumenesRedActivos(compra.getId());
+
+                comprasProcesadas++;
+                beneficiosGenerados += Math.max(0, beneficiosDespues - beneficiosAntes);
+                volumenesRedCreditados += Math.max(0, redDespues - redAntes);
             } catch (RuntimeException exception) {
                 fallos++;
                 addDetalle(detalles, "Compra #" + compra.getId() + ": " + exception.getMessage());
             }
         }
 
+        int saldosPvPropioActualizados = 0;
+        for (Object[] fila : movimientoBilleteraDao.sumarPvPropioPorBilletera()) {
+            Long billeteraId = ((Number) fila[0]).longValue();
+            BigDecimal totalPvPropio = fila[1] == null ? BigDecimal.ZERO : new BigDecimal(fila[1].toString());
+            Billetera billetera = billeteraDao.findById(billeteraId).orElse(null);
+            if (billetera == null) {
+                continue;
+            }
+            if (zeroIfNull(billetera.getSaldoPvPropio()).compareTo(totalPvPropio) != 0) {
+                billetera.setSaldoPvPropio(totalPvPropio);
+                billeteraDao.save(billetera);
+                saldosPvPropioActualizados++;
+            }
+        }
+
+        return new RecreacionResumen(
+                false,
+                comprasProcesadas,
+                beneficiosGenerados,
+                volumenesRedCreditados,
+                saldosPvPropioActualizados,
+                fallos,
+                detalles
+        );
+    }
+
+    private int contarBeneficiosActivos(Long compraId) {
+        return (int) beneficioActivacionCompraDao.findByCompraId(compraId).stream()
+                .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))
+                .count();
+    }
+
+    private int contarVolumenesRedActivos(Long compraId) {
+        return movimientoBilleteraDao.findByReferenciaTipoAndReferenciaId(REFERENCIA_COMPRA_RED, compraId).stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .toList()
+                .size();
+    }
+
+    private ReprocesoResumen ejecutar(boolean notificar) {
         PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
         List<Long> beneficiarioIds = beneficioActivacionCompraDao
                 .findBeneficiarioIdsByPeriodoIdAndEstado(periodoActivo.getId(), Auditoria.ESTADO_ACTIVO);
@@ -106,7 +181,9 @@ public class ReprocesoServiceImpl implements ReprocesoService {
         int beneficiariosRecalculados = 0;
         int inactivosOmitidos = 0;
         int posibleDebitoOmitidos = 0;
+        int fallos = 0;
         BigDecimal dineroTotalCreditado = BigDecimal.ZERO;
+        List<String> detalles = new ArrayList<>();
 
         for (Long beneficiarioId : beneficiarioIds) {
             Ajuste ajuste = analizarBeneficiario(beneficiarioId, periodoActivo);
@@ -137,9 +214,6 @@ public class ReprocesoServiceImpl implements ReprocesoService {
 
         return new ReprocesoResumen(
                 false,
-                comprasProcesadas,
-                bonosQpCreditados,
-                qpTotalCreditado,
                 beneficiariosRecalculados,
                 dineroTotalCreditado,
                 inactivosOmitidos,
@@ -164,7 +238,12 @@ public class ReprocesoServiceImpl implements ReprocesoService {
             return Ajuste.omitido();
         }
 
-        Optional<PlanActivacion> planActivo = obtenerPlanActivacionPorPv(billetera.getSaldoPv());
+        Optional<PlanActivacion> planActivo = obtenerPlanActivacionPorPv(billetera.getSaldoPvPropio());
+        int alcanceEfectivo = billeteraService.calcularAlcanceEfectivo(persona, planActivo.orElse(null));
+        int maxNivelConfigurado = planActivo
+                .flatMap(plan -> planActivacionNivelDao.findFirstByPlanActivacionIdOrderByNumeroNivelDesc(plan.getId()))
+                .map(PlanActivacionNivel::getNumeroNivel)
+                .orElse(0);
         List<BeneficioActivacionCompra> beneficios = beneficioActivacionCompraDao
                 .findByBeneficiarioIdAndPeriodoId(persona.getId(), periodoActivo.getId()).stream()
                 .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))
@@ -176,16 +255,18 @@ public class ReprocesoServiceImpl implements ReprocesoService {
         BigDecimal totalCredito = BigDecimal.ZERO;
         for (BeneficioActivacionCompra beneficio : beneficios) {
             Integer nivel = beneficio.getNivelGenerado();
-            PlanActivacionNivel nivelConfig = planActivo
-                    .map(PlanActivacion::getId)
-                    .flatMap(planId -> planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(planId, nivel))
-                    .orElse(null);
+            boolean nivelAplica = nivel != null && nivel >= 1 && nivel <= alcanceEfectivo;
+            int numeroConfig = nivel == null ? 0 : Math.min(nivel, Math.max(maxNivelConfigurado, 0));
+            PlanActivacionNivel nivelConfig = numeroConfig < 1 || planActivo.isEmpty()
+                    ? null
+                    : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(
+                    planActivo.get().getId(), numeroConfig).orElse(null);
             BigDecimal nuevoMontoPorProducto = nivelConfig == null
                     ? BigDecimal.ZERO
                     : zeroIfNull(nivelConfig.getMontoPorProducto());
             BigDecimal nuevoMontoTotal = nuevoMontoPorProducto
                     .multiply(BigDecimal.valueOf(beneficio.getCantidadProductos()));
-            boolean pagaNuevo = planActivo.isPresent() && nuevoMontoTotal.compareTo(BigDecimal.ZERO) > 0;
+            boolean pagaNuevo = planActivo.isPresent() && nivelAplica && nuevoMontoTotal.compareTo(BigDecimal.ZERO) > 0;
             BigDecimal montoAnterior = zeroIfNull(beneficio.getMontoTotal());
             BigDecimal diferencia = pagaNuevo
                     ? nuevoMontoTotal.subtract(montoAnterior)

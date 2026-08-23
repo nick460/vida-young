@@ -45,13 +45,12 @@ const productForm = reactive({
   nombre: "",
   descripcion: "",
   categoria: "",
-  precio: 0,
-  precioPublico: 0,
-  pv: 0,
-  qp: 0,
-  qpBonoReferido: 0,
-  cr: 0,
-  imagenUrl: "",
+    precio: 0,
+    precioPublico: 0,
+    pv: 0,
+    qp: 0,
+    cr: 0,
+    imagenUrl: "",
   imagenPublicaUrl: "",
   imagenHerramientaUrl: "",
   listarEnShop: false,
@@ -202,10 +201,6 @@ function validateProductForm() {
     errors.qp = "El QP no puede ser negativo.";
   }
 
-  if (Number(productForm.qpBonoReferido) < 0) {
-    errors.qpBonoReferido = "El QP para referente no puede ser negativo.";
-  }
-
   if (Number(productForm.cr) < 0) {
     errors.cr = "El CR no puede ser negativo.";
   }
@@ -301,7 +296,6 @@ function resetProductForm() {
     precioPublico: 0,
     pv: 0,
     qp: 0,
-    qpBonoReferido: 0,
     cr: 0,
     imagenUrl: "",
     imagenPublicaUrl: "",
@@ -329,7 +323,6 @@ function openProductModal(producto = null) {
       precioPublico: producto.precioPublico || producto.precio || 0,
       pv: producto.pv || 0,
       qp: producto.qp || 0,
-      qpBonoReferido: producto.qpBonoReferido || 0,
       cr: producto.cr || 0,
       imagenUrl: producto.imagenUrl || "",
       imagenPublicaUrl: producto.imagenPublicaUrl || "",
@@ -388,7 +381,6 @@ async function saveProduct() {
         precioPublico: Number(productForm.precioPublico || productForm.precio || 0),
         pv: Number(productForm.pv || 0),
         qp: Number(productForm.qp || 0),
-        qpBonoReferido: Number(productForm.qpBonoReferido || 0),
         cr: Number(productForm.cr || 0),
         listarEnShop: Boolean(productForm.listarEnShop),
         listarPublicamente: Boolean(productForm.listarPublicamente)
@@ -559,7 +551,6 @@ watch(productForm, () => {
             />
             <div class="product-main">
               <strong>{{ producto.nombre }}</strong>
-              <small>QP referente {{ money(producto.qpBonoReferido) }}</small>
               <small>{{ producto.sku }} · {{ producto.categoria || "Sin categoria" }} · CR {{ money(producto.cr) }}</small>
             </div>
             <span class="shop-state" :class="{ disabled: !producto.listarEnShop }">
@@ -641,11 +632,6 @@ watch(productForm, () => {
               <span>QP</span>
               <input v-model.number="productForm.qp" type="number" min="0" step="0.01" />
               <small v-if="productErrors.qp">{{ productErrors.qp }}</small>
-            </label>
-            <label :class="{ invalid: productErrors.qpBonoReferido }">
-              <span>QP referente</span>
-              <input v-model.number="productForm.qpBonoReferido" type="number" min="0" step="0.01" />
-              <small v-if="productErrors.qpBonoReferido">{{ productErrors.qpBonoReferido }}</small>
             </label>
             <label :class="{ invalid: productErrors.cr }">
               <span>CR</span>

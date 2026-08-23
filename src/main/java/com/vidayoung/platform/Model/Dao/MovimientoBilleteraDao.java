@@ -27,7 +27,17 @@ public interface MovimientoBilleteraDao extends JpaRepository<MovimientoBilleter
 
     List<MovimientoBilletera> findByReferenciaTipoAndReferenciaId(String referenciaTipo, Long referenciaId);
 
+    List<MovimientoBilletera> findByReferenciaTipoAndReferenciaIdAndBilleteraPersonaId(String referenciaTipo, Long referenciaId, Long personaId);
+
     boolean existsByReferenciaTipoAndReferenciaIdAndTipo(String referenciaTipo, Long referenciaId, String tipo);
 
     boolean existsByBilleteraIdAndReferenciaTipoAndReferenciaIdAndTipo(Long billeteraId, String referenciaTipo, Long referenciaId, String tipo);
+
+    @Query("""
+            select m.billetera.id, sum(m.monto)
+            from MovimientoBilletera m
+            where m.tipo = 'PV' and m.referenciaTipo = 'COMPRA' and m.estado = 'ACTIVO'
+            group by m.billetera.id
+            """)
+    List<Object[]> sumarPvPropioPorBilletera();
 }

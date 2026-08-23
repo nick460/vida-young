@@ -9,15 +9,27 @@ public interface ReprocesoService {
 
     ReprocesoResumen reprocesar(boolean notificar);
 
+    RecreacionResumen simularRecreacion();
+
+    RecreacionResumen recrearRecompensas(boolean notificar);
+
     record ReprocesoResumen(
             boolean simulacion,
-            int comprasProcesadas,
-            int bonosQpCreditados,
-            BigDecimal qpTotalCreditado,
             int beneficiariosRecalculados,
             BigDecimal dineroTotalCreditado,
             int inactivosOmitidos,
             int posibleDebitoOmitidos,
+            int fallos,
+            List<String> detalles
+    ) {
+    }
+
+    record RecreacionResumen(
+            boolean simulacion,
+            int comprasProcesadas,
+            int beneficiosGenerados,
+            int volumenesRedCreditados,
+            int saldosPvPropioActualizados,
             int fallos,
             List<String> detalles
     ) {

@@ -52,7 +52,6 @@ class AdminReconstruirCompraTest {
                 .precioPublico(new BigDecimal("100.00"))
                 .pv(new BigDecimal("10.00"))
                 .qp(new BigDecimal("5.00"))
-                .qpBonoReferido(BigDecimal.ZERO)
                 .cr(BigDecimal.ZERO)
                 .build());
         Producto p2 = productoDao.save(Producto.builder()
@@ -62,7 +61,6 @@ class AdminReconstruirCompraTest {
                 .precioPublico(new BigDecimal("200.00"))
                 .pv(new BigDecimal("20.00"))
                 .qp(new BigDecimal("10.00"))
-                .qpBonoReferido(new BigDecimal("5.00"))
                 .cr(BigDecimal.ZERO)
                 .build());
 
@@ -93,7 +91,7 @@ class AdminReconstruirCompraTest {
 
         Compra viejaRecargada = compraDao.findById(originalId).orElseThrow();
         assertEquals(Compra.ESTADO_COMPRA_ANULADA, viejaRecargada.getEstadoCompra());
-        assertTrue(viejaRecargada.getMotivoAnulacion().contains("Edición administrativa"));
+        assertTrue(viejaRecargada.getMotivoAnulacion().contains("administrativa"));
         assertEquals("admin_test", viejaRecargada.getUsuarioAnulacion());
 
         // La nueva debe tener movimientos de volumen
@@ -116,7 +114,6 @@ class AdminReconstruirCompraTest {
                 .precioPublico(new BigDecimal("50.00"))
                 .pv(new BigDecimal("5.00"))
                 .qp(new BigDecimal("5.00"))
-                .qpBonoReferido(BigDecimal.ZERO)
                 .cr(BigDecimal.ZERO)
                 .build());
         Compra pendiente = compraService.registrarCompra(
@@ -134,7 +131,6 @@ class AdminReconstruirCompraTest {
                 .precioPublico(new BigDecimal("80.00"))
                 .pv(new BigDecimal("8.00"))
                 .qp(new BigDecimal("8.00"))
-                .qpBonoReferido(BigDecimal.ZERO)
                 .cr(BigDecimal.ZERO)
                 .build());
 
@@ -165,7 +161,6 @@ class AdminReconstruirCompraTest {
                 .precioPublico(new BigDecimal("10.00"))
                 .pv(BigDecimal.ONE)
                 .qp(BigDecimal.ONE)
-                .qpBonoReferido(BigDecimal.ZERO)
                 .cr(BigDecimal.ZERO)
                 .build());
         Compra compra = crearCompraValidada(persona.getId(), p, 1);
@@ -183,7 +178,6 @@ class AdminReconstruirCompraTest {
                 .precioPublico(new BigDecimal("10.00"))
                 .pv(BigDecimal.ONE)
                 .qp(BigDecimal.ONE)
-                .qpBonoReferido(BigDecimal.ZERO)
                 .cr(BigDecimal.ZERO)
                 .build());
         Compra compra = crearCompraValidada(persona.getId(), p, 1);
@@ -205,7 +199,6 @@ class AdminReconstruirCompraTest {
                 .precioPublico(new BigDecimal("10.00"))
                 .pv(BigDecimal.ONE)
                 .qp(BigDecimal.ONE)
-                .qpBonoReferido(BigDecimal.ZERO)
                 .cr(BigDecimal.ZERO)
                 .build());
         Compra compra = crearCompraValidada(persona.getId(), p, 1);

@@ -55,3 +55,6 @@ src/main/resources/firebase/serviceAccountKey.json
 ### Vite específico ###
 .vite/
 frontend/.vite/
+
+# Perfil local de pruebas (credenciales de BD de test)
+src/main/resources/application-local.properties

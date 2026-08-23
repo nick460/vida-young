@@ -13,7 +13,8 @@ const editingRangoId = ref(null);
 
 const rangoForm = reactive({
   nombre: "",
-  qpMinimo: 0
+  qpMinimo: 0,
+  nivelesExtra: 0
 });
 
 const orderedRangos = computed(() =>
@@ -44,7 +45,8 @@ function resetForm() {
   editingRangoId.value = null;
   Object.assign(rangoForm, {
     nombre: "",
-    qpMinimo: 0
+    qpMinimo: 0,
+    nivelesExtra: 0
   });
 }
 
@@ -52,7 +54,8 @@ function editRango(rango) {
   editingRangoId.value = rango.id;
   Object.assign(rangoForm, {
     nombre: rango.nombre || "",
-    qpMinimo: Number(rango.qpMinimo || 0)
+    qpMinimo: Number(rango.qpMinimo || 0),
+    nivelesExtra: Number(rango.nivelesExtra || 0)
   });
 }
 
@@ -65,7 +68,8 @@ async function saveRango() {
       method: isEditing ? "PUT" : "POST",
       body: JSON.stringify({
         nombre: rangoForm.nombre,
-        qpMinimo: Number(rangoForm.qpMinimo || 0)
+        qpMinimo: Number(rangoForm.qpMinimo || 0),
+        nivelesExtra: Number(rangoForm.nivelesExtra || 0)
       })
     });
 
@@ -142,6 +146,11 @@ onMounted(loadRangos);
           QP a alcanzar
           <input v-model.number="rangoForm.qpMinimo" type="number" min="0" step="0.01" required />
         </label>
+        <label>
+          Niveles extra de alcance
+          <input v-model.number="rangoForm.nivelesExtra" type="number" min="0" max="10" step="1" />
+          <small>Se suma al alcance del plan de activacion (maximo total: 10 niveles)</small>
+        </label>
         <div class="form-actions">
           <button v-if="editingRangoId" type="button" class="ghost-button" @click="resetForm">Cancelar</button>
           <button type="submit" class="save-button" :disabled="saving">
@@ -165,7 +174,7 @@ onMounted(loadRangos);
             <span class="rank-position">{{ index + 1 }}</span>
             <div class="rank-main">
               <strong>{{ rango.nombre }}</strong>
-              <small>Requiere {{ money(rango.qpMinimo) }} QP</small>
+              <small>Requiere {{ money(rango.qpMinimo) }} QP · +{{ Number(rango.nivelesExtra || 0) }} nivel(es) extra</small>
             </div>
             <div class="rank-actions">
               <button type="button" class="icon-action" title="Editar rango" @click="editRango(rango)">

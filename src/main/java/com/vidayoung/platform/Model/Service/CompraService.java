@@ -26,7 +26,7 @@ public interface CompraService {
 
     Compra anularCompra(Long compraId, String motivo, String usuarioOperacion);
 
-    int reprocesarQpBonoReferido(Long compraId, boolean notificar);
+    int reiniciarRecompensasCompra(Long compraId, boolean notificar);
 
     List<MovimientoCompraResumen> listarMovimientosCompra(Long compraId);
 
