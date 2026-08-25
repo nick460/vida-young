@@ -39,12 +39,20 @@ import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import com.vidayoung.platform.Model.Service.NotificacionService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -55,6 +63,7 @@ public class BilleteraServiceImpl implements BilleteraService {
 
     private static final String REFERENCIA_AFILIACION = "REFERIDO_AFILIACION";
     private static final String REFERENCIA_PV_ACTIVACION = "PV_ACTIVACION";
+    private static final BigDecimal UMBRAL_REGULA_DIRECTOS = new BigDecimal("25000.00");
 
     private final BilleteraDao billeteraDao;
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
@@ -76,8 +85,99 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final NotificacionService notificacionService;
 
     @Override
-    public int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan) {
-        int base = plan == null || plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
+    public ProgresoRangosResponse calcularProgresoRangos(Long personaId) {
+        Persona persona = personaId == null ? null : personaDao.findById(personaId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElse(null);
+        if (persona == null) {
+            return new ProgresoRangosResponse(BigDecimal.ZERO, null, null, List.of());
+        }
+
+        BigDecimal qpTotal = billeteraDao.findByPersonaId(personaId)
+                .map(billetera -> zeroIfNull(billetera.getSaldoQp()))
+                .orElse(BigDecimal.ZERO);
+
+        Map<Long, List<Long>> hijosPorPersona = new HashMap<>();
+        referidoDao.findAll().stream()
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .filter(referido -> referido.getPatrocinador() != null && referido.getPatrocinador().getId() != null)
+                .forEach(referido -> hijosPorPersona
+                        .computeIfAbsent(referido.getPatrocinador().getId(), key -> new ArrayList<>())
+                        .add(referido.getPersona() == null ? null : referido.getPersona().getId()));
+        Map<Long, BigDecimal> qpPorPersona = new HashMap<>();
+        Map<Long, String> nombrePorPersona = new HashMap<>();
+        billeteraDao.findAll().forEach(billetera -> {
+            if (billetera.getPersona() != null && billetera.getPersona().getId() != null) {
+                qpPorPersona.put(billetera.getPersona().getId(), zeroIfNull(billetera.getSaldoQp()));
+                nombrePorPersona.put(billetera.getPersona().getId(),
+                        ((billetera.getPersona().getNombres() == null ? "" : billetera.getPersona().getNombres()) + " "
+                                + (billetera.getPersona().getApellidos() == null ? "" : billetera.getPersona().getApellidos())).trim());
+            }
+        });
+
+        List<Referido> directos = referidoDao.findByPatrocinadorId(personaId).stream()
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .toList();
+        int numeroDirectos = directos.size();
+
+        List<RangoProgresoResponse> rangos = rangoDao.findAll().stream()
+                .filter(rango -> Auditoria.ESTADO_ACTIVO.equals(rango.getEstado()))
+                .sorted(Comparator.comparing(rango -> zeroIfNull(rango.getQpMinimo())))
+                .map(rango -> {
+                    boolean reglaDirectos = aplicaReglaDirectos(rango);
+                    BigDecimal qpMinimo = zeroIfNull(rango.getQpMinimo());
+                    BigDecimal tope = reglaDirectos && numeroDirectos > 0
+                            ? qpMinimo.divide(BigDecimal.valueOf(numeroDirectos), 2, RoundingMode.HALF_UP)
+                            : null;
+                    BigDecimal qpEfectivo;
+                    List<RamaProgresoResponse> ramas = new ArrayList<>();
+                    if (reglaDirectos) {
+                        BigDecimal efectivo = BigDecimal.ZERO;
+                        for (Referido directo : directos) {
+                            Long raizId = directo.getPersona() == null ? null : directo.getPersona().getId();
+                            BigDecimal qpRama = sumaQpSubtree(raizId, hijosPorPersona, qpPorPersona);
+                            BigDecimal contable = qpRama.min(tope);
+                            efectivo = efectivo.add(contable);
+                            ramas.add(new RamaProgresoResponse(
+                                    nombrePorPersona.getOrDefault(raizId, "Referido"),
+                                    qpRama,
+                                    contable));
+                        }
+                        qpEfectivo = reglaDirectos && numeroDirectos == 0 ? BigDecimal.ZERO : efectivo;
+                    } else {
+                        qpEfectivo = qpTotal;
+                    }
+                    boolean cumple = qpEfectivo.compareTo(qpMinimo) >= 0
+                            && (!reglaDirectos || numeroDirectos > 0);
+                    return new RangoProgresoResponse(
+                            rango.getId(),
+                            rango.getNombre(),
+                            qpMinimo,
+                            reglaDirectos,
+                            numeroDirectos,
+                            tope,
+                            qpEfectivo,
+                            cumple,
+                            ramas
+                    );
+                })
+                .toList();
+
+        String rangoActual = null;
+        String rangoSiguiente = null;
+        for (RangoProgresoResponse rango : rangos) {
+            if (rango.cumple()) {
+                rangoActual = rango.nombre();
+            } else if (rangoSiguiente == null) {
+                rangoSiguiente = rango.nombre();
+            }
+        }
+
+        return new ProgresoRangosResponse(qpTotal, rangoActual, rangoSiguiente, rangos);
+    }
+
+    @Override
+    public int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan) {        int base = plan == null || plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
         int extra = 0;
         if (persona != null && persona.getRangoActual() != null
                 && persona.getRangoActual().getNivelesExtra() != null) {
@@ -144,7 +244,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             return;
         }
 
-        Rango rango = rangoAlcanzadoPorQp(qpActual).orElse(null);
+        Rango rango = rangoAlcanzadoAplicandoReglas(persistente, qpActual);
         Long rangoActualId = persistente.getRangoActual() == null ? null : persistente.getRangoActual().getId();
         Long nuevoRangoId = rango == null ? null : rango.getId();
 
@@ -842,6 +942,89 @@ public class BilleteraServiceImpl implements BilleteraService {
                 .filter(rango -> Auditoria.ESTADO_ACTIVO.equals(rango.getEstado()))
                 .filter(rango -> qpActual.compareTo(zeroIfNull(rango.getQpMinimo())) >= 0)
                 .max(Comparator.comparing(rango -> zeroIfNull(rango.getQpMinimo())));
+    }
+
+    /**
+     * Regla de equidad entre ramas: para rangos objetivo con qp_minimo mayor al
+     * umbral, el QP contable por cada rama directa se limita a
+     * objetivo / numero de directos, y todas las ramas deben aportar.
+     */
+    private Rango rangoAlcanzadoAplicandoReglas(Persona persona, BigDecimal qpTotal) {
+        BigDecimal qp = zeroIfNull(qpTotal);
+        List<Rango> activos = rangoDao.findAll().stream()
+                .filter(rango -> Auditoria.ESTADO_ACTIVO.equals(rango.getEstado()))
+                .sorted(Comparator.comparing((Rango rango) -> zeroIfNull(rango.getQpMinimo())).reversed())
+                .toList();
+
+        for (Rango rango : activos) {
+            if (qp.compareTo(zeroIfNull(rango.getQpMinimo())) < 0) {
+                continue;
+            }
+            if (aplicaReglaDirectos(rango) && !cumpleReglaDirectos(persona, rango)) {
+                continue;
+            }
+            return rango;
+        }
+        return null;
+    }
+
+    private boolean aplicaReglaDirectos(Rango objetivo) {
+        return zeroIfNull(objetivo.getQpMinimo()).compareTo(UMBRAL_REGULA_DIRECTOS) > 0;
+    }
+
+    private boolean cumpleReglaDirectos(Persona persona, Rango objetivo) {
+        List<Referido> directos = referidoDao.findByPatrocinadorId(persona.getId()).stream()
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .toList();
+        int numeroDirectos = directos.size();
+        if (numeroDirectos == 0) {
+            return false;
+        }
+
+        Map<Long, List<Long>> hijosPorPersona = new HashMap<>();
+        Map<Long, BigDecimal> qpPorPersona = new HashMap<>();
+        referidoDao.findAll().stream()
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .filter(referido -> referido.getPatrocinador() != null && referido.getPatrocinador().getId() != null)
+                .forEach(referido -> hijosPorPersona
+                        .computeIfAbsent(referido.getPatrocinador().getId(), key -> new ArrayList<>())
+                        .add(referido.getPersona() == null ? null : referido.getPersona().getId()));
+        billeteraDao.findAll().forEach(billetera -> {
+            if (billetera.getPersona() != null && billetera.getPersona().getId() != null) {
+                qpPorPersona.put(billetera.getPersona().getId(), zeroIfNull(billetera.getSaldoQp()));
+            }
+        });
+
+        BigDecimal topePorRama = zeroIfNull(objetivo.getQpMinimo())
+                .divide(BigDecimal.valueOf(numeroDirectos), 2, RoundingMode.HALF_UP);
+        BigDecimal qpEfectivo = BigDecimal.ZERO;
+
+        for (Referido directo : directos) {
+            Long raizId = directo.getPersona() == null ? null : directo.getPersona().getId();
+            qpEfectivo = qpEfectivo.add(sumaQpSubtree(raizId, hijosPorPersona, qpPorPersona).min(topePorRama));
+        }
+        return qpEfectivo.compareTo(zeroIfNull(objetivo.getQpMinimo())) >= 0;
+    }
+
+    /** Suma el saldo QP de toda la descendencia de una rama (incluida la raiz). */
+    private BigDecimal sumaQpSubtree(Long personaId, Map<Long, List<Long>> hijosPorPersona, Map<Long, BigDecimal> qpPorPersona) {
+        BigDecimal total = BigDecimal.ZERO;
+        Deque<Long> pendientes = new ArrayDeque<>();
+        Set<Long> visitados = new HashSet<>();
+        if (personaId != null) {
+            pendientes.push(personaId);
+            visitados.add(personaId);
+        }
+        while (!pendientes.isEmpty()) {
+            Long actual = pendientes.pop();
+            total = total.add(qpPorPersona.getOrDefault(actual, BigDecimal.ZERO));
+            for (Long hijo : hijosPorPersona.getOrDefault(actual, List.of())) {
+                if (hijo != null && visitados.add(hijo)) {
+                    pendientes.push(hijo);
+                }
+            }
+        }
+        return total;
     }
 
     private void desactivarMembresiasVencidasDelPeriodoActivo() {

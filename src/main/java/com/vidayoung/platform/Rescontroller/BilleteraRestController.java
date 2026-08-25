@@ -7,6 +7,7 @@ import com.vidayoung.platform.Model.Dao.CompraDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RangoDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
+import com.vidayoung.platform.Model.Dao.ReferidoDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RetiroBilleteraDetalleDao;
 import com.vidayoung.platform.Model.Entity.Billetera;
@@ -16,19 +17,24 @@ import com.vidayoung.platform.Model.Entity.CompraDetalle;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Auditoria;
+import com.vidayoung.platform.Model.Entity.BeneficioActivacionCompra;
 import com.vidayoung.platform.Model.Entity.PeriodoGestion;
 import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Recompensa;
+import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
 import com.vidayoung.platform.Model.Entity.RetiroBilleteraDetalle;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Getter;
@@ -60,6 +66,7 @@ public class BilleteraRestController {
     private final RetiroBilleteraDao retiroBilleteraDao;
     private final RetiroBilleteraDetalleDao retiroBilleteraDetalleDao;
     private final GestionPeriodoService gestionPeriodoService;
+    private final ReferidoDao referidoDao;
 
     @GetMapping("/saldos")
     public ResponseEntity<List<BilleteraSaldoResponse>> listarSaldos(@RequestParam(required = false) Long periodoId) {
@@ -134,7 +141,8 @@ public class BilleteraRestController {
                             detalleEfectivoMensual(personaId, periodoConsulta),
                             efectivoNivel1Disponible(personaId, periodoConsulta),
                             productosNivel1Disponible(personaId, periodoConsulta),
-                            periodoConsulta
+                            periodoConsulta,
+                            membresiaActualDesdeReferido(personaId)
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -143,6 +151,13 @@ public class BilleteraRestController {
     @GetMapping("/persona/{personaId}/movimientos")
     public ResponseEntity<List<MovimientoBilletera>> movimientosPorPersona(@PathVariable Long personaId) {
         return ResponseEntity.ok(billeteraService.listarMovimientos(personaId));
+    }
+
+    @GetMapping("/progreso-rangos")
+    public ResponseEntity<BilleteraService.ProgresoRangosResponse> progresoRangos(
+            @RequestParam Long personaId
+    ) {
+        return ResponseEntity.ok(billeteraService.calcularProgresoRangos(personaId));
     }
 
     @GetMapping("/persona/{personaId}/membresias")
@@ -246,6 +261,21 @@ public class BilleteraRestController {
         private final BigDecimal productosNivel1Disponible;
 
         private final PeriodoGestion periodoActivo;
+
+        private final MembresiaActualResponse membresiaActual;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class MembresiaActualResponse {
+
+        private final boolean activa;
+
+        private final LocalDateTime fechaInicio;
+
+        private final LocalDateTime fechaFin;
+
+        private final String planNombre;
     }
 
     @Getter
@@ -694,12 +724,28 @@ public class BilleteraRestController {
                 .toList();
     }
 
-    private Billetera billeteraDesdeMovimientos(Billetera billetera, List<MovimientoBilletera> movimientos) {
-        Billetera reconstruida = new Billetera();
+    /**
+     * Estado de membresia desde REFERIDOS (fuente de verdad). El historial puede
+     * quedar desfasado; este dato es el que gobierna beneficios y activacion.
+     */
+    private MembresiaActualResponse membresiaActualDesdeReferido(Long personaId) {
+        return referidoDao.findByPersonaId(personaId)
+                .map(referido -> new MembresiaActualResponse(
+                        Boolean.TRUE.equals(referido.getMembresiaActiva()),
+                        referido.getFechaInicioMembresia(),
+                        referido.getFechaFinMembresia(),
+                        referido.getPlan() == null ? null : referido.getPlan().getNombre()
+                ))
+                .orElse(new MembresiaActualResponse(false, null, null, null));
+    }
+
+    private Billetera billeteraDesdeMovimientos(Billetera billetera, List<MovimientoBilletera> movimientos) {        Billetera reconstruida = new Billetera();
         reconstruida.setId(billetera.getId());
         reconstruida.setPersona(billetera.getPersona());
         reconstruida.setSaldoDinero(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_DINERO).max(BigDecimal.ZERO));
         reconstruida.setSaldoPv(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PV).max(BigDecimal.ZERO));
+        // El PV propio es acumulado de compras propias: es el que determina la membresia
+        reconstruida.setSaldoPvPropio(zeroIfNull(billetera.getSaldoPvPropio()));
         reconstruida.setSaldoQp(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_QP).max(BigDecimal.ZERO));
         reconstruida.setSaldoCr(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_CR).max(BigDecimal.ZERO));
         reconstruida.setSaldoProductos(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PRODUCTOS).max(BigDecimal.ZERO));
@@ -707,20 +753,65 @@ public class BilleteraRestController {
     }
 
     private List<BilleteraMovimientoResponse> movimientosResponse(List<MovimientoBilletera> movimientos) {
+        // Compras directas (COMPRA / COMPRA_BONO_REFERIDO / COMPRA_RED)
         List<Long> compraIds = movimientos.stream()
-                .filter(movimiento -> "COMPRA".equals(movimiento.getReferenciaTipo()) || "COMPRA_BONO_REFERIDO".equals(movimiento.getReferenciaTipo()))
+                .filter(movimiento -> compraDirectaDe(movimiento) != null)
                 .map(MovimientoBilletera::getReferenciaId)
                 .filter(id -> id != null)
                 .distinct()
                 .toList();
-        Map<Long, Compra> comprasPorId = compraIds.isEmpty()
+
+        // Compras asociadas via beneficios de activacion (pago, ajuste, anulacion):
+        // permite agrupar todos los movimientos de dinero por compra en la wallet
+        List<Long> beneficioIds = movimientos.stream()
+                .filter(movimiento -> beneficioCompraDe(movimiento) != null)
+                .map(MovimientoBilletera::getReferenciaId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        Map<Long, Long> compraIdPorBeneficio = beneficioIds.isEmpty()
                 ? Map.of()
-                : compraDao.findByIdInWithDetalles(compraIds).stream()
+                : beneficioActivacionCompraDao.findAllById(beneficioIds).stream()
+                        .filter(beneficio -> beneficio.getCompra() != null)
+                        .collect(Collectors.toMap(BeneficioActivacionCompra::getId, beneficio -> beneficio.getCompra().getId()));
+
+        Set<Long> todasLasCompras = new LinkedHashSet<>(compraIds);
+        todasLasCompras.addAll(compraIdPorBeneficio.values());
+        Map<Long, Compra> comprasPorId = todasLasCompras.isEmpty()
+                ? Map.of()
+                : compraDao.findByIdInWithDetalles(List.copyOf(todasLasCompras)).stream()
                         .collect(Collectors.toMap(Compra::getId, Function.identity()));
 
         return movimientos.stream()
-                .map(movimiento -> movimientoResponse(movimiento, comprasPorId.get(movimiento.getReferenciaId())))
+                .map(movimiento -> {
+                    Long compraId = null;
+                    if ((compraDirectaDe(movimiento) != null || beneficioCompraDe(movimiento) != null)
+                            && movimiento.getReferenciaId() != null) {
+                        compraId = compraDirectaDe(movimiento) != null
+                                ? movimiento.getReferenciaId()
+                                : compraIdPorBeneficio.get(movimiento.getReferenciaId());
+                    }
+                    return movimientoResponse(movimiento, compraId == null ? null : comprasPorId.get(compraId));
+                })
                 .toList();
+    }
+
+    private String compraDirectaDe(MovimientoBilletera movimiento) {
+        String tipo = movimiento.getReferenciaTipo();
+        if ("COMPRA".equals(tipo) || "COMPRA_BONO_REFERIDO".equals(tipo) || "COMPRA_RED".equals(tipo)) {
+            return tipo;
+        }
+        return null;
+    }
+
+    private String beneficioCompraDe(MovimientoBilletera movimiento) {
+        String tipo = movimiento.getReferenciaTipo();
+        if ("BENEFICIO_ACTIVACION_COMPRA".equals(tipo)
+                || "ACTUALIZACION_BENEFICIO_ACTIVACION".equals(tipo)
+                || "ANULACION_BENEFICIO_COMPRA".equals(tipo)) {
+            return tipo;
+        }
+        return null;
     }
 
     private BilleteraMovimientoResponse movimientoResponse(MovimientoBilletera movimiento, Compra compra) {
@@ -733,7 +824,7 @@ public class BilleteraRestController {
                 zeroIfNull(movimiento.getMonto()),
                 zeroIfNull(movimiento.getSaldoResultado()),
                 movimiento.getFechaRegistro(),
-                compra == null || (!"COMPRA".equals(movimiento.getReferenciaTipo()) && !"COMPRA_BONO_REFERIDO".equals(movimiento.getReferenciaTipo())) ? null : compraMovimientoResponse(compra)
+                compra == null ? null : compraMovimientoResponse(compra)
         );
     }
 
@@ -821,7 +912,7 @@ public class BilleteraRestController {
         if (refId == null || tipo == null) {
             return false;
         }
-        if ("COMPRA".equals(tipo) || "ANULACION_COMPRA".equals(tipo) || "COMPRA_BONO_REFERIDO".equals(tipo)) {
+        if ("COMPRA".equals(tipo) || "ANULACION_COMPRA".equals(tipo) || "COMPRA_BONO_REFERIDO".equals(tipo) || "COMPRA_RED".equals(tipo)) {
             return compraDao.findById(refId)
                     .map(c -> Compra.ESTADO_COMPRA_ANULADA.equals(c.getEstadoCompra()))
                     .orElse(false);

@@ -19,6 +19,32 @@ public interface BilleteraService {
 
     int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan);
 
+    ProgresoRangosResponse calcularProgresoRangos(Long personaId);
+
+    record RamaProgresoResponse(String nombrePersona, BigDecimal qpRama, BigDecimal qpContable) {
+    }
+
+    record RangoProgresoResponse(
+            Long rangoId,
+            String nombre,
+            BigDecimal qpMinimo,
+            boolean reglaDirectos,
+            Integer numeroDirectos,
+            BigDecimal topePorRama,
+            BigDecimal qpEfectivo,
+            boolean cumple,
+            List<RamaProgresoResponse> ramas
+    ) {
+    }
+
+    record ProgresoRangosResponse(
+            BigDecimal qpTotal,
+            String rangoActual,
+            String rangoSiguiente,
+            List<RangoProgresoResponse> rangos
+    ) {
+    }
+
     Billetera asegurarBilletera(Persona persona);
 
     Optional<Billetera> buscarPorPersonaId(Long personaId);

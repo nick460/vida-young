@@ -258,9 +258,9 @@ public class CompraServiceImpl implements CompraService {
             return 0;
         }
 
-        // 1. Revertir el dinero pagado por beneficios anteriores y marcar sus filas
-        //    como ELIMINADAS (quedan para auditoria).
-        revertirBeneficiosCompra(compra);
+        // 1. Limpieza silenciosa: revierte el dinero pagado y elimina los beneficios
+        //    anteriores SIN crear entradas de anulacion (la compra sigue vigente).
+        limpiarBeneficiosParaRecreacion(compra);
 
         // 2. Regenerar los beneficios con la logica vigente:
         //    10 niveles, alcance efectivo = plan + rango, montos del plan actual.
@@ -274,6 +274,42 @@ public class CompraServiceImpl implements CompraService {
         acreditarVolumenRed(compra);
 
         return 1;
+    }
+
+    private void limpiarBeneficiosParaRecreacion(Compra compra) {
+        List<Long> beneficiosActivos = beneficioActivacionCompraDao.findByCompraId(compra.getId()).stream()
+                .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))
+                .map(BeneficioActivacionCompra::getId)
+                .toList();
+        if (beneficiosActivos.isEmpty()) {
+            return;
+        }
+
+        for (Long beneficioId : beneficiosActivos) {
+            List<MovimientoBilletera> movimientos = new ArrayList<>();
+            movimientos.addAll(movimientoBilleteraDao
+                    .findByReferenciaTipoAndReferenciaId("BENEFICIO_ACTIVACION_COMPRA", beneficioId));
+            movimientos.addAll(movimientoBilleteraDao
+                    .findByReferenciaTipoAndReferenciaId("ACTUALIZACION_BENEFICIO_ACTIVACION", beneficioId));
+
+            for (MovimientoBilletera movimiento : movimientos) {
+                if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())
+                        || !MovimientoBilletera.TIPO_DINERO.equals(movimiento.getTipo())) {
+                    continue;
+                }
+                Billetera billetera = movimiento.getBilletera();
+                billetera.setSaldoDinero(zeroIfNull(billetera.getSaldoDinero()).subtract(zeroIfNull(movimiento.getMonto())));
+                billeteraDao.save(billetera);
+                movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
+                movimientoBilleteraDao.save(movimiento);
+            }
+        }
+
+        beneficioActivacionCompraDao.findAllById(beneficiosActivos).forEach(beneficio -> {
+            beneficio.setEstado(Auditoria.ESTADO_ELIMINADO);
+            beneficio.setMotivo("Reemplazado por reproceso de recompensas (compra #" + compra.getId() + ")");
+            beneficioActivacionCompraDao.save(beneficio);
+        });
     }
 
     private void revertirMovimientosCompra(Compra compra) {

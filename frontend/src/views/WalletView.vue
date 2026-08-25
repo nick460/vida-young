@@ -8,11 +8,11 @@ import {
   Copy,
   Gem,
   RefreshCw,
-  WalletCards
+  WalletCards,
+  X
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { useAuthStore } from "../stores/authStore.js";
-import NotificationBell from "../components/NotificationBell.vue";
 
 const auth = useAuthStore();
 const loading = ref(false);
@@ -40,10 +40,49 @@ const efectivoMensualDisponible = computed(() =>
 );
 const efectivoNivel1Disponible = computed(() => Number(resumen.value.efectivoNivel1Disponible || 0));
 const productosNivel1Disponible = computed(() => Number(resumen.value.productosNivel1Disponible || 0));
+
+// Modal detalle de efectivo disponible
+const detalleEfectivoAbierto = ref(false);
+const movimientosDinero = computed(() =>
+  movimientos.value.filter((movimiento) => movimiento.tipo === "DINERO")
+);
+const recompensasDetalleEfectivo = computed(() => resumen.value.detalleEfectivoMensual || []);
+const movimientosDineroAgrupados = computed(() => {
+  const groups = new Map();
+  movimientosDinero.value.forEach((movimiento) => {
+    const compraAsociada = movimiento.compra || null;
+    const key = compraAsociada ? `COMPRA-${compraAsociada.id}` : `MOV-${movimiento.id}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        compra: compraAsociada,
+        fecha: compraAsociada?.fechaCompra || movimiento.fechaRegistro,
+        movimientos: []
+      });
+    }
+    groups.get(key).movimientos.push(movimiento);
+  });
+  return Array.from(groups.values()).filter(
+    (group) => !group.compra || group.compra.estadoCompra !== "ANULADA"
+  );
+});
 const totalNivel1Disponible = computed(() => efectivoNivel1Disponible.value + productosNivel1Disponible.value);
 const activeMembership = computed(() =>
   membresias.value.find((membresia) => membresia.estadoMembresia === "ACTIVA" && membershipCoversActivePeriod(membresia))
 );
+// Fuente de verdad: estado de membresia desde referidos (el historial puede estar desfasado)
+const membresiaActual = computed(() => resumen.value.membresiaActual || null);
+const membresiaVigente = computed(() => {
+  const m = membresiaActual.value;
+  if (!m || !m.activa || !m.fechaFin) {
+    return false;
+  }
+  const periodoFin = selectedPeriodo.value?.fechaFin;
+  if (!periodoFin) {
+    return true;
+  }
+  return new Date(m.fechaFin) >= new Date(periodoFin);
+});
 const filteredMovimientos = computed(() => {
   if (movementFilter.value === "TODOS") return movimientos.value;
   return movimientos.value.filter((movimiento) => movimiento.tipo === movementFilter.value);
@@ -52,15 +91,17 @@ const groupedMovimientos = computed(() => {
   const groups = new Map();
 
   filteredMovimientos.value.forEach((movimiento) => {
-    const isCompra = (movimiento.referenciaTipo === "COMPRA" || movimiento.referenciaTipo === "COMPRA_BONO_REFERIDO" || movimiento.referenciaTipo === "COMPRA_RED") && movimiento.referenciaId;
-    const key = isCompra ? `COMPRA-${movimiento.referenciaId}` : `MOV-${movimiento.id}`;
+    // Agrupa por compra cualquier movimiento que tenga compra asociada
+    // (volumen propio/red, beneficios de activacion y sus ajustes retroactivos)
+    const compraAsociada = movimiento.compra || null;
+    const key = compraAsociada ? `COMPRA-${compraAsociada.id}` : `MOV-${movimiento.id}`;
     if (!groups.has(key)) {
       groups.set(key, {
         key,
-        compra: movimiento.compra || null,
+        compra: compraAsociada,
         referenciaTipo: movimiento.referenciaTipo,
         referenciaId: movimiento.referenciaId,
-        fecha: movimiento.compra?.fechaCompra || movimiento.fechaRegistro,
+        fecha: compraAsociada?.fechaCompra || movimiento.fechaRegistro,
         movimientos: []
       });
     }
@@ -244,12 +285,11 @@ onMounted(loadWallet);
             <RefreshCw :class="{ spinning: loading }" :size="16" stroke-width="2.3" />
             <span>{{ loading ? "Actualizando" : "Actualizar" }}</span>
           </button>
-          <NotificationBell />
         </div>
       </header>
 
       <section class="wallet-overview">
-        <article class="balance-card cash-card">
+        <article class="balance-card cash-card clickable" role="button" tabindex="0" @click="detalleEfectivoAbierto = true" @keydown.enter="detalleEfectivoAbierto = true">
           <header>
             <span class="card-icon"><WalletCards :size="24" /></span>
             <div>
@@ -257,6 +297,7 @@ onMounted(loadWallet);
               <strong>Bs. {{ money(efectivoMensualDisponible) }}</strong>
               <p>Saldo mensual del periodo activo, sin recompensas de nivel 1.</p>
             </div>
+            <small class="ver-detalle-hint">Ver detalle</small>
           </header>
         </article>
 
@@ -275,8 +316,11 @@ onMounted(loadWallet);
           <span class="card-icon"><BadgeCheck :size="22" /></span>
           <div>
             <span>Membresia actual</span>
-            <strong>{{ activeMembership ? membershipName(activeMembership) : "Sin membresia activa" }}</strong>
-            <small>{{ activeMembership ? `Vigente hasta ${formatLocalDate(activeMembership.fechaFin)}` : "Activa un plan para habilitar beneficios." }}</small>
+            <strong>{{ membresiaVigente ? (membresiaActual.planNombre || "Membresia activa") : "Sin membresia activa" }}</strong>
+            <small>
+              {{ membresiaVigente ? `Vigente hasta ${formatLocalDate(membresiaActual.fechaFin)}` : "Activa un plan para habilitar beneficios." }}
+              PV propio: {{ money(billetera.saldoPvPropio) }}
+            </small>
           </div>
         </article>
       </section>
@@ -376,44 +420,55 @@ onMounted(loadWallet);
         </div>
       </section>
 
-      <section class="vy-card history-card membership-card">
-        <header class="history-header">
+     </main>
+
+    <div v-if="detalleEfectivoAbierto" class="efectivo-modal-overlay" @click.self="detalleEfectivoAbierto = false">
+      <div class="efectivo-modal" role="dialog" aria-modal="true">
+        <header class="efectivo-modal-header">
           <div>
-            <h2>Historico de membresias</h2>
-            <p>Afiliacion inicial y activaciones mensuales por plan.</p>
+            <span class="vy-eyebrow">Detalle</span>
+            <h3>Efectivo disponible: Bs. {{ money(efectivoMensualDisponible) }}</h3>
+            <small v-if="selectedPeriodo">{{ selectedPeriodo.nombre }} - Gestion {{ selectedPeriodo.gestion?.anio || "" }}</small>
           </div>
+          <button type="button" class="efectivo-modal-close" @click="detalleEfectivoAbierto = false">
+            <X :size="18" />
+          </button>
         </header>
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Plan</th>
-                <th>Inicio</th>
-                <th>Fin</th>
-                <th>Estado</th>
-                <th>QP</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="membresia in membresias" :key="membresia.id">
-                <td>{{ membresia.tipo }}</td>
-                <td>{{ membershipName(membresia) }}</td>
-                <td>{{ formatDate(membresia.fechaInicio) }}</td>
-                <td>{{ formatDate(membresia.fechaFin) }}</td>
-                <td><span class="vy-chip" :class="membresia.estadoMembresia === 'ACTIVA' ? 'vy-chip-success' : 'vy-chip-orange'">{{ membresia.estadoMembresia }}</span></td>
-                <td>{{ money(membresia.qpPlan) }}</td>
-              </tr>
-              <tr v-if="!membresias.length && !loading">
-                <td colspan="6">No hay membresias registradas.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <div class="efectivo-modal-body">
+          <section class="efectivo-modal-section">
+            <h4>Movimientos de dinero ({{ movimientosDinero.length }})</h4>
+            <div v-if="movimientosDineroAgrupados.length" class="efectivo-modal-grupos">
+              <article v-for="grupo in movimientosDineroAgrupados" :key="grupo.key" class="efectivo-modal-grupo">
+                <header>
+                  <strong v-if="grupo.compra">Compra #{{ grupo.compra.id }}</strong>
+                  <strong v-else>Otros movimientos</strong>
+                  <small>{{ formatDate(grupo.fecha) }}<template v-if="grupo.compra"> · {{ grupo.compra.estadoCompra }}</template></small>
+                </header>
+                <ul>
+                  <li v-for="movimiento in grupo.movimientos" :key="movimiento.id">
+                    <span>{{ movimiento.concepto }}</span>
+                    <strong :class="Number(movimiento.monto) < 0 ? 'monto-negativo' : 'monto-positivo'">{{ money(movimiento.monto) }}</strong>
+                  </li>
+                </ul>
+              </article>
+            </div>
+            <p v-else class="efectivo-modal-empty">Sin movimientos de dinero en este periodo.</p>
+          </section>
 
-    </main>
+          <section class="efectivo-modal-section">
+            <h4>Recompensas por cobrar ({{ recompensasDetalleEfectivo.length }})</h4>
+            <ul v-if="recompensasDetalleEfectivo.length" class="recompensa-detalle-lista">
+              <li v-for="detalle in recompensasDetalleEfectivo" :key="detalle.recompensaId">
+                <span>Nivel {{ detalle.nivelGenerado }} · {{ detalle.referidoNombre || "Referido" }}</span>
+                <strong>Bs. {{ money(detalle.montoDisponible) }}</strong>
+              </li>
+            </ul>
+            <p v-else class="efectivo-modal-empty">No tienes recompensas pendientes de cobro.</p>
+          </section>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1027,4 +1082,32 @@ td:nth-child(3) {
     grid-column: 1 / -1;
   }
 }
+
+.cash-card.clickable { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.cash-card.clickable:hover { transform: translateY(-2px); box-shadow: var(--vy-shadow-lg, 0 10px 24px rgba(0,0,0,0.12)); }
+.ver-detalle-hint { margin-left: auto; align-self: flex-start; font-size: 11px; font-weight: 700; color: var(--vy-orange-deep, #b45309); background: rgba(242,135,5,0.1); padding: 4px 8px; border-radius: 8px; white-space: nowrap; }
+
+.efectivo-modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 120; padding: 20px; }
+.efectivo-modal { background: #fff; border-radius: 18px; width: 640px; max-width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+.efectivo-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid var(--vy-line-2, #eee); position: sticky; top: 0; background: #fff; z-index: 1; }
+.efectivo-modal-header h3 { margin: 2px 0 4px; font-size: 18px; letter-spacing: -0.02em; }
+.efectivo-modal-header small { color: var(--vy-ink-3, #9ca3af); font-weight: 600; }
+.efectivo-modal-close { border: 1px solid var(--vy-line, #e5e7eb); background: #fff; border-radius: 10px; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--vy-ink-2, #4b5563); }
+.efectivo-modal-close:hover { background: var(--vy-surface-2, #f9fafb); }
+.efectivo-modal-body { padding: 16px 22px 22px; display: grid; gap: 20px; }
+.efectivo-modal-section h4 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vy-ink-3, #6b7280); }
+.efectivo-modal-empty { margin: 0; font-size: 13px; color: var(--vy-ink-3, #9ca3af); }
+.monto-positivo { color: #16a34a; font-weight: 700; }
+.monto-negativo { color: #dc2626; font-weight: 700; }
+.efectivo-modal-grupos { display: grid; gap: 12px; }
+.efectivo-modal-grupo { border: 1px solid var(--vy-line, #e5e7eb); border-radius: 12px; overflow: hidden; }
+.efectivo-modal-grupo > header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 10px 14px; background: var(--vy-surface-2, #f9fafb); }
+.efectivo-modal-grupo > header strong { font-size: 13px; }
+.efectivo-modal-grupo > header small { color: var(--vy-ink-3, #9ca3af); font-size: 11px; font-weight: 600; }
+.efectivo-modal-grupo ul { list-style: none; margin: 0; padding: 4px 14px 8px; display: grid; gap: 6px; }
+.efectivo-modal-grupo li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 12.5px; color: var(--vy-ink-2, #4b5563); }
+.monto-positivo { color: #16a34a; font-weight: 700; }
+.monto-negativo { color: #dc2626; font-weight: 700; }
+.recompensa-detalle-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.recompensa-detalle-lista li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--vy-surface-2, #f9fafb); border-radius: 10px; font-size: 13px; }
 </style>

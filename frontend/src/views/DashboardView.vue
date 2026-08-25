@@ -14,6 +14,7 @@ const walletSummary = ref({
 });
 const rewards = ref([]);
 const rangos = ref([]);
+const progresoRangos = ref(null);
 const activePeriodo = ref(null);
 const showRanksModal = ref(false);
 
@@ -37,6 +38,18 @@ const walletMovements = computed(() => walletSummary.value.movimientos || []);
 const recentMovements = computed(() => walletMovements.value.slice(0, 5));
 const currentQp = computed(() => Number(wallet.value.saldoQp || 0));
 const activePeriodLabel = computed(() => activePeriodo.value?.nombre || "periodo activo");
+// Recompensas mensuales cobrables (nivel >= 2) pendientes de retiro, igual que la wallet
+const recompensasPorCobrar = computed(() =>
+  rewards.value
+    .filter((reward) => reward.cobrable === true && Number(reward.nivelGenerado || 0) >= 2)
+    .reduce(
+      (sum, reward) => sum + Math.max(0, Number(reward.montoEfectivo || 0) - Number(reward.montoEfectivoRetirado || 0)),
+      0
+    )
+);
+const efectivoPorCobrar = computed(() =>
+  Number(wallet.value.saldoDinero || 0) + recompensasPorCobrar.value
+);
 const redeemableProducts = computed(() =>
   rewards.value
     .filter((reward) => reward.cobrable !== false)
@@ -45,26 +58,47 @@ const redeemableProducts = computed(() =>
 const orderedRanks = computed(() =>
   [...rangos.value].sort((left, right) => Number(left.qpMinimo || 0) - Number(right.qpMinimo || 0))
 );
-const currentRank = computed(() =>
-  [...orderedRanks.value].reverse().find((rango) => currentQp.value >= Number(rango.qpMinimo || 0)) || null
+// Progreso de rangos desde el backend (aplica la regla de tope por rama directa)
+const rangosProgreso = computed(() => progresoRangos.value?.rangos || []);
+const rangoCumplidoInfo = computed(() => {
+  const cumplidos = rangosProgreso.value.filter((rango) => rango.cumple);
+  return cumplidos.length ? cumplidos[cumplidos.length - 1] : null;
+});
+const rangoSiguienteInfo = computed(() =>
+  rangosProgreso.value.find((rango) => !rango.cumple && Number(rango.qpMinimo || 0) > currentQp.value)
+    || rangosProgreso.value.find((rango) => !rango.cumple)
+    || null
 );
-const nextRank = computed(() =>
-  orderedRanks.value.find((rango) => currentQp.value < Number(rango.qpMinimo || 0)) || null
-);
-const rankProgress = computed(() => {
-  if (!orderedRanks.value.length) {
-    return 0;
+const currentRank = computed(() => {
+  if (rangoCumplidoInfo.value) {
+    return orderedRanks.value.find((rango) => rango.nombre === rangoCumplidoInfo.value.nombre)
+      || { nombre: rangoCumplidoInfo.value.nombre, qpMinimo: Number(rangoCumplidoInfo.value.qpMinimo || 0) };
   }
-
+  return [...orderedRanks.value].reverse().find((rango) => currentQp.value >= Number(rango.qpMinimo || 0)) || null;
+});
+const nextRank = computed(() => {
+  if (rangoSiguienteInfo.value) {
+    const encontrado = orderedRanks.value.find((rango) => rango.nombre === rangoSiguienteInfo.value.nombre);
+    if (encontrado) {
+      return encontrado;
+    }
+    return { nombre: rangoSiguienteInfo.value.nombre, qpMinimo: Number(rangoSiguienteInfo.value.qpMinimo || 0) };
+  }
+  return orderedRanks.value.find((rango) => currentQp.value < Number(rango.qpMinimo || 0)) || null;
+});
+const rankProgress = computed(() => {
   if (!nextRank.value) {
     return currentRank.value ? 100 : 0;
   }
 
   const target = Math.max(1, Number(nextRank.value.qpMinimo || 0));
-  return Math.min(100, Math.max(0, Math.round((currentQp.value / target) * 100)));
+  const qpContable = Number(rangoSiguienteInfo.value?.qpEfectivo ?? currentQp.value);
+  return Math.min(100, Math.max(0, Math.round((qpContable / target) * 100)));
 });
 const missingQp = computed(() =>
-  nextRank.value ? Math.max(0, Number(nextRank.value.qpMinimo || 0) - currentQp.value) : 0
+  nextRank.value
+    ? Math.max(0, Number(nextRank.value.qpMinimo || 0) - Number(rangoSiguienteInfo.value?.qpEfectivo ?? currentQp.value))
+    : 0
 );
 const rankSummary = computed(() => {
   if (!orderedRanks.value.length) {
@@ -92,8 +126,8 @@ const welcomeRankMessage = computed(() => {
 const dashboardKpis = computed(() => [
   {
     label: "Efectivo por cobrar",
-    value: `Bs. ${money(wallet.value.saldoDinero)}`,
-    hint: `Disponible en ${activePeriodLabel.value}`,
+    value: `Bs. ${money(efectivoPorCobrar.value)}`,
+    hint: `Billetera ${money(wallet.value.saldoDinero)} + recompensas ${money(recompensasPorCobrar.value)}`,
     state: loadingSummary.value ? "Actualizando" : "Disponible"
   },
   {
@@ -166,15 +200,17 @@ async function loadDashboardSummary() {
     activePeriodo.value = periodoResponse || null;
     const periodQuery = activePeriodo.value?.id ? `?periodoId=${activePeriodo.value.id}` : "";
 
-    const [walletResponse, rewardsResponse, rangosResponse] = await Promise.all([
+    const [walletResponse, rewardsResponse, rangosResponse, progresoResponse] = await Promise.all([
       apiRequest(`/api/billeteras/persona/${personaId.value}${periodQuery}`),
       apiRequest(`/api/recompensas/persona/${personaId.value}${periodQuery}`),
-      apiRequest("/api/rangos")
+      apiRequest("/api/rangos"),
+      apiRequest(`/api/billeteras/progreso-rangos?personaId=${personaId.value}`).catch(() => null)
     ]);
 
     walletSummary.value = walletResponse || { billetera: null };
     rewards.value = Array.isArray(rewardsResponse) ? rewardsResponse : [];
     rangos.value = Array.isArray(rangosResponse) ? rangosResponse : [];
+    progresoRangos.value = progresoResponse || null;
   } catch (exception) {
     summaryError.value = exception.message || "No se pudo cargar el resumen financiero.";
   } finally {
@@ -232,7 +268,11 @@ onMounted(loadDashboardSummary);
                 </div>
                 <div>
                   <strong>{{ nextRank ? `Proximo: ${nextRank.nombre}` : "Rango maximo alcanzado" }}</strong>
-                  <span v-if="nextRank">
+                  <span v-if="nextRank && rangoSiguienteInfo?.reglaDirectos">
+                    QP contable: <b>{{ money(rangoSiguienteInfo.qpEfectivo) }}</b> de
+                    <b>{{ money(nextRank.qpMinimo) }} QP</b>. Faltan <b>{{ money(missingQp) }} QP</b>.
+                  </span>
+                  <span v-else-if="nextRank">
                     Tienes <b>{{ money(currentQp) }} QP</b>. Faltan <b>{{ money(missingQp) }} QP</b> para llegar a {{ money(nextRank.qpMinimo) }} QP.
                   </span>
                   <span v-else-if="currentRank">
@@ -241,6 +281,29 @@ onMounted(loadDashboardSummary);
                   <span v-else>No hay rangos configurados para calcular el avance.</span>
                   <button class="vy-btn vy-btn-dark" type="button" @click="showRanksModal = true">Ver rangos</button>
                 </div>
+              </div>
+
+              <div v-if="rangoSiguienteInfo?.reglaDirectos" class="regla-directos-panel">
+                <h4>Regla de equilibrio entre ramas directas</h4>
+                <p>
+                  Para <b>{{ rangoSiguienteInfo.nombre }}</b> ({{ money(rangoSiguienteInfo.qpMinimo) }} QP) con
+                  <b>{{ rangoSiguienteInfo.numeroDirectos }}</b> referidos directos, cada rama cuenta hasta un maximo de
+                  <b>{{ money(rangoSiguienteInfo.topePorRama) }} QP</b>
+                  ({{ money(rangoSiguienteInfo.qpMinimo) }} ÷ {{ rangoSiguienteInfo.numeroDirectos }}).
+                  Todas las ramas deben aportar.
+                </p>
+                <ul v-if="rangoSiguienteInfo.ramas?.length">
+                  <li v-for="rama in rangoSiguienteInfo.ramas" :key="rama.nombrePersona">
+                    <span>{{ rama.nombrePersona || "Referido" }}</span>
+                    <span class="rama-qp">{{ money(rama.qpRama) }} QP
+                      <small v-if="Number(rama.qpRama) > Number(rama.qpContable)">→ cuentan {{ money(rama.qpContable) }}</small>
+                    </span>
+                  </li>
+                </ul>
+                <p class="regla-resumen">
+                  QP contable total: <b>{{ money(rangoSiguienteInfo.qpEfectivo) }}</b> de
+                  {{ money(rangoSiguienteInfo.qpMinimo) }} necesarios.
+                </p>
               </div>
             </div>
           </article>
@@ -845,4 +908,13 @@ td:nth-child(3) {
     grid-template-columns: 1fr;
   }
 }
+
+.regla-directos-panel { margin-top: 16px; padding: 14px 16px; background: var(--vy-surface-2, #f9fafb); border: 1px solid var(--vy-line, #e5e7eb); border-radius: 12px; }
+.regla-directos-panel h4 { margin: 0 0 6px; font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+.regla-directos-panel p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--vy-ink-2, #4b5563); }
+.regla-directos-panel ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
+.regla-directos-panel li { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; padding: 6px 10px; background: #fff; border-radius: 8px; border: 1px solid var(--vy-line-2, #f3f4f6); }
+.rama-qp { font-weight: 700; white-space: nowrap; }
+.rama-qp small { color: var(--vy-orange-deep, #b45309); font-weight: 700; }
+.regla-resumen { margin: 0 !important; font-weight: 600; }
 </style>

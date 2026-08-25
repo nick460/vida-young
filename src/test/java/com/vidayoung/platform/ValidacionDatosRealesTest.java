@@ -538,6 +538,61 @@ class ValidacionDatosRealesTest {
         assertEquals(redAntes, redDespues, "El recreador no debe duplicar el volumen de red");
     }
 
+    /**
+     * Regla de equidad desde rangos superiores a 25.000 QP: el QP contable por
+     * rama directa se topa a objetivo/numeroDeDirectos y todas las ramas aportan.
+     * Con 60.000 QP propios en una sola rama NO se alcanza ESMERALDA (50.000).
+     */
+    @Test
+    void reglaRangosAltos_elQpSeTopePorRamaDirecta() {
+        Rango esmeralda = rangoDao.findAll().stream()
+                .filter(r -> Auditoria.ESTADO_ACTIVO.equals(r.getEstado()))
+                .filter(r -> r.getNombre() != null && r.getNombre().equalsIgnoreCase("ESMERALDA"))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No existe rango ESMERALDA"));
+
+        Persona p = personaDao.save(Persona.builder().nombres("Regla").apellidos("Padre").build());
+        Billetera bp = billeteraDao.save(billetera(p, BigDecimal.ZERO, BigDecimal.ZERO));
+        bp.setSaldoQp(new BigDecimal("60000.00"));
+        billeteraDao.save(bp);
+
+        LocalDateTime ahora = LocalDateTime.now();
+        Plan plan = primerPlan();
+        // 5 ramas directas: 4 con 10.000 QP y una con 0
+        List<Persona> directos = new java.util.ArrayList<>();
+        for (int i = 1; i <= 4; i++) {
+            Persona d = personaDao.save(Persona.builder().nombres("Regla").apellidos("Rama" + i).build());
+            Billetera bd = billeteraDao.save(billetera(d, BigDecimal.ZERO, BigDecimal.ZERO));
+            bd.setSaldoQp(new BigDecimal("10000.00"));
+            billeteraDao.save(bd);
+            referidoDao.save(referido(d, p, plan, ahora.minusDays(30), ahora.plusDays(30), false));
+            directos.add(d);
+        }
+        Persona d5 = personaDao.save(Persona.builder().nombres("Regla").apellidos("Rama5").build());
+        referidoDao.save(referido(d5, p, plan, ahora.minusDays(30), ahora.plusDays(30), false));
+
+        var progreso = billeteraService.calcularProgresoRangos(p.getId());
+        var infoEsmeralda = progreso.rangos().stream()
+                .filter(r -> "ESMERALDA".equals(r.nombre()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(infoEsmeralda.reglaDirectos(), "ESMERALDA debe aplicar la regla de directos");
+        assertCompara("10000.00", infoEsmeralda.topePorRama()); // 50000 / 5
+        assertCompara("40000.00", infoEsmeralda.qpEfectivo());  // 4x10000 + 0
+        assertFalse(infoEsmeralda.cumple(), "Sin la quinta rama activa no alcanza ESMERALDA");
+
+        // La rama faltante crece: ahora todas aportan y ESMERALDA se alcanza
+        Billetera bd5 = billeteraDao.save(billetera(d5, BigDecimal.ZERO, BigDecimal.ZERO));
+        bd5.setSaldoQp(new BigDecimal("12000.00"));
+        billeteraDao.save(bd5);
+
+        billeteraService.actualizarRangoActual(p, new BigDecimal("60000.00"));
+        Persona pRecargada = personaDao.findById(p.getId()).orElseThrow();
+        assertNotNull(pRecargada.getRangoActual(), "Debe alcanzar un rango");
+        assertEquals(esmeralda.getId(), pRecargada.getRangoActual().getId(),
+                "Con todas las ramas al tope debe lograr ESMERALDA aunque su QP propio sea de otra rama");
+    }
+
     private Plan primerPlan() {
         return planDao.findAll().stream()
                 .filter(p -> Auditoria.ESTADO_ACTIVO.equals(p.getEstado()))

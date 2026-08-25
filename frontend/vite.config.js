@@ -27,6 +27,11 @@ export default defineConfig({
       "/uploads": {
         target: "http://localhost:9095",
         changeOrigin: true
+      },
+      "/ws-notificaciones": {
+        target: "http://localhost:9095",
+        changeOrigin: true,
+        ws: true
       }
     }
   }
