@@ -64,8 +64,11 @@ const movimientoGroups = computed(() => {
   const groups = new Map();
 
   movimientos.value.forEach((movimiento) => {
-    const referenciaTipo = movimiento.referenciaTipo || "MOVIMIENTO";
-    const referenciaId = movimiento.referenciaId || movimiento.id;
+    // Agrupa por compra cualquier movimiento con compra asociada
+    // (volumen propio/red, beneficios de activacion y sus ajustes)
+    const compraAsociada = movimiento.compra || null;
+    const referenciaTipo = compraAsociada ? "COMPRA" : (movimiento.referenciaTipo || "MOVIMIENTO");
+    const referenciaId = compraAsociada ? compraAsociada.id : (movimiento.referenciaId || movimiento.id);
     const key = `${referenciaTipo}-${referenciaId}`;
 
     if (!groups.has(key)) {
@@ -76,7 +79,7 @@ const movimientoGroups = computed(() => {
         title: movimientoTitle(movimiento),
         concepts: new Set(),
         date: movimiento.fechaRegistro,
-        compra: movimiento.compra || null,
+        compra: compraAsociada,
         dinero: 0,
         pv: 0,
         qp: 0,
@@ -166,9 +169,35 @@ function buildTree(rootPersonaId, visited = new Set()) {
 
   return childrenOf(personaId).map((item) => ({
     ...item,
+    activo: esActivo(item),
+    aporte: aportesPorPersona.value.get(Number(item.persona?.id)) || null,
     children: buildTree(item.persona?.id, new Set(visited))
   }));
 }
+
+/** Referido activo: membresia vigente al dia de hoy (misma regla que /red). */
+function esActivo(referido) {
+  if (!referido || referido.estado !== "ACTIVO") return false;
+  if (!referido.persona || referido.persona.estado !== "ACTIVO") return false;
+  if (!Boolean(referido.membresiaActiva) || !referido.fechaFinMembresia) return false;
+  return new Date(referido.fechaFinMembresia).getTime() >= Date.now();
+}
+
+/** Cuanto aportó cada comprador a la persona consultada (PV/QP/dinero por sus compras). */
+const aportesPorPersona = computed(() => {
+  const mapa = new Map();
+  movimientos.value.forEach((movimiento) => {
+    const compradorId = Number(movimiento.compra?.persona?.id || 0);
+    if (!compradorId) return;
+    const entrada = mapa.get(compradorId) || { pv: 0, qp: 0, dinero: 0 };
+    const amount = Number(movimiento.monto || 0);
+    if (movimiento.tipo === "PV") entrada.pv += amount;
+    if (movimiento.tipo === "QP") entrada.qp += amount;
+    if (movimiento.tipo === "DINERO") entrada.dinero += amount;
+    mapa.set(compradorId, entrada);
+  });
+  return mapa;
+});
 
 function flattenTree(nodes, level = 1) {
   return nodes.flatMap((node) => [

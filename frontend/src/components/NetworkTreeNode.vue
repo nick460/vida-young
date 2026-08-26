@@ -47,15 +47,24 @@ function progressWidth(node) {
   const percent = Math.min(100, 35 + children * 18);
   return `${percent}%`;
 }
+
+function money(value) {
+  return Number(value || 0).toLocaleString("es-BO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
+}
 </script>
 
 <template>
   <li class="tree-item">
-    <article class="tree-card">
+    <article class="tree-card" :class="node.activo === undefined ? '' : (node.activo ? 'estado-activo' : 'estado-inactivo')">
       <header>
-        <span class="member-avatar">
+        <span class="member-avatar" :class="node.activo === false ? 'avatar-inactivo' : ''">
           <img v-if="photoUrl(node.persona)" :src="photoUrl(node.persona)" :alt="fullName(node.persona)" />
           <span v-else>{{ initials(node.persona) }}</span>
+          <i v-if="node.activo !== undefined" class="status-dot" :class="node.activo ? 'dot-activo' : 'dot-inactivo'"
+             :title="node.activo ? 'Activo' : 'Inactivo'"></i>
         </span>
         <div>
           <strong>{{ fullName(node.persona) }}</strong>
@@ -74,6 +83,12 @@ function progressWidth(node) {
         <span>Nivel {{ level }}</span>
         <strong>{{ node.children?.length || 0 }} directos</strong>
       </footer>
+
+      <div v-if="node.aporte" class="aporte-box">
+        <span>Aporto a la red</span>
+        <strong>{{ money(node.aporte.pv) }} PV · {{ money(node.aporte.qp) }} QP</strong>
+        <em v-if="node.aporte.dinero > 0">Bs. {{ money(node.aporte.dinero) }} en dinero</em>
+      </div>
     </article>
 
     <ul v-if="node.children?.length" class="tree-children">
@@ -230,6 +245,72 @@ function progressWidth(node) {
 
 .tree-card footer strong {
   color: var(--vy-ink-2);
+}
+
+/* Estado activo/inactivo */
+.tree-card.estado-activo {
+  border-color: rgba(22, 163, 74, 0.45);
+}
+
+.tree-card.estado-inactivo {
+  border-color: rgba(220, 38, 38, 0.5);
+  background: linear-gradient(180deg, #fff 0%, rgba(254, 242, 242, 0.6) 100%);
+}
+
+.member-avatar {
+  position: relative;
+}
+
+.status-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.dot-activo {
+  background: #16a34a;
+}
+
+.dot-inactivo {
+  background: #dc2626;
+}
+
+.avatar-inactivo {
+  filter: grayscale(0.7);
+  opacity: 0.75;
+}
+
+.aporte-box {
+  margin-top: 8px;
+  padding: 7px 9px;
+  background: rgba(242, 135, 5, 0.08);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.aporte-box span {
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vy-orange-deep);
+}
+
+.aporte-box strong {
+  font-size: 11.5px;
+  color: var(--vy-ink);
+}
+
+.aporte-box em {
+  font-size: 10px;
+  font-style: normal;
+  color: #16a34a;
+  font-weight: 700;
 }
 
 .tree-children {
