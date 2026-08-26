@@ -258,6 +258,11 @@ public class CompraServiceImpl implements CompraService {
             return 0;
         }
 
+        // 0. Migracion: eliminar los movimientos del antiguo "QP bono referido"
+        //    (regla eliminada). Sin ellos el QP quedaria doblemente contado junto
+        //    al nuevo volumen de red.
+        retirarMovimientosBonoReferido(compra);
+
         // 1. Limpieza silenciosa: revierte el dinero pagado y elimina los beneficios
         //    anteriores SIN crear entradas de anulacion (la compra sigue vigente).
         limpiarBeneficiosParaRecreacion(compra);
@@ -268,29 +273,50 @@ public class CompraServiceImpl implements CompraService {
                 .map(CompraDetalle::getCantidad)
                 .filter(value -> value != null)
                 .reduce(0, Integer::sum);
-        generarBeneficiosActivacion(compra, totalProductos);
+        generarBeneficiosActivacion(compra, totalProductos, notificar);
 
         // 3. Asegurar el volumen de red (PV+QP a los 9 niveles): idempotente.
-        acreditarVolumenRed(compra);
+        acreditarVolumenRed(compra, notificar);
 
         return 1;
     }
 
+    /** Marca ELIMINADO los movimientos del viejo bono referido y ajusta los saldos. */
+    private void retirarMovimientosBonoReferido(Compra compra) {
+        for (MovimientoBilletera movimiento : movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaId("COMPRA_BONO_REFERIDO", compra.getId())) {
+            if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())) {
+                continue;
+            }
+            Billetera billetera = movimiento.getBilletera();
+            if (MovimientoBilletera.TIPO_QP.equals(movimiento.getTipo())) {
+                billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).subtract(zeroIfNull(movimiento.getMonto())).max(BigDecimal.ZERO));
+                billeteraService.actualizarRangoActual(billetera.getPersona(), billetera.getSaldoQp());
+            } else if (MovimientoBilletera.TIPO_PV.equals(movimiento.getTipo())) {
+                billetera.setSaldoPv(zeroIfNull(billetera.getSaldoPv()).subtract(zeroIfNull(movimiento.getMonto())).max(BigDecimal.ZERO));
+            } else {
+                continue;
+            }
+            billeteraDao.save(billetera);
+            movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
+            movimientoBilleteraDao.save(movimiento);
+        }
+    }
     private void limpiarBeneficiosParaRecreacion(Compra compra) {
-        List<Long> beneficiosActivos = beneficioActivacionCompraDao.findByCompraId(compra.getId()).stream()
-                .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))
-                .map(BeneficioActivacionCompra::getId)
-                .toList();
-        if (beneficiosActivos.isEmpty()) {
+        // Barrer TODOS los beneficios de la compra (activos y ya eliminados):
+        // los movimientos huerfanos de ajustes de generaciones anteriores deben
+        // salir del calculo aunque su beneficio ya este marcado ELIMINADO.
+        List<BeneficioActivacionCompra> todos = beneficioActivacionCompraDao.findByCompraId(compra.getId());
+        if (todos.isEmpty()) {
             return;
         }
 
-        for (Long beneficioId : beneficiosActivos) {
+        for (BeneficioActivacionCompra beneficio : todos) {
             List<MovimientoBilletera> movimientos = new ArrayList<>();
             movimientos.addAll(movimientoBilleteraDao
-                    .findByReferenciaTipoAndReferenciaId("BENEFICIO_ACTIVACION_COMPRA", beneficioId));
+                    .findByReferenciaTipoAndReferenciaId("BENEFICIO_ACTIVACION_COMPRA", beneficio.getId()));
             movimientos.addAll(movimientoBilleteraDao
-                    .findByReferenciaTipoAndReferenciaId("ACTUALIZACION_BENEFICIO_ACTIVACION", beneficioId));
+                    .findByReferenciaTipoAndReferenciaId("ACTUALIZACION_BENEFICIO_ACTIVACION", beneficio.getId()));
 
             for (MovimientoBilletera movimiento : movimientos) {
                 if (!Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado())
@@ -303,13 +329,13 @@ public class CompraServiceImpl implements CompraService {
                 movimiento.setEstado(Auditoria.ESTADO_ELIMINADO);
                 movimientoBilleteraDao.save(movimiento);
             }
-        }
 
-        beneficioActivacionCompraDao.findAllById(beneficiosActivos).forEach(beneficio -> {
-            beneficio.setEstado(Auditoria.ESTADO_ELIMINADO);
-            beneficio.setMotivo("Reemplazado por reproceso de recompensas (compra #" + compra.getId() + ")");
-            beneficioActivacionCompraDao.save(beneficio);
-        });
+            if (!Auditoria.ESTADO_ELIMINADO.equals(beneficio.getEstado())) {
+                beneficio.setEstado(Auditoria.ESTADO_ELIMINADO);
+                beneficio.setMotivo("Reemplazado por reproceso de recompensas (compra #" + compra.getId() + ")");
+                beneficioActivacionCompraDao.save(beneficio);
+            }
+        }
     }
 
     private void revertirMovimientosCompra(Compra compra) {
@@ -726,7 +752,7 @@ public class CompraServiceImpl implements CompraService {
         billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPvPropio(), compra.getPeriodo());
         billeteraService.recalcularBeneficiosActivacion(compra.getPersona());
         // El PV y QP de la compra sube por la red hasta 9 niveles (comprador + 9 = 10)
-        acreditarVolumenRed(compra);
+        acreditarVolumenRed(compra, true);
 
         notificacionService.notificarPersona(
                 compra.getPersona().getId(),
@@ -737,11 +763,11 @@ public class CompraServiceImpl implements CompraService {
         );
 
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {
-            generarBeneficiosActivacion(compra, totalProductos);
+            generarBeneficiosActivacion(compra, totalProductos, true);
         }
     }
 
-    private int acreditarVolumenRed(Compra compra) {
+    private int acreditarVolumenRed(Compra compra, boolean notificar) {
         BigDecimal totalPv = zeroIfNull(compra.getTotalPv());
         BigDecimal totalQp = zeroIfNull(compra.getTotalQp());
         if (totalPv.compareTo(BigDecimal.ZERO) <= 0 && totalQp.compareTo(BigDecimal.ZERO) <= 0) {
@@ -805,14 +831,16 @@ public class CompraServiceImpl implements CompraService {
             }
 
             if (acredito) {
-                notificacionService.notificarPersona(
-                        beneficiario.getId(),
-                        Notificacion.TIPO_COMPRA,
-                        "Volumen de red",
-                        "Recibiste " + totalPv + " PV y " + totalQp + " QP de tu red (nivel " + nivel
-                                + ") por la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
-                        "wallet"
-                );
+                if (notificar) {
+                    notificacionService.notificarPersona(
+                            beneficiario.getId(),
+                            Notificacion.TIPO_COMPRA,
+                            "Volumen de red",
+                            "Recibiste " + totalPv + " PV y " + totalQp + " QP de tu red (nivel " + nivel
+                                    + ") por la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
+                            "wallet"
+                    );
+                }
                 creditados++;
             }
 
@@ -890,7 +918,7 @@ public class CompraServiceImpl implements CompraService {
         return billetera;
     }
 
-    private void generarBeneficiosActivacion(Compra compra, int totalProductos) {
+    private void generarBeneficiosActivacion(Compra compra, int totalProductos, boolean notificar) {
         // El beneficio de dinero se genera SIEMPRE hasta 10 niveles hacia arriba,
         // aunque el beneficiario no cobre todavia: queda registrado para el pago
         // retroactivo cuando active membresia o suba de plan/rango.
@@ -955,13 +983,15 @@ public class CompraServiceImpl implements CompraService {
                         .monto(montoTotal)
                         .saldoResultado(billetera.getSaldoDinero())
                         .build());
-                notificacionService.notificarPersona(
-                        beneficiario.getId(),
-                        Notificacion.TIPO_RECOMPENSA,
-                        "Beneficio de activacion",
-                        "Recibiste S/ " + montoTotal + " por el beneficio de activacion nivel " + nivel + " de la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
-                        "wallet"
-                );
+                if (notificar) {
+                    notificacionService.notificarPersona(
+                            beneficiario.getId(),
+                            Notificacion.TIPO_RECOMPENSA,
+                            "Beneficio de activacion",
+                            "Recibiste S/ " + montoTotal + " por el beneficio de activacion nivel " + nivel + " de la compra #" + compra.getId() + " de " + nombreCompleto(compra.getPersona()) + ".",
+                            "wallet"
+                    );
+                }
             }
 
             beneficiario = referidoDao.findByPersonaId(beneficiario.getId())

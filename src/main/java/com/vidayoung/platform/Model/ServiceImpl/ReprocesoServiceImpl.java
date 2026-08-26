@@ -97,12 +97,16 @@ public class ReprocesoServiceImpl implements ReprocesoService {
     /**
      * Recrea las recompensas de TODAS las compras validadas/confirmadas con la
      * logica vigente, compra por compra:
+     * 0. Reconstruye saldo_pv_propio desde los movimientos historicos (PRIMERO:
+     *    los beneficios se pagan segun el plan que determina ese PV propio).
      * 1. Revierte y elimina los beneficios anteriores (auditoria conservada).
      * 2. Los regenera con 10 niveles, alcance efectivo plan+rango y montos actuales.
      * 3. Asegura el volumen de red (PV+QP a 9 niveles), idempotente.
-     * 4. Reconstruye saldo_pv_propio desde los movimientos historicos de compras propias.
      */
     private RecreacionResumen ejecutarRecreacion(boolean notificar) {
+        // Paso 0: reconstruir PV propio ANTES de generar beneficios
+        int saldosPvPropioActualizados = reconstruirSaldosPvPropio();
+
         List<Compra> compras = compraDao.findAllByOrderByFechaCompraDesc().stream()
                 .filter(compra -> Auditoria.ESTADO_ACTIVO.equals(compra.getEstado()))
                 .filter(compra -> Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra())
@@ -134,21 +138,6 @@ public class ReprocesoServiceImpl implements ReprocesoService {
             }
         }
 
-        int saldosPvPropioActualizados = 0;
-        for (Object[] fila : movimientoBilleteraDao.sumarPvPropioPorBilletera()) {
-            Long billeteraId = ((Number) fila[0]).longValue();
-            BigDecimal totalPvPropio = fila[1] == null ? BigDecimal.ZERO : new BigDecimal(fila[1].toString());
-            Billetera billetera = billeteraDao.findById(billeteraId).orElse(null);
-            if (billetera == null) {
-                continue;
-            }
-            if (zeroIfNull(billetera.getSaldoPvPropio()).compareTo(totalPvPropio) != 0) {
-                billetera.setSaldoPvPropio(totalPvPropio);
-                billeteraDao.save(billetera);
-                saldosPvPropioActualizados++;
-            }
-        }
-
         return new RecreacionResumen(
                 false,
                 comprasProcesadas,
@@ -160,8 +149,26 @@ public class ReprocesoServiceImpl implements ReprocesoService {
         );
     }
 
-    private int contarBeneficiosActivos(Long compraId) {
-        return (int) beneficioActivacionCompraDao.findByCompraId(compraId).stream()
+    /** Reconstruye saldo_pv_propio de todas las billeteras desde movimientos COMPRA/PV activos. */
+    private int reconstruirSaldosPvPropio() {
+        int actualizados = 0;
+        for (Object[] fila : movimientoBilleteraDao.sumarPvPropioPorBilletera()) {
+            Long billeteraId = ((Number) fila[0]).longValue();
+            BigDecimal totalPvPropio = fila[1] == null ? BigDecimal.ZERO : new BigDecimal(fila[1].toString());
+            Billetera billetera = billeteraDao.findById(billeteraId).orElse(null);
+            if (billetera == null) {
+                continue;
+            }
+            if (zeroIfNull(billetera.getSaldoPvPropio()).compareTo(totalPvPropio) != 0) {
+                billetera.setSaldoPvPropio(totalPvPropio);
+                billeteraDao.save(billetera);
+                actualizados++;
+            }
+        }
+        return actualizados;
+    }
+
+    private int contarBeneficiosActivos(Long compraId) {        return (int) beneficioActivacionCompraDao.findByCompraId(compraId).stream()
                 .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))
                 .count();
     }
