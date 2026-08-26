@@ -183,11 +183,14 @@ function esActivo(referido) {
   return new Date(referido.fechaFinMembresia).getTime() >= Date.now();
 }
 
-/** Cuanto aportó cada comprador a la persona consultada (PV/QP/dinero por sus compras). */
+/** Cuanto aportó cada comprador a la persona consultada en el mes consultado (PV/QP/dinero). */
 const aportesPorPersona = computed(() => {
   const mapa = new Map();
   movimientos.value.forEach((movimiento) => {
-    const compradorId = Number(movimiento.compra?.persona?.id || 0);
+    // La compra expone al comprador plano: compra.personaId
+    const compradorId = Number(movimiento.compra?.personaNombres !== undefined
+      ? movimiento.compra?.personaId
+      : movimiento.compra?.persona?.id || 0);
     if (!compradorId) return;
     const entrada = mapa.get(compradorId) || { pv: 0, qp: 0, dinero: 0 };
     const amount = Number(movimiento.monto || 0);
