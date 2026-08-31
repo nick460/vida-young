@@ -5,7 +5,7 @@ import select2 from "select2";
 import "select2/dist/css/select2.css";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { ArrowDownToLine, CalendarClock, CheckCircle2, Eye, PackageCheck, Printer, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
+import { ArrowDownToLine, CalendarClock, CheckCircle2, Download, Eye, PackageCheck, Printer, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import logoFull from "../assets/logoFull.png";
 
@@ -760,6 +760,42 @@ function nextPage() {
   page.value = Math.min(totalPages.value, page.value + 1);
 }
 
+function exportExcel() {
+  if (!allRows.value.length) return;
+  const headers = ["Persona", "Documento", "Rango", "Efectivo", "Productos", "PV", "QP", "Estado retiro"];
+  const rows = allRows.value.map((saldo) => [
+    `"${`${saldo.nombres || ""} ${saldo.apellidos || ""}`.trim().replaceAll('"', '""')}"`,
+    `"${String(saldo.documento || "Sin documento").replaceAll('"', '""')}"`,
+    `"${String(saldo.rangoNombre || "Sin rango").replaceAll('"', '""')}"`,
+    Number(Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0)).toFixed(2).replace(".", ","),
+    Number(saldo.saldoProductos || 0).toFixed(2).replace(".", ","),
+    Number(saldo.saldoPv || 0).toFixed(2).replace(".", ","),
+    Number(saldo.saldoQp || 0).toFixed(2).replace(".", ","),
+    saldo.rowType === "RETIRADO" ? "Retirado" : "Pendiente"
+  ]);
+  const totalsRow = [
+    '"TOTAL"',
+    '""',
+    '""',
+    Number(totals.value.dinero || 0).toFixed(2).replace(".", ","),
+    Number(totals.value.productos || 0).toFixed(2).replace(".", ","),
+    Number(totals.value.pv || 0).toFixed(2).replace(".", ","),
+    Number(totals.value.qp || 0).toFixed(2).replace(".", ","),
+    '""'
+  ];
+  const csv = [headers.join(";"), ...rows.map((r) => r.join(";")), totalsRow.join(";")].join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const periodo = selectedPeriodo.value?.nombre ? `-${selectedPeriodo.value.nombre.replaceAll(" ", "_")}` : "";
+  a.download = `retiros${periodo}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 watch(periodos, () => {
   initPeriodoSelect2();
 });
@@ -886,10 +922,15 @@ onBeforeUnmount(() => {
             <h2>Retiros por persona</h2>
             <p>Consulta pendientes y retiros procesados del mes seleccionado.</p>
           </div>
-          <label class="search-box">
-            <Search :size="16" />
-            <input v-model.trim="searchTerm" type="search" placeholder="Buscar persona o documento" />
-          </label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button class="refresh-action" type="button" :disabled="!allRows.length" @click="exportExcel" title="Exportar a Excel">
+              <Download :size="16" /> Exportar
+            </button>
+            <label class="search-box">
+              <Search :size="16" />
+              <input v-model.trim="searchTerm" type="search" placeholder="Buscar persona o documento" />
+            </label>
+          </div>
         </header>
 
         <div v-if="loading" class="loading-box">Cargando saldos...</div>
@@ -904,7 +945,6 @@ onBeforeUnmount(() => {
                 <th>Productos</th>
                 <th>PV</th>
                 <th>QP</th>
-                <th>CR</th>
                 <th>Estado</th>
                 <th></th>
               </tr>
@@ -927,7 +967,6 @@ onBeforeUnmount(() => {
                 <td>Bs. {{ money(saldo.saldoProductos) }}</td>
                 <td>{{ money(saldo.saldoPv) }}</td>
                 <td>{{ money(saldo.saldoQp) }}</td>
-                <td>{{ money(saldo.saldoCr) }}</td>
                 <td>
                   <span class="withdrawal-status" :class="saldo.rowType === 'RETIRADO' ? 'processed' : 'pending'">
                     {{ saldo.rowType === "RETIRADO" ? "Retirado" : "Pendiente" }}
@@ -948,7 +987,7 @@ onBeforeUnmount(() => {
                 </td>
               </tr>
               <tr v-if="!allRows.length && !loading">
-                <td colspan="10">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
+                <td colspan="9">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
               </tr>
             </tbody>
           </table>
@@ -997,7 +1036,7 @@ onBeforeUnmount(() => {
                 <div>
                   <small>Productos / puntos</small>
                   <strong>Productos Bs. {{ money(selectedSaldoDetalle?.saldoProductos) }}</strong>
-                  <span>PV {{ money(selectedSaldoDetalle?.saldoPv) }} - QP {{ money(selectedSaldoDetalle?.saldoQp) }} - CR {{ money(selectedSaldoDetalle?.saldoCr) }}</span>
+                  <span>PV {{ money(selectedSaldoDetalle?.saldoPv) }} - QP {{ money(selectedSaldoDetalle?.saldoQp) }}</span>
                 </div>
               </div>
 
@@ -1050,7 +1089,6 @@ onBeforeUnmount(() => {
                         <th>Productos</th>
                         <th>PV</th>
                         <th>QP</th>
-                        <th>CR</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1067,10 +1105,9 @@ onBeforeUnmount(() => {
                         <td>Bs. {{ money(row.productos) }}</td>
                         <td>{{ money(row.pv) }}</td>
                         <td>{{ money(row.qp) }}</td>
-                        <td>{{ money(row.cr) }}</td>
                       </tr>
                       <tr v-if="!detalleOrigenRows.length">
-                        <td colspan="7">No hay movimientos para el periodo seleccionado.</td>
+                        <td colspan="6">No hay movimientos para el periodo seleccionado.</td>
                       </tr>
                     </tbody>
                   </table>

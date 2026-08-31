@@ -88,9 +88,9 @@ const selectedPeriodo = computed(() =>
 );
 const efectivoSeleccionadoDisponible = computed(() => efectivoDisponible(selected.value));
 const productosSeleccionadoDisponible = computed(() => productosDisponible(selected.value));
-const retiroExcedeEfectivo = computed(() => Number(form.value.montoDinero || 0) > efectivoSeleccionadoDisponible.value);
-const retiroExcedeProductos = computed(() => retiroProductosTotal.value > productosSeleccionadoDisponible.value);
-const retiroTieneMonto = computed(() => Number(form.value.montoDinero || 0) > 0 || retiroProductosTotal.value > 0);
+const retiroExcedeEfectivo = computed(() => Number(form.value.montoDinero || 0) !== efectivoSeleccionadoDisponible.value);
+const retiroExcedeProductos = computed(() => retiroProductosTotal.value !== productosSeleccionadoDisponible.value);
+const retiroTieneMonto = computed(() => efectivoSeleccionadoDisponible.value > 0 || productosSeleccionadoDisponible.value > 0);
 const retiroTieneMontosValidos = computed(() => Number(form.value.montoDinero || 0) >= 0 && retiroProductosTotal.value >= 0);
 const canRegistrarRetiro = computed(() =>
   Boolean(selected.value)
@@ -472,6 +472,8 @@ function nextPage() {
 
 async function registrarRetiro() {
   if (!selected.value || processing.value) return;
+  // Forzar retiro total
+  form.value.montoDinero = efectivoSeleccionadoDisponible.value;
   if (!canRegistrarRetiro.value) {
     await Swal.fire({
       title: "Montos no válidos",
@@ -809,15 +811,16 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="withdraw-grid">
-              <label class="field" :class="{ invalid: retiroExcedeEfectivo }">
-                <span>Retirar efectivo</span>
-                <input v-model.number="form.montoDinero" type="number" min="0" step="0.01" />
-                <small v-if="retiroExcedeEfectivo">Supera el efectivo disponible.</small>
-              </label>
+              <div class="field">
+                <span>Retirar efectivo (total obligatorio)</span>
+                <div class="readonly-total">Bs. {{ money(efectivoSeleccionadoDisponible) }}</div>
+                <small>Se retirará la totalidad del efectivo disponible.</small>
+              </div>
               <div class="field" :class="{ invalid: retiroExcedeProductos }">
-                <span>Total productos</span>
-                <div class="readonly-total">Bs. {{ money(retiroProductosTotal) }}</div>
-                <small v-if="retiroExcedeProductos">Supera el crédito disponible.</small>
+                <span>Total productos (total obligatorio)</span>
+                <div class="readonly-total">Bs. {{ money(retiroProductosTotal) }} / Bs. {{ money(productosSeleccionadoDisponible) }}</div>
+                <small v-if="retiroExcedeProductos">Debe seleccionar productos por el total del crédito disponible.</small>
+                <small v-else>Debe cubrir la totalidad del crédito en productos.</small>
               </div>
             </div>
 
