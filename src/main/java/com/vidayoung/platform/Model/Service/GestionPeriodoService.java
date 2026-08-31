@@ -30,4 +30,6 @@ public interface GestionPeriodoService {
     PeriodoGestion desactivarPeriodoActivo();
 
     PeriodoGestion cerrarPeriodoActivo();
+
+    PeriodoGestion rotarPeriodoMensualAutomatico();
 }

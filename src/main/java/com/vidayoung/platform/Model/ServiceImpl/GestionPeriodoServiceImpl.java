@@ -173,6 +173,51 @@ public class GestionPeriodoServiceImpl implements GestionPeriodoService {
         return periodoGestionDao.save(activo);
     }
 
+    @Override
+    @Transactional
+    public PeriodoGestion rotarPeriodoMensualAutomatico() {
+        PeriodoGestion activo = buscarPeriodoActivo().orElseGet(this::crearPeriodoActualActivo);
+        LocalDate hoy = LocalDate.now(java.time.ZoneId.of("America/La_Paz"));
+        // No rotar si hoy es antes del fin del periodo (aun no es ultimo dia o ya paso pero reconciliacion lo forzara)
+        // Para el cron L (23:59 ultimo dia) -> hoy.equals(fechaFin) => rota
+        // Para reconciliacion (01 00:05) -> hoy.isAfter(fechaFin) => tambien rota para recuperar dias perdidos
+        if (hoy.isBefore(activo.getFechaFin())) {
+            return activo;
+        }
+        // Si ya existe otro ACTIVO distinto (ejecucion duplicada del scheduler en el mismo minuto)
+        if (periodoGestionDao.findFirstByEstadoPeriodoOrderByFechaInicioDesc(PeriodoGestion.ESTADO_PERIODO_ACTIVO)
+                .filter(p -> !p.getId().equals(activo.getId()))
+                .isPresent()) {
+            if (PeriodoGestion.ESTADO_PERIODO_ACTIVO.equals(activo.getEstadoPeriodo())) {
+                activo.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_PENDIENTE_CIERRE);
+                periodoGestionDao.save(activo);
+                return periodoGestionDao.findFirstByEstadoPeriodoOrderByFechaInicioDesc(PeriodoGestion.ESTADO_PERIODO_ACTIVO)
+                        .orElse(activo);
+            }
+            return periodoGestionDao.findFirstByEstadoPeriodoOrderByFechaInicioDesc(PeriodoGestion.ESTADO_PERIODO_ACTIVO).orElse(activo);
+        }
+        // Si hoy esta despues del fin, es reconciliacion tardia -> igual rotar
+        // 1. Pasar activo a PENDIENTE_CIERRE
+        activo.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_PENDIENTE_CIERRE);
+        periodoGestionDao.save(activo);
+
+        // 2. Calcular siguiente mes (maneja cambio de año Dic -> Ene)
+        LocalDate siguienteFecha = activo.getFechaFin().plusDays(1);
+        int nextAnio = siguienteFecha.getYear();
+        int nextMes = siguienteFecha.getMonthValue();
+
+        Gestion gestionSiguiente = crearGestion(nextAnio, "Gestion " + nextAnio);
+        PeriodoGestion siguiente = periodoGestionDao.findByGestionIdAndMes(gestionSiguiente.getId(), nextMes)
+                .orElseGet(() -> periodoGestionDao.save(buildPeriodo(gestionSiguiente, nextMes, null, PeriodoGestion.ESTADO_PERIODO_PENDIENTE)));
+
+        // Si ya estaba CERRADO no se puede activar
+        if (PeriodoGestion.ESTADO_PERIODO_CERRADO.equals(siguiente.getEstadoPeriodo())) {
+            throw new IllegalStateException("No se puede activar un periodo cerrado: " + siguiente.getNombre());
+        }
+        siguiente.setEstadoPeriodo(PeriodoGestion.ESTADO_PERIODO_ACTIVO);
+        return periodoGestionDao.save(siguiente);
+    }
+
     private PeriodoGestion crearPeriodoActualActivo() {
         LocalDate today = LocalDate.now();
         Gestion gestion = crearGestion(today.getYear(), "Gestion " + today.getYear());
