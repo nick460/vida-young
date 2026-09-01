@@ -5,6 +5,7 @@ import com.vidayoung.platform.Model.Dao.BeneficioActivacionCompraDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
+import com.vidayoung.platform.Model.Dao.PeriodoGestionDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionNivelDao;
@@ -68,6 +69,7 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final BilleteraDao billeteraDao;
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
+    private final PeriodoGestionDao periodoGestionDao;
     private final HistorialMembresiaDao historialMembresiaDao;
     private final PersonaDao personaDao;
     private final PlanActivacionDao planActivacionDao;
@@ -93,27 +95,53 @@ public class BilleteraServiceImpl implements BilleteraService {
             return new ProgresoRangosResponse(BigDecimal.ZERO, null, null, List.of());
         }
 
-        BigDecimal qpTotal = billeteraDao.findByPersonaId(personaId)
-                .map(billetera -> zeroIfNull(billetera.getSaldoQp()))
-                .orElse(BigDecimal.ZERO);
-
+        // QP del mes activo (no acumulado total) — para que el dashboard muestre rango del periodo vigente
+        PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
+        BigDecimal qpTotal;
+        Map<Long, BigDecimal> qpPorPersona = new HashMap<>();
+        Map<Long, String> nombrePorPersona = new HashMap<>();
         Map<Long, List<Long>> hijosPorPersona = new HashMap<>();
+
+        // Nombres para ramas (independiente del periodo)
+        billeteraDao.findAll().forEach(billetera -> {
+            if (billetera.getPersona() != null && billetera.getPersona().getId() != null) {
+                nombrePorPersona.put(billetera.getPersona().getId(),
+                        ((billetera.getPersona().getNombres() == null ? "" : billetera.getPersona().getNombres()) + " "
+                                + (billetera.getPersona().getApellidos() == null ? "" : billetera.getPersona().getApellidos())).trim());
+            }
+        });
+
+        if (periodoActivo != null && periodoActivo.getId() != null) {
+            // Sumar QP solo de movimientos ACTIVOS del periodo activo
+            movimientoBilleteraDao.findByPeriodoIdWithPersona(periodoActivo.getId()).forEach(mov -> {
+                if (!Auditoria.ESTADO_ACTIVO.equals(mov.getEstado()) || !MovimientoBilletera.TIPO_QP.equals(mov.getTipo())) {
+                    return;
+                }
+                if (mov.getBilletera() == null || mov.getBilletera().getPersona() == null || mov.getBilletera().getPersona().getId() == null) {
+                    return;
+                }
+                Long pid = mov.getBilletera().getPersona().getId();
+                qpPorPersona.merge(pid, zeroIfNull(mov.getMonto()), BigDecimal::add);
+            });
+            qpTotal = qpPorPersona.getOrDefault(personaId, BigDecimal.ZERO);
+        } else {
+            // Fallback sin periodo activo: usar saldo acumulado
+            qpTotal = billeteraDao.findByPersonaId(personaId)
+                    .map(billetera -> zeroIfNull(billetera.getSaldoQp()))
+                    .orElse(BigDecimal.ZERO);
+            billeteraDao.findAll().forEach(billetera -> {
+                if (billetera.getPersona() != null && billetera.getPersona().getId() != null) {
+                    qpPorPersona.put(billetera.getPersona().getId(), zeroIfNull(billetera.getSaldoQp()));
+                }
+            });
+        }
+
         referidoDao.findAll().stream()
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
                 .filter(referido -> referido.getPatrocinador() != null && referido.getPatrocinador().getId() != null)
                 .forEach(referido -> hijosPorPersona
                         .computeIfAbsent(referido.getPatrocinador().getId(), key -> new ArrayList<>())
                         .add(referido.getPersona() == null ? null : referido.getPersona().getId()));
-        Map<Long, BigDecimal> qpPorPersona = new HashMap<>();
-        Map<Long, String> nombrePorPersona = new HashMap<>();
-        billeteraDao.findAll().forEach(billetera -> {
-            if (billetera.getPersona() != null && billetera.getPersona().getId() != null) {
-                qpPorPersona.put(billetera.getPersona().getId(), zeroIfNull(billetera.getSaldoQp()));
-                nombrePorPersona.put(billetera.getPersona().getId(),
-                        ((billetera.getPersona().getNombres() == null ? "" : billetera.getPersona().getNombres()) + " "
-                                + (billetera.getPersona().getApellidos() == null ? "" : billetera.getPersona().getApellidos())).trim());
-            }
-        });
 
         List<Referido> directos = referidoDao.findByPatrocinadorId(personaId).stream()
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
@@ -855,8 +883,9 @@ public class BilleteraServiceImpl implements BilleteraService {
     @Override
     @Transactional
     public int cerrarMesBilleteras() {
-        PeriodoGestion periodoActivo = gestionPeriodoService.obtenerPeriodoActivo();
-        String periodo = periodoKey(periodoActivo);
+        // Cerrar el periodo que esta pendiente de cierre (el mes que acabo), no el nuevo ACTIVO con movimientos del mes entrante
+        PeriodoGestion periodoACerrar = periodoGestionDaoFindPendienteCierreOrActivo();
+        String periodo = periodoKey(periodoACerrar);
         LocalDateTime fechaCierre = LocalDateTime.now();
         int totalCierres = 0;
 
@@ -866,11 +895,12 @@ public class BilleteraServiceImpl implements BilleteraService {
                 continue;
             }
 
-            BigDecimal saldoDinero = zeroIfNull(billetera.getSaldoDinero());
-            BigDecimal saldoPv = zeroIfNull(billetera.getSaldoPv());
-            BigDecimal saldoQp = zeroIfNull(billetera.getSaldoQp());
-            BigDecimal saldoCr = zeroIfNull(billetera.getSaldoCr());
-            BigDecimal saldoProductos = zeroIfNull(billetera.getSaldoProductos());
+            // Solo lo del mes que se cierra, no todo el saldo (preserva movimientos del nuevo mes activo)
+            BigDecimal saldoDinero = efectivoBilleteraDisponiblePeriodo(billetera.getPersona().getId(), periodoACerrar);
+            BigDecimal saldoPv = saldoPeriodo(billetera.getPersona().getId(), periodoACerrar, MovimientoBilletera.TIPO_PV);
+            BigDecimal saldoQp = saldoPeriodo(billetera.getPersona().getId(), periodoACerrar, MovimientoBilletera.TIPO_QP);
+            BigDecimal saldoCr = saldoPeriodo(billetera.getPersona().getId(), periodoACerrar, MovimientoBilletera.TIPO_CR);
+            BigDecimal saldoProductos = saldoPeriodo(billetera.getPersona().getId(), periodoACerrar, MovimientoBilletera.TIPO_PRODUCTOS);
             Rango rango = rangoAlcanzadoPorQp(saldoQp).orElse(null);
 
             CierreMensualBilletera cierre = cierreMensualBilleteraDao.save(CierreMensualBilletera.builder()
@@ -886,26 +916,32 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .rangoQpMinimo(rango == null ? null : zeroIfNull(rango.getQpMinimo()))
                     .estadoPlanilla(CierreMensualBilletera.ESTADO_PLANILLA_PENDIENTE)
                     .fechaCierre(fechaCierre)
-                    .periodoGestion(periodoActivo)
+                    .periodoGestion(periodoACerrar)
                     .build());
 
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_DINERO, saldoDinero, periodoActivo);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PV, saldoPv, periodoActivo);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_QP, saldoQp, periodoActivo);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_CR, saldoCr, periodoActivo);
-            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PRODUCTOS, saldoProductos, periodoActivo);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_DINERO, saldoDinero, periodoACerrar);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PV, saldoPv, periodoACerrar);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_QP, saldoQp, periodoACerrar);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_CR, saldoCr, periodoACerrar);
+            registrarMovimientoCierreSiAplica(billetera, cierre, MovimientoBilletera.TIPO_PRODUCTOS, saldoProductos, periodoACerrar);
 
-            billetera.setSaldoDinero(BigDecimal.ZERO);
-            billetera.setSaldoPv(BigDecimal.ZERO);
-            billetera.setSaldoQp(BigDecimal.ZERO);
-            billetera.setSaldoCr(BigDecimal.ZERO);
-            billetera.setSaldoProductos(BigDecimal.ZERO);
+            // Descontar SOLO lo del mes cerrado, preservando saldo del nuevo mes activo (ej: 1500 -> resta 1500, deja 200)
+            billetera.setSaldoDinero(zeroIfNull(billetera.getSaldoDinero()).subtract(saldoDinero).max(BigDecimal.ZERO));
+            billetera.setSaldoPv(zeroIfNull(billetera.getSaldoPv()).subtract(saldoPv).max(BigDecimal.ZERO));
+            billetera.setSaldoQp(zeroIfNull(billetera.getSaldoQp()).subtract(saldoQp).max(BigDecimal.ZERO));
+            billetera.setSaldoCr(zeroIfNull(billetera.getSaldoCr()).subtract(saldoCr).max(BigDecimal.ZERO));
+            billetera.setSaldoProductos(zeroIfNull(billetera.getSaldoProductos()).subtract(saldoProductos).max(BigDecimal.ZERO));
             billeteraDao.save(billetera);
-            actualizarRangoActual(billetera.getPersona(), BigDecimal.ZERO);
+            actualizarRangoActual(billetera.getPersona(), billetera.getSaldoQp());
             totalCierres++;
         }
 
         return totalCierres;
+    }
+
+    private PeriodoGestion periodoGestionDaoFindPendienteCierreOrActivo() {
+        return periodoGestionDao.findFirstByEstadoPeriodoOrderByFechaInicioDesc(PeriodoGestion.ESTADO_PERIODO_PENDIENTE_CIERRE)
+                .orElseGet(gestionPeriodoService::obtenerPeriodoActivo);
     }
 
     @Override
