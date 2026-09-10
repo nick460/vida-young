@@ -1270,6 +1270,7 @@ public class BilleteraServiceImpl implements BilleteraService {
             return BigDecimal.ZERO;
         }
         return movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodo.getId()).stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
                 .filter(movimiento -> tipo.equals(movimiento.getTipo()))
                 .map(MovimientoBilletera::getMonto)
                 .map(this::zeroIfNull)
