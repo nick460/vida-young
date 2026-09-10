@@ -64,8 +64,8 @@ const retiroRows = computed(() =>
     documento: retiro.documento,
     rangoNombre: retiro.rangoNombre,
     rangoQpMinimo: retiro.rangoQpMinimo,
-    saldoDinero: retiro.montoDinero,
-    efectivoRecompensasDisponible: 0,
+    saldoDinero: retiro.montoDesdeBilletera,
+    efectivoRecompensasDisponible: retiro.montoDesdeRecompensas,
     saldoProductos: retiro.montoProductos,
     saldoPv: 0,
     saldoQp: 0,
@@ -95,11 +95,13 @@ const totals = computed(() =>
   filteredSaldos.value.reduce(
     (acc, saldo) => ({
       dinero: acc.dinero + Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0),
+      compras: acc.compras + Number(saldo.saldoDinero || 0),
+      referidos: acc.referidos + Number(saldo.efectivoRecompensasDisponible || 0),
       productos: acc.productos + Number(saldo.saldoProductos || 0),
       pv: acc.pv + Number(saldo.saldoPv || 0),
       qp: acc.qp + Number(saldo.saldoQp || 0)
     }),
-    { dinero: 0, productos: 0, pv: 0, qp: 0 }
+    { dinero: 0, compras: 0, referidos: 0, productos: 0, pv: 0, qp: 0 }
   )
 );
 const billeteraSeleccionada = computed(() => selectedWallet.value?.billetera || {});
@@ -200,13 +202,13 @@ function retiroReceipt(retiro) {
     impresoPor: currentUserName(),
     detalles: [
       {
-        titulo: "Saldo directo de billetera",
-        descripcion: "Dinero retirado desde el saldo directo",
+        titulo: "Dinero de compras",
+        descripcion: "Beneficios de compras y activaciones",
         monto: Number(retiro.montoDesdeBilletera || 0)
       },
       {
-        titulo: "Efectivo de recompensas",
-        descripcion: "Monto retirado desde recompensas mensuales",
+        titulo: "Dinero por niveles de referidos",
+        descripcion: "Recompensas mensuales de nivel 2 en adelante",
         monto: Number(retiro.montoDesdeRecompensas || 0)
       },
       ...(retiro.detalles || []).map((item) => ({
@@ -678,8 +680,8 @@ async function registrarRetiro() {
     impresoPor: currentUserName(),
     detalles: [
       {
-        titulo: "Saldo directo de billetera",
-        descripcion: "Dinero acreditado previamente a la billetera",
+        titulo: "Dinero de compras",
+        descripcion: "Beneficios de compras y activaciones",
         monto: Number(billeteraSeleccionada.value.saldoDinero || 0)
       },
       ...detalleEfectivoMensual.value.map((item) => ({
@@ -776,12 +778,14 @@ function nextPage() {
 
 function exportExcel() {
   if (!allRows.value.length) return;
-  const headers = ["Persona", "Documento", "Rango", "Efectivo", "Productos", "PV", "QP", "Estado retiro"];
+  const headers = ["Persona", "Documento", "Rango", "Efectivo total", "Dinero compras", "Dinero referidos", "Productos", "PV", "QP", "Estado retiro"];
   const rows = allRows.value.map((saldo) => [
     `"${`${saldo.nombres || ""} ${saldo.apellidos || ""}`.trim().replaceAll('"', '""')}"`,
     `"${String(saldo.documento || "Sin documento").replaceAll('"', '""')}"`,
-    `"${String(saldo.rangoNombre || "Sin rango").replaceAll('"', '""')}"`,
+    `"${String(saldo.rangoNombre || "Standar").replaceAll('"', '""')}"`,
     Number(Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0)).toFixed(2).replace(".", ","),
+    Number(saldo.saldoDinero || 0).toFixed(2).replace(".", ","),
+    Number(saldo.efectivoRecompensasDisponible || 0).toFixed(2).replace(".", ","),
     Number(saldo.saldoProductos || 0).toFixed(2).replace(".", ","),
     Number(saldo.saldoPv || 0).toFixed(2).replace(".", ","),
     Number(saldo.saldoQp || 0).toFixed(2).replace(".", ","),
@@ -792,6 +796,8 @@ function exportExcel() {
     '""',
     '""',
     Number(totals.value.dinero || 0).toFixed(2).replace(".", ","),
+    Number(totals.value.compras || 0).toFixed(2).replace(".", ","),
+    Number(totals.value.referidos || 0).toFixed(2).replace(".", ","),
     Number(totals.value.productos || 0).toFixed(2).replace(".", ","),
     Number(totals.value.pv || 0).toFixed(2).replace(".", ","),
     Number(totals.value.qp || 0).toFixed(2).replace(".", ","),
@@ -908,6 +914,20 @@ onBeforeUnmount(() => {
           <p>{{ filteredSaldos.length }} personas con saldo.</p>
         </article>
         <article class="metric-card">
+          <span class="metric-icon"><WalletCards :size="20" /></span>
+          <div>
+            <small>Dinero compras</small>
+            <strong>Bs. {{ money(totals.compras) }}</strong>
+          </div>
+        </article>
+        <article class="metric-card">
+          <span class="metric-icon"><ArrowDownToLine :size="20" /></span>
+          <div>
+            <small>Dinero referidos</small>
+            <strong>Bs. {{ money(totals.referidos) }}</strong>
+          </div>
+        </article>
+        <article class="metric-card">
           <span class="metric-icon"><PackageCheck :size="20" /></span>
           <div>
             <small>Productos canjeables</small>
@@ -956,6 +976,8 @@ onBeforeUnmount(() => {
                 <th>Documento</th>
                 <th>Rango</th>
                 <th>Efectivo</th>
+                <th>Compras</th>
+                <th>Referidos</th>
                 <th>Productos</th>
                 <th>PV</th>
                 <th>QP</th>
@@ -974,10 +996,12 @@ onBeforeUnmount(() => {
                 </td>
                 <td>{{ saldo.documento || "Sin documento" }}</td>
                 <td>
-                  <span class="rank-pill">{{ saldo.rangoNombre || "Sin rango" }}</span>
+                  <span class="rank-pill">{{ saldo.rangoNombre || "Standar" }}</span>
                   <small v-if="saldo.rangoQpMinimo">QP min. {{ money(saldo.rangoQpMinimo) }}</small>
                 </td>
                 <td>Bs. {{ money(Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0)) }}</td>
+                <td>Bs. {{ money(saldo.saldoDinero) }}</td>
+                <td>Bs. {{ money(saldo.efectivoRecompensasDisponible) }}</td>
                 <td>Bs. {{ money(saldo.saldoProductos) }}</td>
                 <td>{{ money(saldo.saldoPv) }}</td>
                 <td>{{ money(saldo.saldoQp) }}</td>
@@ -1001,7 +1025,7 @@ onBeforeUnmount(() => {
                 </td>
               </tr>
               <tr v-if="!allRows.length && !loading">
-                <td colspan="9">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
+                <td colspan="11">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
               </tr>
             </tbody>
           </table>
@@ -1045,7 +1069,7 @@ onBeforeUnmount(() => {
                 <div>
                   <small>Efectivo tabla</small>
                   <strong>Bs. {{ money(detalleEfectivoTotal) }}</strong>
-                  <span>Billetera Bs. {{ money(detalleEfectivoDirecto) }} + recompensas Bs. {{ money(detalleEfectivoRecompensas) }}</span>
+                  <span>Compras Bs. {{ money(detalleEfectivoDirecto) }} + referidos Bs. {{ money(detalleEfectivoRecompensas) }}</span>
                 </div>
                 <div>
                   <small>Productos / puntos</small>
@@ -1064,14 +1088,14 @@ onBeforeUnmount(() => {
                 </header>
                 <div class="breakdown-row">
                   <span>
-                    <strong>Movimientos de billetera tipo DINERO</strong>
-                    <small>Suma de movimientos registrados para la persona en este periodo.</small>
+                    <strong>Dinero de compras</strong>
+                    <small>Beneficios de compras y activaciones registrados en este periodo.</small>
                   </span>
                   <b>Bs. {{ money(detalleEfectivoDirecto) }}</b>
                 </div>
                 <div class="breakdown-row">
                   <span>
-                    <strong>Recompensas mensuales cobrables</strong>
+                    <strong>Dinero por niveles de referidos</strong>
                     <small>Recompensas activas del periodo con nivel 2 en adelante.</small>
                   </span>
                   <b>Bs. {{ money(detalleEfectivoRecompensas) }}</b>
@@ -1177,15 +1201,15 @@ onBeforeUnmount(() => {
               </header>
               <div class="breakdown-row">
                 <span>
-                  <strong>Saldo directo de billetera</strong>
-                  <small>Dinero retirado desde el saldo directo.</small>
+                  <strong>Dinero de compras</strong>
+                  <small>Beneficios de compras y activaciones.</small>
                 </span>
                 <b>Bs. {{ money(selectedRetiroDetalle.montoDesdeBilletera) }}</b>
               </div>
               <div class="breakdown-row">
                 <span>
-                  <strong>Efectivo de recompensas</strong>
-                  <small>Monto retirado desde recompensas mensuales.</small>
+                  <strong>Dinero por niveles de referidos</strong>
+                  <small>Recompensas mensuales de nivel 2 en adelante.</small>
                 </span>
                 <b>Bs. {{ money(selectedRetiroDetalle.montoDesdeRecompensas) }}</b>
               </div>
@@ -1230,7 +1254,7 @@ onBeforeUnmount(() => {
                 <div>
                   <small>Efectivo mensual disponible</small>
                   <strong>Bs. {{ money(efectivoDisponibleRetiro) }}</strong>
-                  <span>Billetera Bs. {{ money(billeteraSeleccionada.saldoDinero) }} + recompensas Bs. {{ money(selectedWallet?.efectivoRecompensasDisponible) }}</span>
+                  <span>Compras Bs. {{ money(billeteraSeleccionada.saldoDinero) }} + referidos Bs. {{ money(selectedWallet?.efectivoRecompensasDisponible) }}</span>
                 </div>
                 <div>
                   <small>Productos nivel 1</small>
@@ -1250,8 +1274,8 @@ onBeforeUnmount(() => {
 
                 <div class="breakdown-row">
                   <span>
-                    <strong>Saldo directo de billetera</strong>
-                    <small>Dinero acreditado previamente a la billetera.</small>
+                    <strong>Dinero de compras</strong>
+                    <small>Beneficios de compras y activaciones registrados en este periodo.</small>
                   </span>
                   <b>Bs. {{ money(billeteraSeleccionada.saldoDinero) }}</b>
                 </div>
@@ -1315,7 +1339,7 @@ onBeforeUnmount(() => {
 .month-close-action { min-height: 42px; padding: 0 16px; border: 1px solid rgba(22, 101, 52, 0.22); border-radius: 12px; background: #166534; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 950; box-shadow: 0 10px 24px rgba(22, 101, 52, 0.16); }
 .month-close-action:hover:not(:disabled) { background: #15803d; transform: translateY(-1px); }
 .month-close-action:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
-.summary-grid { display: grid; grid-template-columns: minmax(260px, 1.35fr) repeat(3, minmax(160px, 1fr)); gap: 14px; }
+.summary-grid { display: grid; grid-template-columns: minmax(230px, 1.25fr) repeat(5, minmax(140px, 1fr)); gap: 14px; }
 .balance-card, .metric-card, .table-card { border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-sm); }
 .balance-card, .metric-card { border-radius: 18px; padding: 18px; }
 .balance-icon, .metric-icon { width: 44px; height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: var(--vy-orange); }
@@ -1329,7 +1353,7 @@ onBeforeUnmount(() => {
 .search-box { min-width: min(340px, 100%); min-height: 42px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); padding: 0 12px; color: var(--vy-ink-3); }
 .search-box input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; min-width: 980px; }
+table { width: 100%; border-collapse: collapse; min-width: 1180px; }
 th, td { padding: 13px 12px; border-bottom: 1px solid var(--vy-line-2); text-align: left; vertical-align: middle; font-size: 13px; }
 th { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 td strong, td small { display: block; }
