@@ -3,6 +3,7 @@ package com.vidayoung.platform.Model.ServiceImpl;
 import com.vidayoung.platform.Model.Dao.BilleteraDao;
 import com.vidayoung.platform.Model.Dao.BeneficioActivacionCompraDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
+import com.vidayoung.platform.Model.Dao.CompraDao;
 import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.PeriodoGestionDao;
@@ -20,6 +21,7 @@ import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.BeneficioActivacionCompra;
 import com.vidayoung.platform.Model.Entity.Billetera;
 import com.vidayoung.platform.Model.Entity.CierreMensualBilletera;
+import com.vidayoung.platform.Model.Entity.Compra;
 import com.vidayoung.platform.Model.Entity.HistorialMembresia;
 import com.vidayoung.platform.Model.Entity.MovimientoBilletera;
 import com.vidayoung.platform.Model.Entity.Notificacion;
@@ -80,6 +82,7 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final RecompensaDao recompensaDao;
     private final ReferidoDao referidoDao;
     private final BeneficioActivacionCompraDao beneficioActivacionCompraDao;
+    private final CompraDao compraDao;
     private final CarteraEmpresaService carteraEmpresaService;
     private final GestionPeriodoService gestionPeriodoService;
     private final RetiroBilleteraDao retiroBilleteraDao;
@@ -1271,11 +1274,31 @@ public class BilleteraServiceImpl implements BilleteraService {
         }
         return movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodo.getId()).stream()
                 .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .filter(movimiento -> !esDeCompraAnulada(movimiento))
                 .filter(movimiento -> tipo.equals(movimiento.getTipo()))
                 .map(MovimientoBilletera::getMonto)
                 .map(this::zeroIfNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .max(BigDecimal.ZERO);
+    }
+
+    private boolean esDeCompraAnulada(MovimientoBilletera movimiento) {
+        String tipo = movimiento.getReferenciaTipo();
+        Long refId = movimiento.getReferenciaId();
+        if (refId == null || tipo == null) {
+            return false;
+        }
+        if ("COMPRA".equals(tipo) || "ANULACION_COMPRA".equals(tipo) || "COMPRA_BONO_REFERIDO".equals(tipo) || "COMPRA_RED".equals(tipo)) {
+            return compraDao.findById(refId)
+                    .map(compra -> Compra.ESTADO_COMPRA_ANULADA.equals(compra.getEstadoCompra()))
+                    .orElse(false);
+        }
+        if ("BENEFICIO_ACTIVACION_COMPRA".equals(tipo) || "ACTUALIZACION_BENEFICIO_ACTIVACION".equals(tipo) || "ANULACION_BENEFICIO_COMPRA".equals(tipo)) {
+            return beneficioActivacionCompraDao.findById(refId)
+                    .map(beneficio -> beneficio.getCompra() != null && Compra.ESTADO_COMPRA_ANULADA.equals(beneficio.getCompra().getEstadoCompra()))
+                    .orElse(false);
+        }
+        return false;
     }
 
     private BigDecimal zeroIfNull(BigDecimal value) {
