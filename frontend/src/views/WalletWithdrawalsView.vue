@@ -319,9 +319,9 @@ function buildWithdrawalReceiptHtml(receipt) {
       font-weight: 700;
     }
     .signature-area {
-      margin-top: 0.45cm;
+      margin-top: 1cm;
       display: grid;
-      gap: 0.5cm;
+      gap: 1.05cm;
     }
     .signature {
       padding-top: 0.18cm;
