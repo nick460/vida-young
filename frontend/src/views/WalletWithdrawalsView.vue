@@ -318,12 +318,23 @@ function buildWithdrawalReceiptHtml(receipt) {
       font-size: 12pt;
       font-weight: 700;
     }
+    .signature-area {
+      margin-top: 0.45cm;
+      display: grid;
+      gap: 0.5cm;
+    }
     .signature {
-      margin-top: 0.55cm;
-      padding-top: 0.16cm;
+      padding-top: 0.18cm;
       border-top: 1px solid #000;
       text-align: center;
       font-size: 8pt;
+      min-height: 0.65cm;
+    }
+    .signature strong {
+      display: block;
+      margin-bottom: 0.03cm;
+      font-size: 8.5pt;
+      text-transform: uppercase;
     }
   </style>
 </head>
@@ -341,7 +352,10 @@ function buildWithdrawalReceiptHtml(receipt) {
     <div class="section-title">Detalle del retiro</div>
     ${detalles}
     <div class="row total"><span>Total retiro</span><span>Bs. ${escapeHtml(money(receipt.total))}</span></div>
-    <div class="signature">Firma / recibido conforme</div>
+    <div class="signature-area">
+      <div class="signature"><strong>Entregue conforme</strong>Firma y sello</div>
+      <div class="signature"><strong>Recibi conforme</strong>${escapeHtml(receipt.persona)}</div>
+    </div>
   </main>
 </body>
 </html>`;
