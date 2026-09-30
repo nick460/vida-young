@@ -76,6 +76,7 @@ public class DataInitializer {
             asignarMenuLogs(rol);
             asignarMenuNotificaciones(rol);
             asignarMenuEnLinea(rol);
+            asignarMenuEvolution(rol);
 
             usuarioDao.save(usuario);
         };
@@ -131,6 +132,27 @@ public class DataInitializer {
                         .icon("Wifi")
                         .custom(false)
                         .orden(96)
+                        .build());
+
+        menu.setEstado(Auditoria.ESTADO_ACTIVO);
+        menu.setCustom(false);
+        menu = menuSistemaDao.save(menu);
+
+        jdbcTemplate.update(
+                "INSERT INTO roles_menus (rol_id, menu_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                rol.getId(),
+                menu.getId()
+        );
+    }
+
+    private void asignarMenuEvolution(Rol rol) {
+        MenuSistema menu = menuSistemaDao.findByMenuId("evolution-config")
+                .orElseGet(() -> MenuSistema.builder()
+                        .menuId("evolution-config")
+                        .label("Evolution API")
+                        .icon("MessageCircle")
+                        .custom(false)
+                        .orden(97)
                         .build());
 
         menu.setEstado(Auditoria.ESTADO_ACTIVO);

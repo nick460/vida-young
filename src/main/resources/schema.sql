@@ -551,6 +551,9 @@ ALTER TABLE preinscripciones_referidos
     ADD COLUMN IF NOT EXISTS username_solicitado VARCHAR(50) NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS password_solicitado VARCHAR(255) NOT NULL DEFAULT '';
 
+ALTER TABLE preinscripciones_referidos
+    ADD COLUMN IF NOT EXISTS password_solicitado_texto VARCHAR(120);
+
 CREATE INDEX IF NOT EXISTS idx_preinscripciones_referidos_estado
     ON preinscripciones_referidos (estado_preinscripcion);
 
@@ -926,6 +929,36 @@ CREATE TABLE IF NOT EXISTS dispositivos (
 
 CREATE INDEX IF NOT EXISTS idx_dispositivos_persona ON dispositivos (persona_id);
 CREATE INDEX IF NOT EXISTS idx_dispositivos_token ON dispositivos (token);
+
+CREATE TABLE IF NOT EXISTS evolution_api_config (
+    id BIGINT PRIMARY KEY,
+    habilitado BOOLEAN NOT NULL DEFAULT FALSE,
+    api_url VARCHAR(255),
+    api_key VARCHAR(255),
+    instance_name VARCHAR(120),
+    codigo_pais VARCHAR(8) NOT NULL DEFAULT '591',
+    login_url VARCHAR(255) NOT NULL DEFAULT 'https://vidayoung.online/login',
+    ultimo_template INTEGER NOT NULL DEFAULT -1,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+ALTER TABLE evolution_api_config
+    ADD COLUMN IF NOT EXISTS habilitado BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS api_url VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS api_key VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS instance_name VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS codigo_pais VARCHAR(8) NOT NULL DEFAULT '591',
+    ADD COLUMN IF NOT EXISTS login_url VARCHAR(255) NOT NULL DEFAULT 'https://vidayoung.online/login',
+    ADD COLUMN IF NOT EXISTS ultimo_template INTEGER NOT NULL DEFAULT -1,
+    ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    ADD COLUMN IF NOT EXISTS fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    ADD COLUMN IF NOT EXISTS usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM';
 
 CREATE TABLE IF NOT EXISTS presencias_usuarios (
     id BIGSERIAL PRIMARY KEY,

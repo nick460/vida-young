@@ -68,6 +68,10 @@ public class PreinscripcionReferido extends Auditoria {
     @Column(name = "password_solicitado", nullable = false, length = 255)
     private String passwordSolicitado;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Column(name = "password_solicitado_texto", length = 120)
+    private String passwordSolicitadoTexto;
+
     @Column(name = "estado_preinscripcion", nullable = false, length = 30)
     @Builder.Default
     private String estadoPreinscripcion = ESTADO_PREINSCRIPCION_PENDIENTE;

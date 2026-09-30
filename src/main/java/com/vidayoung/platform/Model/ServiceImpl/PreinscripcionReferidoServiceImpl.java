@@ -16,6 +16,7 @@ import com.vidayoung.platform.Model.Entity.Usuario;
 import com.vidayoung.platform.Model.Service.PersonaService;
 import com.vidayoung.platform.Model.Service.PreinscripcionReferidoService;
 import com.vidayoung.platform.Model.Service.ReferidoService;
+import com.vidayoung.platform.Model.Service.EvolutionApiService;
 import jakarta.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -40,6 +41,7 @@ public class PreinscripcionReferidoServiceImpl implements PreinscripcionReferido
     private final PersonaService personaService;
     private final ReferidoService referidoService;
     private final PasswordEncoder passwordEncoder;
+    private final EvolutionApiService evolutionApiService;
 
     @Override
     public List<PreinscripcionReferido> listar(String estadoPreinscripcion) {
@@ -105,6 +107,7 @@ public class PreinscripcionReferidoServiceImpl implements PreinscripcionReferido
                 .plan(plan)
                 .usernameSolicitado(usernameNormalizado)
                 .passwordSolicitado(passwordEncoder.encode(passwordNormalizado))
+                .passwordSolicitadoTexto(passwordNormalizado)
                 .estadoPreinscripcion(PreinscripcionReferido.ESTADO_PREINSCRIPCION_PENDIENTE)
                 .build());
     }
@@ -151,11 +154,20 @@ public class PreinscripcionReferidoServiceImpl implements PreinscripcionReferido
         preinscripcion.setDocumento(persona.getDocumento());
         preinscripcion.setTelefono(persona.getTelefono());
         preinscripcion.setEmail(persona.getEmail());
+        String passwordPlano = preinscripcion.getPasswordSolicitadoTexto();
         preinscripcion.setEstadoPreinscripcion(PreinscripcionReferido.ESTADO_PREINSCRIPCION_VALIDADA);
         preinscripcion.setFechaValidacion(LocalDateTime.now());
         preinscripcion.setUsuarioValidacion(normalizar(usuarioValidacion) == null ? "SISTEMA" : normalizar(usuarioValidacion));
+        preinscripcion.setPasswordSolicitadoTexto(null);
 
-        return preinscripcionReferidoDao.save(preinscripcion);
+        PreinscripcionReferido guardada = preinscripcionReferidoDao.save(preinscripcion);
+        evolutionApiService.enviarBienvenida(
+                persona.getNombres(),
+                persona.getTelefono(),
+                preinscripcion.getUsernameSolicitado(),
+                passwordPlano
+        );
+        return guardada;
     }
 
     @Override

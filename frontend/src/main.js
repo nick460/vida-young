@@ -21,6 +21,7 @@ import WalletWithdrawalsView from "./views/WalletWithdrawalsView.vue";
 import LevelOneWithdrawalsView from "./views/LevelOneWithdrawalsView.vue";
 import LogsView from "./views/LogsView.vue";
 import UsuariosEnLineaView from "./views/UsuariosEnLineaView.vue";
+import EvolutionConfigView from "./views/EvolutionConfigView.vue";
 import NotificacionesAdminView from "./views/NotificacionesAdminView.vue";
 import GestionPeriodsView from "./views/GestionPeriodsView.vue";
 import CartView from "./views/CartView.vue";
@@ -92,6 +93,7 @@ const routes = [
   { path: "/retiros-nivel-1", name: "retiros-nivel-1", component: LevelOneWithdrawalsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/logs", name: "logs", component: LogsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/usuarios-en-linea", name: "usuarios-en-linea", component: UsuariosEnLineaView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/evolution-config", name: "evolution-config", component: EvolutionConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/notificaciones", name: "notificaciones", component: NotificacionesAdminView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/wallet", name: "wallet", component: WalletView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/shop", name: "shop", component: ShopView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] } },
