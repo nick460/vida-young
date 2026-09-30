@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import {
@@ -8,10 +8,12 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Search,
   Save,
   UserPlus,
   Users,
-  Wallet
+  Wallet,
+  X
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { VyAvatar } from "../components/ui.js";
@@ -26,6 +28,10 @@ const referidos = ref([]);
 const editingReferidoId = ref(null);
 const useExistingPerson = ref(false);
 const esCabezaRed = ref(false);
+const modalOpen = ref(false);
+const searchTerm = ref("");
+const page = ref(1);
+const pageSize = ref(10);
 
 const form = reactive({
   personaId: "",
@@ -73,6 +79,21 @@ const compensationSummary = computed(() => referidos.value.reduce((summaryValue,
 }, { efectivo: 0, productos: 0 }));
 
 const previewRows = computed(() => compensationRowsForSponsor(Number(form.patrocinadorId), Number(form.planId)));
+const filteredReferidos = computed(() => {
+  const term = searchTerm.value.trim().toLowerCase();
+  if (!term) return referidos.value;
+  return referidos.value.filter((referido) => `${fullName(referido.persona)} ${referido.persona?.documento || ""} ${fullName(referido.patrocinador)} ${referido.plan?.nombre || ""}`.toLowerCase().includes(term));
+});
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredReferidos.value.length / Number(pageSize.value || 10))));
+const paginatedReferidos = computed(() => {
+  const size = Number(pageSize.value || 10);
+  const start = (page.value - 1) * size;
+  return filteredReferidos.value.slice(start, start + size);
+});
+
+watch(totalPages, (value) => {
+  if (page.value > value) page.value = value;
+});
 
 function optionalText(value) {
   const normalized = String(value || "").trim();
@@ -178,6 +199,29 @@ function resetForm() {
   });
 }
 
+function openCreateModal() {
+  resetForm();
+  modalOpen.value = true;
+}
+
+function closeModal() {
+  modalOpen.value = false;
+  resetForm();
+}
+
+function updateSearch(value) {
+  searchTerm.value = value;
+  page.value = 1;
+}
+
+function previousPage() {
+  page.value = Math.max(1, page.value - 1);
+}
+
+function nextPage() {
+  page.value = Math.min(totalPages.value, page.value + 1);
+}
+
 async function loadAll() {
   loading.value = true;
   error.value = "";
@@ -200,6 +244,7 @@ async function loadAll() {
 
 function editReferido(referido) {
   editingReferidoId.value = referido.id;
+  modalOpen.value = true;
   useExistingPerson.value = true;
   esCabezaRed.value = !referido.patrocinador?.id;
   Object.assign(form, {
@@ -266,7 +311,7 @@ async function saveReferido() {
     });
 
     await showSuccess(isEditing ? "Referido editado correctamente." : "Referido guardado correctamente.");
-    resetForm();
+    closeModal();
     await loadAll();
   } catch (exception) {
     await showError(exception.message || "No se pudo guardar el referido.");
@@ -329,9 +374,14 @@ onMounted(loadAll);
         <h1>Referidos</h1>
         <p>Registra quien patrocina a cada persona y que plan define su alcance de niveles.</p>
       </div>
-      <button type="button" class="vy-btn vy-btn-ghost" :disabled="loading" @click="loadAll">
-        <RefreshCw :size="16" /> Actualizar
-      </button>
+      <div class="header-actions">
+        <button type="button" class="vy-btn vy-btn-primary" @click="openCreateModal">
+          <Plus :size="16" /> Nuevo referido
+        </button>
+        <button type="button" class="vy-btn vy-btn-ghost" :disabled="loading" @click="loadAll">
+          <RefreshCw :size="16" /> Actualizar
+        </button>
+      </div>
     </section>
 
     <p v-if="error" class="referrals-error">{{ error }}</p>
@@ -359,9 +409,78 @@ onMounted(loadAll);
       </article>
     </section>
 
-    <section class="referrals-layout">
-      <form class="referrals-panel" @submit.prevent="saveReferido">
-        <h2>{{ editingReferidoId ? "Editar referido" : "Nuevo referido" }}</h2>
+    <section class="referrals-panel table-panel">
+      <div class="table-heading">
+        <div>
+          <h2>Red registrada</h2>
+          <span>{{ filteredReferidos.length }} de {{ referidos.length }} activos</span>
+        </div>
+        <label class="search-box">
+          <Search :size="16" />
+          <input
+            :value="searchTerm"
+            type="search"
+            placeholder="Buscar por persona, patrocinador, documento o plan"
+            @input="updateSearch($event.target.value)"
+          />
+        </label>
+      </div>
+
+      <div v-if="loading" class="empty-state">Cargando referidos...</div>
+      <div v-else-if="!referidos.length" class="empty-state">No hay referidos registrados.</div>
+      <div v-else-if="!filteredReferidos.length" class="empty-state">No hay resultados para la busqueda.</div>
+
+      <div v-else class="referral-list">
+        <article v-for="referido in paginatedReferidos" :key="referido.id" class="referral-row">
+          <div class="person-cell">
+            <VyAvatar :name="initials(referido.persona)" :size="38" />
+            <span>
+              <strong>{{ fullName(referido.persona) }}</strong>
+              <small>{{ referido.patrocinador ? `Referido por ${fullName(referido.patrocinador)}` : "Cabeza de red" }}</small>
+            </span>
+          </div>
+          <div class="plan-cell">
+            <strong>{{ referido.plan?.nombre || "Plan" }}</strong>
+            <small>{{ referido.plan?.nivelesAlcance || 0 }} niveles de alcance</small>
+            <small>Genera Bs. {{ money(referralCompensationTotal(referido)) }}</small>
+          </div>
+          <div class="row-actions">
+            <button type="button" title="Editar referido" @click="editReferido(referido)">
+              <Pencil :size="16" />
+            </button>
+            <button type="button" class="danger" title="Quitar referido" @click="removeReferido(referido)">
+              <CircleMinus :size="16" />
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <div v-if="filteredReferidos.length" class="pagination-bar">
+        <span>Pagina {{ page }} de {{ totalPages }}</span>
+        <label>
+          Mostrar
+          <select v-model.number="pageSize" @change="page = 1">
+            <option :value="5">5</option>
+            <option :value="10">10</option>
+            <option :value="20">20</option>
+            <option :value="50">50</option>
+          </select>
+        </label>
+        <div>
+          <button type="button" :disabled="page <= 1" @click="previousPage">Anterior</button>
+          <button type="button" :disabled="page >= totalPages" @click="nextPage">Siguiente</button>
+        </div>
+      </div>
+    </section>
+
+    <div v-if="modalOpen" class="modal-backdrop" @click.self="closeModal">
+      <form class="referrals-panel referral-modal" @submit.prevent="saveReferido">
+        <div class="modal-heading">
+          <h2>{{ editingReferidoId ? "Editar referido" : "Nuevo referido" }}</h2>
+          <button type="button" title="Cerrar" @click="closeModal">
+            <X :size="18" />
+          </button>
+        </div>
 
         <div v-if="!editingReferidoId" class="mode-switch">
           <button type="button" :class="{ active: !useExistingPerson }" @click="useExistingPerson = false">
@@ -473,47 +592,12 @@ onMounted(loadAll);
           <button type="submit" class="vy-btn vy-btn-primary save-button" :disabled="saving">
             <Save :size="16" /> Guardar
           </button>
-          <button v-if="editingReferidoId" type="button" class="vy-btn vy-btn-ghost" @click="resetForm">
+          <button type="button" class="vy-btn vy-btn-ghost" @click="closeModal">
             Cancelar
           </button>
         </div>
       </form>
-
-      <section class="referrals-panel table-panel">
-        <div class="table-heading">
-          <h2>Red registrada</h2>
-          <span>{{ referidos.length }} activos</span>
-        </div>
-
-        <div v-if="loading" class="empty-state">Cargando referidos...</div>
-        <div v-else-if="!referidos.length" class="empty-state">No hay referidos registrados.</div>
-
-        <div v-else class="referral-list">
-          <article v-for="referido in referidos" :key="referido.id" class="referral-row">
-            <div class="person-cell">
-              <VyAvatar :name="initials(referido.persona)" :size="38" />
-              <span>
-                <strong>{{ fullName(referido.persona) }}</strong>
-                <small>{{ referido.patrocinador ? `Referido por ${fullName(referido.patrocinador)}` : "Cabeza de red" }}</small>
-              </span>
-            </div>
-            <div class="plan-cell">
-              <strong>{{ referido.plan?.nombre || "Plan" }}</strong>
-              <small>{{ referido.plan?.nivelesAlcance || 0 }} niveles de alcance</small>
-              <small>Genera Bs. {{ money(referralCompensationTotal(referido)) }}</small>
-            </div>
-            <div class="row-actions">
-              <button type="button" title="Editar referido" @click="editReferido(referido)">
-                <Pencil :size="16" />
-              </button>
-              <button type="button" class="danger" title="Quitar referido" @click="removeReferido(referido)">
-                <CircleMinus :size="16" />
-              </button>
-            </div>
-          </article>
-        </div>
-      </section>
-    </section>
+    </div>
   </main>
 </template>
 
@@ -540,6 +624,12 @@ onMounted(loadAll);
 .referrals-header p {
   margin-top: 6px;
   color: var(--vy-ink-2);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .summary-grid,
@@ -774,6 +864,11 @@ onMounted(loadAll);
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 14px;
+}
+
+.table-heading h2 {
+  margin-bottom: 4px;
 }
 
 .table-heading span,
@@ -781,6 +876,32 @@ onMounted(loadAll);
   color: var(--vy-ink-3);
   font-size: 13px;
   font-weight: 700;
+}
+
+.search-box {
+  width: min(420px, 100%);
+  min-height: 42px;
+  padding: 0 12px;
+  margin-bottom: 0;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--vy-ink-3);
+  font-weight: 700;
+}
+
+.search-box input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--vy-ink);
+  background: transparent;
 }
 
 .referral-list {
@@ -861,6 +982,96 @@ onMounted(loadAll);
   color: #fff;
 }
 
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--vy-line);
+  color: var(--vy-ink-3);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pagination-bar label,
+.pagination-bar div {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-bar label {
+  margin-bottom: 0;
+}
+
+.pagination-bar select,
+.pagination-bar button {
+  min-height: 34px;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--vy-ink);
+  font: inherit;
+  font-weight: 900;
+}
+
+.pagination-bar select {
+  padding: 0 8px;
+}
+
+.pagination-bar button {
+  padding: 0 12px;
+}
+
+.pagination-bar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  padding: 22px;
+  background: rgba(31, 26, 20, 0.58);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.referral-modal {
+  width: min(760px, 100%);
+  margin: auto 0;
+}
+
+.modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.modal-heading h2 {
+  margin-bottom: 0;
+}
+
+.modal-heading button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--vy-ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .referrals-error {
   border: 1px solid rgba(196, 69, 42, 0.25);
   border-radius: 8px;
@@ -875,7 +1086,10 @@ onMounted(loadAll);
   }
 
   .referrals-header,
-  .form-actions {
+  .form-actions,
+  .header-actions,
+  .table-heading,
+  .pagination-bar {
     align-items: stretch;
     flex-direction: column;
   }
@@ -888,6 +1102,10 @@ onMounted(loadAll);
 
   .referral-row {
     grid-template-columns: 1fr;
+  }
+
+  .modal-backdrop {
+    padding: 12px;
   }
 }
 </style>
