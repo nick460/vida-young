@@ -218,8 +218,9 @@ function buildLevelOneReceipt(retiro) {
     .detail-row small { margin-top: 0.02cm; font-size: 8pt; }
     .detail-row b { white-space: nowrap; }
     .total { margin-top: 0.25cm; padding-top: 0.18cm; border-top: 2px solid #000; font-size: 12pt; }
-    .signatures { display: flex; gap: 0.9cm; margin-top: 1cm; }
-    .sign-box { flex: 1; text-align: center; }
+    .signatures { margin-top: 1cm; }
+    .sign-box { text-align: center; margin-bottom: 0.9cm; }
+    .sign-box:last-child { margin-bottom: 0; }
     .sign-line { height: 1.6cm; border-bottom: 1px solid #000; margin-bottom: 0.15cm; }
     .sign-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; }
   </style>
