@@ -72,9 +72,10 @@ public class DataInitializer {
             persona.setUsuario(usuario);
             persona.setEstado(Auditoria.ESTADO_ACTIVO);
             rol.setEstado(Auditoria.ESTADO_ACTIVO);
-rol = rolDao.save(rol);
+            rol = rolDao.save(rol);
             asignarMenuLogs(rol);
             asignarMenuNotificaciones(rol);
+            asignarMenuEnLinea(rol);
 
             usuarioDao.save(usuario);
         };
@@ -109,6 +110,27 @@ rol = rolDao.save(rol);
                         .icon("BellRing")
                         .custom(false)
                         .orden(95)
+                        .build());
+
+        menu.setEstado(Auditoria.ESTADO_ACTIVO);
+        menu.setCustom(false);
+        menu = menuSistemaDao.save(menu);
+
+        jdbcTemplate.update(
+                "INSERT INTO roles_menus (rol_id, menu_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                rol.getId(),
+                menu.getId()
+        );
+    }
+
+    private void asignarMenuEnLinea(Rol rol) {
+        MenuSistema menu = menuSistemaDao.findByMenuId("usuarios-en-linea")
+                .orElseGet(() -> MenuSistema.builder()
+                        .menuId("usuarios-en-linea")
+                        .label("En línea")
+                        .icon("Wifi")
+                        .custom(false)
+                        .orden(96)
                         .build());
 
         menu.setEstado(Auditoria.ESTADO_ACTIVO);

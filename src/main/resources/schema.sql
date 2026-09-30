@@ -411,8 +411,27 @@ CREATE TABLE IF NOT EXISTS rangos (
 ALTER TABLE rangos
     ADD COLUMN IF NOT EXISTS niveles_extra INTEGER NOT NULL DEFAULT 0;
 
+ALTER TABLE rangos
+    ADD COLUMN IF NOT EXISTS color VARCHAR(20) NOT NULL DEFAULT '#F28705';
+
+CREATE TABLE IF NOT EXISTS rangos_niveles (
+    id BIGSERIAL PRIMARY KEY,
+    rango_id BIGINT NOT NULL REFERENCES rangos(id),
+    numero_nivel_extra INTEGER NOT NULL,
+    monto_por_producto NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM',
+    CONSTRAINT uk_rangos_nivel_extra UNIQUE (rango_id, numero_nivel_extra)
+);
+
 ALTER TABLE personas
     ADD COLUMN IF NOT EXISTS rango_actual_id BIGINT REFERENCES rangos(id);
+
+ALTER TABLE personas
+    ADD COLUMN IF NOT EXISTS rango_maximo_id BIGINT REFERENCES rangos(id);
 
 ALTER TABLE planes
     ADD COLUMN IF NOT EXISTS imagen_url VARCHAR(255);
@@ -600,6 +619,11 @@ ALTER TABLE retiros_billetera
 
 ALTER TABLE retiros_billetera
     ADD COLUMN IF NOT EXISTS referencia_id BIGINT;
+
+ALTER TABLE retiros_billetera
+    ADD COLUMN IF NOT EXISTS motivo_anulacion VARCHAR(500),
+    ADD COLUMN IF NOT EXISTS fecha_anulacion TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS usuario_anulacion VARCHAR(80);
 
 CREATE TABLE IF NOT EXISTS retiros_billetera_detalles (
     id BIGSERIAL PRIMARY KEY,
@@ -902,3 +926,21 @@ CREATE TABLE IF NOT EXISTS dispositivos (
 
 CREATE INDEX IF NOT EXISTS idx_dispositivos_persona ON dispositivos (persona_id);
 CREATE INDEX IF NOT EXISTS idx_dispositivos_token ON dispositivos (token);
+
+CREATE TABLE IF NOT EXISTS presencias_usuarios (
+    id BIGSERIAL PRIMARY KEY,
+    persona_id BIGINT NOT NULL REFERENCES personas(id),
+    username VARCHAR(50),
+    ultimo_latido TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip VARCHAR(45),
+    user_agent VARCHAR(300),
+    ruta_actual VARCHAR(200),
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM',
+    CONSTRAINT uk_presencias_persona UNIQUE (persona_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_presencias_ultimo_latido ON presencias_usuarios (ultimo_latido DESC);

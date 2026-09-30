@@ -41,7 +41,10 @@ public class ProfileResponse {
                 persona.getDocumento(),
                 persona.getEmail(),
                 persona.getTelefono(),
-                persona.getRangoActual() == null ? null : persona.getRangoActual().getNombre()
+                persona.getRangoActual() == null ? null : persona.getRangoActual().getNombre(),
+                persona.getRangoActual() == null ? null : persona.getRangoActual().getColor(),
+                persona.getRangoMaximo() == null ? null : persona.getRangoMaximo().getNombre(),
+                persona.getRangoMaximo() == null ? null : persona.getRangoMaximo().getColor()
         );
         ReferidoData referidoData = referido == null ? null : toReferidoData(referido, referidosDirectos, redTotal);
 
@@ -77,7 +80,10 @@ public class ProfileResponse {
                         patrocinador.getDocumento(),
                         patrocinador.getEmail(),
                         patrocinador.getTelefono(),
-                        patrocinador.getRangoActual() == null ? null : patrocinador.getRangoActual().getNombre()
+                        patrocinador.getRangoActual() == null ? null : patrocinador.getRangoActual().getNombre(),
+                        patrocinador.getRangoActual() == null ? null : patrocinador.getRangoActual().getColor(),
+                        patrocinador.getRangoMaximo() == null ? null : patrocinador.getRangoMaximo().getNombre(),
+                        patrocinador.getRangoMaximo() == null ? null : patrocinador.getRangoMaximo().getColor()
                 ),
                 plan == null ? null : new PlanData(plan.getId(), plan.getNombre()),
                 referidosDirectos,
@@ -102,6 +108,12 @@ public class ProfileResponse {
         private String telefono;
 
         private String rangoActual;
+
+        private String rangoActualColor;
+
+        private String rangoMaximo;
+
+        private String rangoMaximoColor;
     }
 
     @Getter

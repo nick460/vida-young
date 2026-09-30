@@ -218,7 +218,10 @@ function buildLevelOneReceipt(retiro) {
     .detail-row small { margin-top: 0.02cm; font-size: 8pt; }
     .detail-row b { white-space: nowrap; }
     .total { margin-top: 0.25cm; padding-top: 0.18cm; border-top: 2px solid #000; font-size: 12pt; }
-    .signature { margin-top: 0.55cm; padding-top: 0.16cm; border-top: 1px solid #000; text-align: center; font-size: 8pt; }
+    .signatures { display: flex; gap: 0.9cm; margin-top: 1cm; }
+    .sign-box { flex: 1; text-align: center; }
+    .sign-line { height: 1.6cm; border-bottom: 1px solid #000; margin-bottom: 0.15cm; }
+    .sign-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; }
   </style>
 </head>
 <body>
@@ -237,7 +240,10 @@ function buildLevelOneReceipt(retiro) {
     <div class="row"><span class="label">Efectivo</span><span class="value">Bs. ${escapeHtml(money(retiro.montoDinero))}</span></div>
     ${productosDetalle}
     <div class="row total"><span>Total retiro</span><span>Bs. ${escapeHtml(money(retiro.total))}</span></div>
-    <div class="signature">Firma / recibido conforme</div>
+    <div class="signatures">
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Entregue conforme</div></div>
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Recibí conforme</div></div>
+    </div>
   </main>
 </body>
 </html>`;

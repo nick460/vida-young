@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,53 +21,42 @@ import lombok.Setter;
 import lombok.ToString;
 
 @Entity
-@Table(name = "notificaciones")
+@Table(
+        name = "presencias_usuarios",
+        uniqueConstraints = @UniqueConstraint(name = "uk_presencias_persona", columnNames = {"persona_id"})
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
-public class Notificacion extends Auditoria {
-
-    public static final String TIPO_INFO = "INFO";
-    public static final String TIPO_COMPRA = "COMPRA";
-    public static final String TIPO_MEMBRESIA = "MEMBRESIA";
-    public static final String TIPO_RECOMPENSA = "RECOMPENSA";
-    public static final String TIPO_RANGO = "RANGO";
-    public static final String TIPO_SISTEMA = "SISTEMA";
+public class PresenciaUsuario extends Auditoria {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "destinatario_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "persona_id", nullable = false)
     @JsonIgnoreProperties({"usuario", "rangoActual", "rangoMaximo", "hibernateLazyInitializer", "handler"})
     @ToString.Exclude
-    private Persona destinatario;
+    private Persona persona;
 
-    @Column(nullable = false, length = 120)
-    private String titulo;
+    @Column(length = 50)
+    private String username;
 
-    @Column(nullable = false, length = 500)
-    private String mensaje;
-
-    @Column(nullable = false, length = 30)
+    @Column(name = "ultimo_latido", nullable = false)
     @Builder.Default
-    private String tipo = TIPO_INFO;
+    private LocalDateTime ultimoLatido = LocalDateTime.now();
 
-    @Column(length = 255)
-    private String link;
+    @Column(length = 45)
+    private String ip;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean leida = false;
+    @Column(name = "user_agent", length = 300)
+    private String userAgent;
 
-    @Column(name = "fecha_leida")
-    private LocalDateTime fechaLeida;
-
-    @Column(name = "fecha_enviado", nullable = false)
-    private LocalDateTime fechaEnviado;
+    @Column(name = "ruta_actual", length = 200)
+    private String rutaActual;
 }

@@ -85,7 +85,7 @@ public class BilleteraRestController {
             }
             Billetera billetera = movimiento.getBilletera();
             Persona persona = billetera.getPersona();
-            if (persona == null || persona.getId() == null || retiroBilleteraDao.existsByPersonaIdAndPeriodoIdAndReferenciaTipoIsNull(persona.getId(), periodoConsultaId)) {
+            if (persona == null || persona.getId() == null || retiroBilleteraDao.existsByPersonaIdAndPeriodoIdAndReferenciaTipoIsNullAndEstadoRetiro(persona.getId(), periodoConsultaId, RetiroBilletera.ESTADO_PROCESADO)) {
                 return;
             }
             PeriodoSaldo saldo = saldosPeriodo.computeIfAbsent(persona.getId(), id -> new PeriodoSaldo(persona, billetera.getId()));
@@ -98,7 +98,7 @@ public class BilleteraRestController {
                 .filter(recompensa -> recompensa.getBeneficiario() != null && recompensa.getBeneficiario().getId() != null)
                 .filter(recompensa -> recompensa.getPeriodo() != null && periodoConsultaId.equals(recompensa.getPeriodo().getId()))
                 .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
-                .filter(recompensa -> !retiroBilleteraDao.existsByPersonaIdAndPeriodoIdAndReferenciaTipoIsNull(recompensa.getBeneficiario().getId(), periodoConsultaId))
+                .filter(recompensa -> !retiroBilleteraDao.existsByPersonaIdAndPeriodoIdAndReferenciaTipoIsNullAndEstadoRetiro(recompensa.getBeneficiario().getId(), periodoConsultaId, RetiroBilletera.ESTADO_PROCESADO))
                 .forEach(recompensa -> {
                     Billetera billetera = billeteraService.asegurarBilletera(recompensa.getBeneficiario());
                     PeriodoSaldo saldo = saldosPeriodo.computeIfAbsent(recompensa.getBeneficiario().getId(), id -> new PeriodoSaldo(recompensa.getBeneficiario(), billetera.getId()));
@@ -231,6 +231,17 @@ public class BilleteraRestController {
             @RequestBody ActivacionRequest request
     ) {
         return ResponseEntity.ok(billeteraService.registrarActivacion(personaId, request.getPlanId()));
+    }
+
+    @PostMapping("/retiros/{retiroId}/anular")
+    public ResponseEntity<RetiroBilletera> anularRetiro(
+            @PathVariable Long retiroId,
+            @RequestBody AnularRetiroRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails
+    ) {
+        String motivo = request == null ? null : request.getMotivo();
+        String usuario = userDetails == null ? null : userDetails.getUsername();
+        return ResponseEntity.ok(billeteraService.anularRetiro(retiroId, motivo, usuario));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -581,6 +592,12 @@ public class BilleteraRestController {
 
         private final String observacion;
 
+        private final String motivoAnulacion;
+
+        private final java.time.LocalDateTime fechaAnulacion;
+
+        private final String usuarioAnulacion;
+
         private final List<RetiroDetalleResponse> detalles;
     }
 
@@ -621,6 +638,13 @@ public class BilleteraRestController {
         private List<ProductoRetiroRequest> productos = List.of();
 
         private String observacion;
+    }
+
+    @Getter
+    @Setter
+    public static class AnularRetiroRequest {
+
+        private String motivo;
     }
 
     @Getter
@@ -967,6 +991,9 @@ public class BilleteraRestController {
                 periodo == null ? null : periodo.getNombre(),
                 periodo == null || periodo.getGestion() == null ? null : periodo.getGestion().getAnio(),
                 retiro.getObservacion(),
+                retiro.getMotivoAnulacion(),
+                retiro.getFechaAnulacion(),
+                retiro.getUsuarioAnulacion(),
                 detalles
         );
     }

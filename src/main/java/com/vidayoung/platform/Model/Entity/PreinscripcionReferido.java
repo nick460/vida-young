@@ -42,7 +42,7 @@ public class PreinscripcionReferido extends Auditoria {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "patrocinador_id", nullable = false)
-    @JsonIgnoreProperties({"usuario", "rangoActual"})
+    @JsonIgnoreProperties({"usuario", "rangoActual", "rangoMaximo"})
     @ToString.Exclude
     private Persona patrocinador;
 
@@ -80,7 +80,7 @@ public class PreinscripcionReferido extends Auditoria {
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "persona_id")
-    @JsonIgnoreProperties({"usuario", "rangoActual"})
+    @JsonIgnoreProperties({"usuario", "rangoActual", "rangoMaximo"})
     @ToString.Exclude
     private Persona persona;
 

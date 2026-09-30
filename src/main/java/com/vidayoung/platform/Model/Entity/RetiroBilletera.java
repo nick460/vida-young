@@ -34,6 +34,8 @@ public class RetiroBilletera extends Auditoria {
 
     public static final String ESTADO_PROCESADO = "PROCESADO";
 
+    public static final String ESTADO_ANULADO = "ANULADO";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
@@ -67,6 +69,15 @@ public class RetiroBilletera extends Auditoria {
 
     @Column(length = 240)
     private String observacion;
+
+    @Column(name = "motivo_anulacion", length = 500)
+    private String motivoAnulacion;
+
+    @Column(name = "fecha_anulacion")
+    private java.time.LocalDateTime fechaAnulacion;
+
+    @Column(name = "usuario_anulacion", length = 80)
+    private String usuarioAnulacion;
 
     @Column(name = "referencia_tipo", length = 60)
     private String referenciaTipo;

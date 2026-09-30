@@ -11,6 +11,7 @@ import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
 import com.vidayoung.platform.Model.Dao.PlanActivacionNivelDao;
 import com.vidayoung.platform.Model.Dao.PlanDao;
+import com.vidayoung.platform.Model.Dao.RangoNivelDao;
 import com.vidayoung.platform.Model.Dao.ProductoDao;
 import com.vidayoung.platform.Model.Dao.RangoDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
@@ -32,6 +33,7 @@ import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
 import com.vidayoung.platform.Model.Entity.Producto;
 import com.vidayoung.platform.Model.Entity.Rango;
+import com.vidayoung.platform.Model.Entity.RangoNivel;
 import com.vidayoung.platform.Model.Entity.Recompensa;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.RetiroBilletera;
@@ -79,6 +81,7 @@ public class BilleteraServiceImpl implements BilleteraService {
     private final PlanDao planDao;
     private final ProductoDao productoDao;
     private final RangoDao rangoDao;
+    private final RangoNivelDao rangoNivelDao;
     private final RecompensaDao recompensaDao;
     private final ReferidoDao referidoDao;
     private final BeneficioActivacionCompraDao beneficioActivacionCompraDao;
@@ -218,6 +221,33 @@ public class BilleteraServiceImpl implements BilleteraService {
     }
 
     @Override
+    public BigDecimal resolverMontoPorProducto(Persona beneficiario, PlanActivacion plan, int nivel) {
+        if (plan == null || nivel < 1) {
+            return BigDecimal.ZERO;
+        }
+        int base = plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
+        if (nivel <= base) {
+            return planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(plan.getId(), nivel)
+                    .filter(n -> Auditoria.ESTADO_ACTIVO.equals(n.getEstado()))
+                    .map(PlanActivacionNivel::getMontoPorProducto)
+                    .map(m -> m == null ? BigDecimal.ZERO : m)
+                    .orElse(BigDecimal.ZERO);
+        }
+        int indiceExtra = nivel - base;
+        Long rangoId = beneficiario == null || beneficiario.getRangoActual() == null
+                ? null
+                : beneficiario.getRangoActual().getId();
+        if (rangoId == null) {
+            return BigDecimal.ZERO;
+        }
+        return rangoNivelDao.findByRangoIdAndNumeroNivelExtra(rangoId, indiceExtra)
+                .filter(n -> Auditoria.ESTADO_ACTIVO.equals(n.getEstado()))
+                .map(RangoNivel::getMontoPorProducto)
+                .map(m -> m == null ? BigDecimal.ZERO : m)
+                .orElse(BigDecimal.ZERO);
+    }
+
+    @Override
     @Transactional
     public Billetera asegurarBilletera(Persona persona) {
         return billeteraDao.findByPersonaId(persona.getId())
@@ -279,6 +309,14 @@ public class BilleteraServiceImpl implements BilleteraService {
         Long rangoActualId = persistente.getRangoActual() == null ? null : persistente.getRangoActual().getId();
         Long nuevoRangoId = rango == null ? null : rango.getId();
 
+        Rango maximo = persistente.getRangoMaximo();
+        Rango candidatoMaximo = masAlto(maximo, persistente.getRangoActual());
+        candidatoMaximo = masAlto(candidatoMaximo, rango);
+        if (candidatoMaximo != null
+                && (maximo == null || !candidatoMaximo.getId().equals(maximo.getId()))) {
+            persistente.setRangoMaximo(candidatoMaximo);
+        }
+
         if (!java.util.Objects.equals(rangoActualId, nuevoRangoId)) {
             persistente.setRangoActual(rango);
             personaDao.save(persistente);
@@ -292,7 +330,21 @@ public class BilleteraServiceImpl implements BilleteraService {
                         "wallet"
                 );
             }
+        } else if (persistente.getRangoMaximo() != null) {
+            personaDao.save(persistente);
         }
+    }
+
+    private Rango masAlto(Rango actual, Rango candidato) {
+        if (candidato == null) {
+            return actual;
+        }
+        if (actual == null) {
+            return candidato;
+        }
+        BigDecimal qpActual = zeroIfNull(actual.getQpMinimo());
+        BigDecimal qpCandidato = zeroIfNull(candidato.getQpMinimo());
+        return qpCandidato.compareTo(qpActual) > 0 ? candidato : actual;
     }
 
     @Override
@@ -543,22 +595,13 @@ public class BilleteraServiceImpl implements BilleteraService {
         Optional<PlanActivacion> planActivo = obtenerPlanActivacionPorPv(billetera.getSaldoPvPropio());
         boolean membresiaActiva = membresiaActiva(persona, periodoActivo);
         int alcanceEfectivo = calcularAlcanceEfectivo(persona, planActivo.orElse(null));
-        int maxNivelConfigurado = planActivo
-                .flatMap(plan -> planActivacionNivelDao.findFirstByPlanActivacionIdOrderByNumeroNivelDesc(plan.getId()))
-                .map(PlanActivacionNivel::getNumeroNivel)
-                .orElse(0);
 
         for (BeneficioActivacionCompra beneficio : beneficios) {
             Integer nivel = beneficio.getNivelGenerado();
             boolean nivelAplica = nivel != null && nivel >= 1 && nivel <= alcanceEfectivo;
-            int numeroConfig = nivel == null ? 0 : Math.min(nivel, Math.max(maxNivelConfigurado, 0));
-            PlanActivacionNivel nivelConfig = numeroConfig < 1 || planActivo.isEmpty()
-                    ? null
-                    : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(
-                    planActivo.get().getId(), numeroConfig).orElse(null);
-            BigDecimal nuevoMontoPorProducto = nivelConfig == null
+            BigDecimal nuevoMontoPorProducto = (nivel == null || planActivo.isEmpty())
                     ? BigDecimal.ZERO
-                    : zeroIfNull(nivelConfig.getMontoPorProducto());
+                    : zeroIfNull(resolverMontoPorProducto(persona, planActivo.get(), nivel));
             BigDecimal nuevoMontoTotal = nuevoMontoPorProducto
                     .multiply(BigDecimal.valueOf(beneficio.getCantidadProductos()));
             boolean pagaNuevo = planActivo.isPresent()
@@ -777,8 +820,181 @@ public class BilleteraServiceImpl implements BilleteraService {
         return retiro;
     }
 
-    private CierreMensualBilletera registrarCierrePersonalPagado(Persona persona, Billetera billetera, PeriodoGestion periodoActivo) {
-        String periodo = periodoKey(periodoActivo);
+    @Override
+    @Transactional
+    public RetiroBilletera anularRetiro(Long retiroId, String motivoAnulacion, String usuarioAnulacion) {
+        String motivo = normalizarTexto(motivoAnulacion);
+        if (motivo == null || motivo.length() < 10) {
+            throw new IllegalArgumentException("El motivo de anulación es obligatorio (mínimo 10 caracteres).");
+        }
+
+        RetiroBilletera retiro = retiroBilleteraDao.findById(retiroId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Retiro no encontrado."));
+
+        if (!RetiroBilletera.ESTADO_PROCESADO.equals(retiro.getEstadoRetiro())) {
+            throw new IllegalArgumentException("Solo se puede anular un retiro en estado PROCESADO.");
+        }
+
+        PeriodoGestion periodo = retiro.getPeriodo();
+        if (periodo != null && PeriodoGestion.ESTADO_PERIODO_CERRADO.equals(periodo.getEstadoPeriodo())) {
+            throw new IllegalArgumentException("No se puede anular: el periodo ya está CERRADO.");
+        }
+
+        Persona persona = retiro.getPersona();
+        Billetera billetera = asegurarBilletera(persona);
+        BigDecimal dinero = zeroIfNull(retiro.getMontoDinero());
+
+        BigDecimal desdeBilletera = movimientoBilleteraDao
+                .findByReferenciaTipoAndReferenciaIdAndTipo("RETIRO_BILLETERA", retiroId, MovimientoBilletera.TIPO_DINERO)
+                .stream()
+                .filter(mov -> Auditoria.ESTADO_ACTIVO.equals(mov.getEstado()))
+                .map(MovimientoBilletera::getMonto)
+                .map(this::zeroIfNull)
+                .map(BigDecimal::abs)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal desdeRecompensas = dinero.subtract(desdeBilletera).max(BigDecimal.ZERO);
+
+        if (desdeBilletera.compareTo(BigDecimal.ZERO) > 0) {
+            billetera.setSaldoDinero(zeroIfNull(billetera.getSaldoDinero()).add(desdeBilletera));
+            billetera = billeteraDao.save(billetera);
+            movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                    .billetera(billetera)
+                    .tipo(MovimientoBilletera.TIPO_DINERO)
+                    .concepto("Anulación retiro #" + retiroId + ": " + motivo)
+                    .referenciaTipo("ANULACION_RETIRO_BILLETERA")
+                    .referenciaId(retiroId)
+                    .monto(desdeBilletera)
+                    .saldoResultado(billetera.getSaldoDinero())
+                    .periodo(periodo)
+                    .build());
+        }
+
+        if (desdeRecompensas.compareTo(BigDecimal.ZERO) > 0) {
+            // Las recompensas nivel 2+ no viven en saldoDinero sino en
+            // recompensa.montoEfectivoRetirado: se revierten sin movimiento DINERO
+            // (un movimiento DINERO aquí duplicaría el efectivo del periodo).
+            revertirEfectivoRecompensas(persona.getId(), periodo, desdeRecompensas);
+        }
+
+        if (dinero.compareTo(BigDecimal.ZERO) > 0) {
+            carteraEmpresaService.registrarIngreso(
+                    "ANULACION_RETIRO_BILLETERA",
+                    retiroId,
+                    dinero,
+                    "Anulación retiro #" + retiroId + " de " + nombreCompleto(persona) + ": " + motivo
+            );
+        }
+
+        String periodoKey = periodo == null ? null : periodoKey(periodo);
+        CierreMensualBilletera cierre = periodoKey == null ? null : cierreMensualBilleteraDao
+                .findByPersonaIdOrderByPeriodoDesc(persona.getId()).stream()
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .filter(item -> periodoKey.equals(item.getPeriodo()))
+                .findFirst()
+                .orElse(null);
+
+        if (cierre != null) {
+            movimientoBilleteraDao.findByReferenciaTipoAndReferenciaId("CIERRE_MENSUAL", cierre.getId()).forEach(mov -> {
+                if (Auditoria.ESTADO_ACTIVO.equals(mov.getEstado())) {
+                    mov.setEstado(Auditoria.ESTADO_ELIMINADO);
+                    movimientoBilleteraDao.save(mov);
+                }
+            });
+
+            restaurarSaldoCierre(billetera, periodo, cierre.getSaldoPv(), MovimientoBilletera.TIPO_PV, retiroId, motivo);
+            restaurarSaldoCierre(billetera, periodo, cierre.getSaldoQp(), MovimientoBilletera.TIPO_QP, retiroId, motivo);
+            restaurarSaldoCierre(billetera, periodo, cierre.getSaldoCr(), MovimientoBilletera.TIPO_CR, retiroId, motivo);
+            restaurarSaldoCierre(billetera, periodo, cierre.getSaldoProductos(), MovimientoBilletera.TIPO_PRODUCTOS, retiroId, motivo);
+            billetera = billeteraDao.findById(billetera.getId()).orElse(billetera);
+
+            cierre.setEstado(Auditoria.ESTADO_ELIMINADO);
+            cierreMensualBilleteraDao.save(cierre);
+        }
+
+        billetera = billeteraDao.findById(billetera.getId()).orElse(billetera);
+        actualizarRangoActual(persona, billetera.getSaldoQp());
+
+        retiro.setEstadoRetiro(RetiroBilletera.ESTADO_ANULADO);
+        retiro.setMotivoAnulacion(motivo);
+        retiro.setFechaAnulacion(LocalDateTime.now());
+        retiro.setUsuarioAnulacion(normalizarTexto(usuarioAnulacion));
+        retiro = retiroBilleteraDao.save(retiro);
+
+        notificacionService.notificarPersona(
+                persona.getId(),
+                Notificacion.TIPO_RECOMPENSA,
+                "Retiro anulado",
+                "Tu retiro #" + retiroId + " fue anulado y tus saldos del periodo fueron restaurados.",
+                "wallet"
+        );
+
+        return retiro;
+    }
+
+    private void restaurarSaldoCierre(
+            Billetera billetera,
+            PeriodoGestion periodo,
+            BigDecimal monto,
+            String tipo,
+            Long retiroId,
+            String motivo
+    ) {
+        BigDecimal valor = zeroIfNull(monto);
+        if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        Billetera actual = billeteraDao.findById(billetera.getId()).orElse(billetera);
+        if (MovimientoBilletera.TIPO_PV.equals(tipo)) {
+            actual.setSaldoPv(zeroIfNull(actual.getSaldoPv()).add(valor));
+        } else if (MovimientoBilletera.TIPO_QP.equals(tipo)) {
+            actual.setSaldoQp(zeroIfNull(actual.getSaldoQp()).add(valor));
+        } else if (MovimientoBilletera.TIPO_CR.equals(tipo)) {
+            actual.setSaldoCr(zeroIfNull(actual.getSaldoCr()).add(valor));
+        } else if (MovimientoBilletera.TIPO_PRODUCTOS.equals(tipo)) {
+            actual.setSaldoProductos(zeroIfNull(actual.getSaldoProductos()).add(valor));
+        } else {
+            return;
+        }
+        actual = billeteraDao.save(actual);
+        movimientoBilleteraDao.save(MovimientoBilletera.builder()
+                .billetera(actual)
+                .tipo(tipo)
+                .concepto("Anulación retiro #" + retiroId + ": " + motivo)
+                .referenciaTipo("ANULACION_RETIRO_BILLETERA")
+                .referenciaId(retiroId)
+                .monto(valor)
+                .saldoResultado(
+                        MovimientoBilletera.TIPO_PV.equals(tipo) ? actual.getSaldoPv()
+                                : MovimientoBilletera.TIPO_QP.equals(tipo) ? actual.getSaldoQp()
+                                : MovimientoBilletera.TIPO_CR.equals(tipo) ? actual.getSaldoCr()
+                                : actual.getSaldoProductos())
+                .periodo(periodo)
+                .build());
+    }
+
+    private void revertirEfectivoRecompensas(Long personaId, PeriodoGestion periodo, BigDecimal monto) {
+        BigDecimal pendiente = zeroIfNull(monto);
+        if (pendiente.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        for (Recompensa recompensa : recompensasMensualesCobrables(personaId, periodo)) {
+            BigDecimal retirado = zeroIfNull(recompensa.getMontoEfectivoRetirado());
+            if (retirado.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal devolver = retirado.min(pendiente);
+            recompensa.setMontoEfectivoRetirado(retirado.subtract(devolver));
+            recompensaDao.save(recompensa);
+            pendiente = pendiente.subtract(devolver);
+            if (pendiente.compareTo(BigDecimal.ZERO) <= 0) {
+                return;
+            }
+        }
+    }
+
+    private CierreMensualBilletera registrarCierrePersonalPagado(Persona persona, Billetera billetera, PeriodoGestion periodoActivo) {        String periodo = periodoKey(periodoActivo);
         if (cierreMensualBilleteraDao.existsByPersonaIdAndPeriodo(persona.getId(), periodo)) {
             return cierreMensualBilleteraDao.findByPersonaIdOrderByPeriodoDesc(persona.getId()).stream()
                     .filter(cierre -> periodo.equals(cierre.getPeriodo()))

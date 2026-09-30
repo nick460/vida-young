@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch } from "vue";
+import { computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import { LogOut } from "lucide-vue-next";
@@ -8,6 +8,7 @@ import NotificationBell from "./components/NotificationBell.vue";
 import { VyAvatar } from "./components/ui.js";
 import { useAuthStore } from "./stores/authStore.js";
 import { useNotificacionesStore } from "./stores/notificacionesStore.js";
+import { enviarLatido, marcarSalida } from "./services/presenciaService.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -47,6 +48,7 @@ async function logout() {
 
   if (!result.isConfirmed) return;
 
+  await marcarSalida();
   authStore.logout();
   router.push({ name: "login" });
 }
@@ -88,11 +90,35 @@ watch(
     if (autenticado) {
       notificacionesStore.cargar();
       notificacionesStore.conectar();
+      latir();
     } else {
       notificacionesStore.desconectar();
     }
   },
   { immediate: true }
+);
+
+let latidoIntervalo = null;
+
+function latir() {
+  if (!authStore.isAuthenticated) return;
+  enviarLatido(route.fullPath);
+}
+
+onMounted(() => {
+  latir();
+  latidoIntervalo = setInterval(latir, 60000);
+  window.addEventListener("beforeunload", marcarSalida);
+});
+
+onUnmounted(() => {
+  if (latidoIntervalo) clearInterval(latidoIntervalo);
+  window.removeEventListener("beforeunload", marcarSalida);
+});
+
+watch(
+  () => route.fullPath,
+  () => latir()
 );
 
 function nav(id) {

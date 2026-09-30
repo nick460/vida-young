@@ -1,6 +1,7 @@
 package com.vidayoung.platform.Rescontroller;
 
 import com.vidayoung.platform.Model.Entity.Rango;
+import com.vidayoung.platform.Model.Entity.RangoNivel;
 import com.vidayoung.platform.Model.Service.RangoService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +58,28 @@ public class RangoRestController {
         }
 
         rangoService.eliminar(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/niveles")
+    public ResponseEntity<List<RangoNivel>> listarNiveles(@PathVariable Long id) {
+        if (rangoService.buscarPorId(id).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(rangoService.listarNiveles(id));
+    }
+
+    @PostMapping("/{id}/niveles")
+    public ResponseEntity<RangoNivel> guardarNivel(@PathVariable Long id, @RequestBody RangoNivel nivel) {
+        if (rangoService.buscarPorId(id).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(rangoService.guardarNivel(id, nivel));
+    }
+
+    @DeleteMapping("/niveles/{nivelId}")
+    public ResponseEntity<Void> eliminarNivel(@PathVariable Long nivelId) {
+        rangoService.eliminarNivel(nivelId);
         return ResponseEntity.noContent().build();
     }
 

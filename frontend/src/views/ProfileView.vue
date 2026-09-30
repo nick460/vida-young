@@ -7,6 +7,7 @@ import {
   Copy,
   Settings,
   Star,
+  Trophy,
   UploadCloud
 } from "lucide-vue-next";
 import { useAuthStore } from "../stores/authStore.js";
@@ -82,6 +83,40 @@ const stats = computed(() => [
 
 const sponsorName = computed(() => fullName(patrocinador.value) || "Sin patrocinador");
 const memberSince = computed(() => formatDate(referido.value?.fechaUnion || authStore.usuario?.persona?.fechaRegistro));
+
+function colorPorDefecto(nombre) {
+  const base = String(nombre || "").trim().toUpperCase();
+  if (base.includes("BRONCE")) return "#B0703A";
+  if (base.includes("PLATA")) return "#9AA3B2";
+  if (base.includes("ORO")) return "#C9A227";
+  if (base.includes("DIAMANTE")) return "#38BDF8";
+  if (base.includes("ESMERALDA")) return "#10B981";
+  if (base.includes("RUB")) return "#E11D48";
+  if (base.includes("ZAFIRO")) return "#2563EB";
+  return "#F28705";
+}
+
+const rangoActualNombre = computed(() => authStore.usuario?.persona?.rangoActual || "Sin rango");
+const rangoActualColor = computed(
+  () => authStore.usuario?.persona?.rangoActualColor || colorPorDefecto(rangoActualNombre.value)
+);
+const rangoMaximoNombre = computed(() => authStore.usuario?.persona?.rangoMaximo || null);
+const rangoMaximoColor = computed(() =>
+  rangoMaximoNombre.value
+    ? authStore.usuario?.persona?.rangoMaximoColor || colorPorDefecto(rangoMaximoNombre.value)
+    : null
+);
+const tieneRangoMaximo = computed(() => Boolean(rangoMaximoNombre.value));
+const rangoInsigniaStyle = computed(() =>
+  tieneRangoMaximo.value
+    ? { background: `${rangoMaximoColor.value}22`, color: rangoMaximoColor.value, borderColor: `${rangoMaximoColor.value}55` }
+    : {}
+);
+const perfilTintStyle = computed(() =>
+  tieneRangoMaximo.value
+    ? { "--rango-color": rangoMaximoColor.value }
+    : {}
+);
 const membershipStatus = computed(() => {
   if (!referido.value) return "Sin membresia";
   return referido.value.membresiaActiva ? "Activa" : "Vencida";
@@ -93,7 +128,8 @@ const personalInfo = computed(() => [
   { label: "Documento", value: account.value.document },
   { label: "Telefono", value: account.value.phone },
   { label: "Usuario", value: authStore.usuario?.username || "Sin usuario", mono: true },
-  { label: "Rango actual", value: authStore.usuario?.persona?.rangoActual || "Sin rango" },
+  { label: "Rango actual (mes)", value: rangoActualNombre.value },
+  { label: "Rango máximo histórico", value: rangoMaximoNombre.value || "Sin rango" },
   { label: "Miembro desde", value: memberSince.value },
   { label: "Patrocinador", value: sponsorName.value },
   { label: "Plan", value: plan.value?.nombre || "Sin plan" },
@@ -265,7 +301,7 @@ async function handlePhotoChange(event) {
       </header>
 
       <section class="profile-grid">
-        <article class="vy-card profile-card">
+        <article class="vy-card profile-card" :style="perfilTintStyle" :class="{ 'con-rango': tieneRangoMaximo }">
           <div class="avatar-wrap">
             <img v-if="photoUrl" class="profile-photo" :src="photoUrl" :alt="account.name" />
             <VyAvatar v-else :name="account.avatar" :size="92" bg="var(--vy-orange)" color="#fff" />
@@ -288,6 +324,15 @@ async function handlePhotoChange(event) {
             <Star :size="13" fill="currentColor" stroke-width="1.8" />
             {{ account.role }}
           </span>
+
+          <div v-if="tieneRangoMaximo" class="rango-maximo-badge" :style="rangoInsigniaStyle">
+            <Trophy :size="16" stroke-width="2" />
+            <div>
+              <strong>Rango {{ rangoMaximoNombre }}</strong>
+              <small>Lo conservas hasta superarlo</small>
+            </div>
+          </div>
+          <p v-else class="sin-rango-msg">Aún no alcanzas un rango. Acumula QP para lograrlo.</p>
 
           <div class="stats-grid">
             <article v-for="item in stats" :key="item.label">
@@ -381,6 +426,48 @@ async function handlePhotoChange(event) {
   text-align: center;
   background: linear-gradient(180deg, var(--vy-cream) 0%, var(--vy-surface) 50%);
   border-color: transparent;
+}
+
+.profile-card.con-rango {
+  border-top: 5px solid var(--rango-color, var(--vy-orange));
+}
+
+.profile-card.con-rango .profile-photo {
+  border-color: var(--rango-color, var(--vy-surface));
+}
+
+.rango-maximo-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid;
+  text-align: left;
+}
+
+.rango-maximo-badge strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rango-maximo-badge small {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.sin-rango-msg {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--vy-ink-3);
 }
 
 .avatar-wrap {

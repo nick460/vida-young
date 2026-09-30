@@ -19,6 +19,8 @@ public interface BilleteraService {
 
     int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan);
 
+    java.math.BigDecimal resolverMontoPorProducto(Persona beneficiario, PlanActivacion plan, int nivel);
+
     ProgresoRangosResponse calcularProgresoRangos(Long personaId);
 
     record RamaProgresoResponse(String nombrePersona, BigDecimal qpRama, BigDecimal qpContable) {
@@ -72,6 +74,8 @@ public interface BilleteraService {
     RetiroBilletera registrarRetiro(Long personaId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);
 
     RetiroBilletera registrarRetiro(Long personaId, Long periodoId, BigDecimal montoDinero, BigDecimal montoProductos, List<ProductoRetiroRequest> productos, String observacion);
+
+    RetiroBilletera anularRetiro(Long retiroId, String motivoAnulacion, String usuarioAnulacion);
 
     void sincronizarSaldoProductosRecompensa(Long recompensaId);
 

@@ -10,6 +10,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -19,14 +21,20 @@ import lombok.Setter;
 import lombok.ToString;
 
 @Entity
-@Table(name = "dispositivos")
+@Table(
+        name = "rangos_niveles",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_rangos_nivel_extra",
+                columnNames = {"rango_id", "numero_nivel_extra"}
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
-public class Dispositivo extends Auditoria {
+public class RangoNivel extends Auditoria {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,19 +42,15 @@ public class Dispositivo extends Auditoria {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "persona_id", nullable = false)
-    @JsonIgnoreProperties({"usuario", "rangoActual", "rangoMaximo", "hibernateLazyInitializer", "handler"})
+    @JoinColumn(name = "rango_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @ToString.Exclude
-    private Persona persona;
+    private Rango rango;
 
-    @Column(nullable = false, length = 500, unique = true)
-    private String token;
+    @Column(name = "numero_nivel_extra", nullable = false)
+    private Integer numeroNivelExtra;
 
-    @Column(length = 20)
+    @Column(name = "monto_por_producto", nullable = false, precision = 12, scale = 2)
     @Builder.Default
-    private String plataforma = "WEB";
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean activo = true;
+    private BigDecimal montoPorProducto = BigDecimal.ZERO;
 }

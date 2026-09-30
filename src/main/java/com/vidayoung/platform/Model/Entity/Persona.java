@@ -57,6 +57,12 @@ public class Persona extends Auditoria {
     @ToString.Exclude
     private Rango rangoActual;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rango_maximo_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @ToString.Exclude
+    private Rango rangoMaximo;
+
     @OneToOne(mappedBy = "persona", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @JsonIgnoreProperties("persona")
     @ToString.Exclude

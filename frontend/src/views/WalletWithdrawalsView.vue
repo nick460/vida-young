@@ -534,6 +534,57 @@ function imprimirRetiroProcesado(retiro) {
   printWithdrawalReceipt(retiroReceipt(retiro));
 }
 
+async function anularRetiroProcesado(retiro) {
+  if (!canRegisterWithdrawals.value) return;
+  const result = await Swal.fire({
+    title: `Anular retiro #${retiro.id}`,
+    html: `<p style="text-align:left">Se deshará el retiro de <b>${retiro.nombres || ""} ${retiro.apellidos || ""}</b> y se restaurarán sus saldos del periodo. Esta acción queda auditada.</p>`,
+    input: "textarea",
+    inputLabel: "Motivo de anulación (obligatorio, mínimo 10 caracteres)",
+    inputPlaceholder: "Ej. Retiro registrado por error antes del cierre...",
+    inputAttributes: { rows: 3, maxlength: 500 },
+    showCancelButton: true,
+    confirmButtonText: "Anular retiro",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#C4452A",
+    cancelButtonColor: "#1F1A14",
+    inputValidator: (value) => {
+      if (!value || value.trim().length < 10) {
+        return "Escribe un motivo de al menos 10 caracteres.";
+      }
+      return null;
+    }
+  });
+
+  if (!result.isConfirmed) return;
+
+  processing.value = true;
+  try {
+    await apiRequest(`/api/billeteras/retiros/${retiro.id}/anular`, {
+      method: "POST",
+      body: JSON.stringify({ motivo: result.value.trim() })
+    });
+    await Swal.fire({
+      title: "Retiro anulado",
+      text: "Los saldos del periodo fueron restaurados.",
+      icon: "success",
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#F28705"
+    });
+    await loadSaldos();
+  } catch (exception) {
+    await Swal.fire({
+      title: "No se pudo anular",
+      text: exception.message || "No se pudo anular el retiro.",
+      icon: "error",
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#F28705"
+    });
+  } finally {
+    processing.value = false;
+  }
+}
+
 function tipoMovimientoLabel(tipo) {
   const labels = {
     DINERO: "Efectivo directo",
@@ -1021,6 +1072,16 @@ onBeforeUnmount(() => {
                     <button v-else class="print-button" type="button" @click="imprimirRetiroProcesado(saldo)">
                       <Printer :size="15" /> Imprimir
                     </button>
+                    <button
+                      v-if="saldo.rowType === 'RETIRADO' && saldo.estadoRetiro !== 'ANULADO'"
+                      class="anular-button"
+                      type="button"
+                      :disabled="!canRegisterWithdrawals || processing"
+                      title="Deshacer retiro con motivo"
+                      @click="anularRetiroProcesado(saldo)"
+                    >
+                      <X :size="15" /> Deshacer
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -1367,10 +1428,12 @@ td small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight
 .withdrawal-status.pending { background: #fff7e8; color: #9a4d00; border: 1px solid rgba(242, 135, 5, 0.24); }
 .withdrawal-status.processed { background: rgba(22, 101, 52, 0.1); color: #166534; border: 1px solid rgba(22, 101, 52, 0.2); }
 .processed-actions { display: inline-flex; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
-.detail-button, .print-button { min-height: 34px; padding: 0 10px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 950; white-space: nowrap; }
+.detail-button, .print-button, .anular-button { min-height: 34px; padding: 0 10px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 950; white-space: nowrap; }
 .detail-button { border: 1px solid var(--vy-line); background: var(--vy-surface-2); color: var(--vy-ink); }
 .print-button { border: 1px solid rgba(242, 135, 5, 0.28); background: #fff7e8; color: #1f1a14; }
-.detail-button:hover, .print-button:hover { transform: translateY(-1px); }
+.anular-button { border: 1px solid rgba(196, 69, 42, 0.35); background: rgba(196, 69, 42, 0.08); color: #991b1b; cursor: pointer; }
+.detail-button:hover, .print-button:hover, .anular-button:hover:not(:disabled) { transform: translateY(-1px); }
+.anular-button:disabled { cursor: not-allowed; opacity: 0.5; }
 .pagination-bar { padding-top: 14px; }
 .pagination-bar > div { display: flex; align-items: center; gap: 10px; color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }
 .pagination-bar select, .field select, .field input, .field textarea, .period-filter select { width: 100%; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; outline: 0; }

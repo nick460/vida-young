@@ -14,7 +14,15 @@ const editingRangoId = ref(null);
 const rangoForm = reactive({
   nombre: "",
   qpMinimo: 0,
-  nivelesExtra: 0
+  nivelesExtra: 0,
+  color: "#F28705"
+});
+
+const nivelesRango = ref([]);
+const loadingNiveles = ref(false);
+const nivelForm = reactive({
+  numeroNivelExtra: 1,
+  montoPorProducto: 0
 });
 
 const orderedRangos = computed(() =>
@@ -46,8 +54,10 @@ function resetForm() {
   Object.assign(rangoForm, {
     nombre: "",
     qpMinimo: 0,
-    nivelesExtra: 0
+    nivelesExtra: 0,
+    color: "#F28705"
   });
+  nivelesRango.value = [];
 }
 
 function editRango(rango) {
@@ -55,8 +65,50 @@ function editRango(rango) {
   Object.assign(rangoForm, {
     nombre: rango.nombre || "",
     qpMinimo: Number(rango.qpMinimo || 0),
-    nivelesExtra: Number(rango.nivelesExtra || 0)
+    nivelesExtra: Number(rango.nivelesExtra || 0),
+    color: rango.color || "#F28705"
   });
+  loadNivelesRango(rango.id);
+}
+
+async function loadNivelesRango(rangoId) {
+  if (!rangoId) {
+    nivelesRango.value = [];
+    return;
+  }
+  loadingNiveles.value = true;
+  try {
+    nivelesRango.value = await apiRequest(`/api/rangos/${rangoId}/niveles`);
+  } catch {
+    nivelesRango.value = [];
+  } finally {
+    loadingNiveles.value = false;
+  }
+}
+
+async function saveNivelExtra() {
+  if (!editingRangoId.value) {
+    await Swal.fire("Selecciona un rango", "Guarda o selecciona un rango para configurar sus montos extra.", "info");
+    return;
+  }
+  try {
+    await apiRequest(`/api/rangos/${editingRangoId.value}/niveles`, {
+      method: "POST",
+      body: JSON.stringify({
+        numeroNivelExtra: Number(nivelForm.numeroNivelExtra || 1),
+        montoPorProducto: Number(nivelForm.montoPorProducto || 0)
+      })
+    });
+    Object.assign(nivelForm, { numeroNivelExtra: 1, montoPorProducto: 0 });
+    await loadNivelesRango(editingRangoId.value);
+  } catch (exception) {
+    await Swal.fire("Revisa los datos", exception.message || "No se pudo guardar el nivel extra.", "error");
+  }
+}
+
+async function deleteNivelExtra(nivel) {
+  await apiRequest(`/api/rangos/niveles/${nivel.id}`, { method: "DELETE" });
+  await loadNivelesRango(editingRangoId.value);
 }
 
 async function saveRango() {
@@ -69,7 +121,8 @@ async function saveRango() {
       body: JSON.stringify({
         nombre: rangoForm.nombre,
         qpMinimo: Number(rangoForm.qpMinimo || 0),
-        nivelesExtra: Number(rangoForm.nivelesExtra || 0)
+        nivelesExtra: Number(rangoForm.nivelesExtra || 0),
+        color: rangoForm.color || "#F28705"
       })
     });
 
@@ -151,6 +204,33 @@ onMounted(loadRangos);
           <input v-model.number="rangoForm.nivelesExtra" type="number" min="0" max="10" step="1" />
           <small>Se suma al alcance del plan de activacion (maximo total: 10 niveles)</small>
         </label>
+        <label class="color-label">
+          Color del rango
+          <span class="color-row">
+            <input v-model="rangoForm.color" type="color" class="color-input" />
+            <input v-model.trim="rangoForm.color" type="text" maxlength="20" placeholder="#C9A227" class="color-text" />
+          </span>
+          <small>Tiñe el perfil cuando este sea el rango máximo histórico (Ej. Oro #C9A227).</small>
+        </label>
+        <div v-if="editingRangoId" class="nivel-extra-box">
+          <h3>Montos por nivel extra (propios del rango)</h3>
+          <p class="muted">Extra 1 = primer nivel más allá del plan. Ej. plan base 5 + Oro +1 → nivel 6 paga Extra 1.</p>
+          <div v-if="loadingNiveles" class="empty-state">Cargando niveles...</div>
+          <ul v-else class="nivel-list">
+            <li v-for="nivel in nivelesRango" :key="nivel.id">
+              <span>Extra {{ nivel.numeroNivelExtra }} — S/ {{ money(nivel.montoPorProducto) }} x producto</span>
+              <button type="button" class="icon-action danger" title="Eliminar" @click="deleteNivelExtra(nivel)">
+                <Trash2 :size="14" />
+              </button>
+            </li>
+            <li v-if="!nivelesRango.length" class="empty-state">Sin montos: los niveles extra pagarán S/ 0.00.</li>
+          </ul>
+          <div class="nivel-form">
+            <label>N° extra <input v-model.number="nivelForm.numeroNivelExtra" type="number" min="1" max="10" step="1" /></label>
+            <label>Monto S/ <input v-model.number="nivelForm.montoPorProducto" type="number" min="0" step="0.01" /></label>
+            <button type="button" class="save-button" @click="saveNivelExtra"><Plus :size="14" /> Agregar</button>
+          </div>
+        </div>
         <div class="form-actions">
           <button v-if="editingRangoId" type="button" class="ghost-button" @click="resetForm">Cancelar</button>
           <button type="submit" class="save-button" :disabled="saving">
@@ -171,7 +251,8 @@ onMounted(loadRangos);
 
         <div class="rank-stack">
           <article v-for="(rango, index) in orderedRangos" :key="rango.id" class="rank-row">
-            <span class="rank-position">{{ index + 1 }}</span>
+            <span class="rank-position" :style="{ background: (rango.color || '#F28705') + '22', color: rango.color || '#F28705' }">{{ index + 1 }}</span>
+            <span class="rank-dot" :style="{ background: rango.color || '#F28705' }" title="Color del rango"></span>
             <div class="rank-main">
               <strong>{{ rango.nombre }}</strong>
               <small>Requiere {{ money(rango.qpMinimo) }} QP · +{{ Number(rango.nivelesExtra || 0) }} nivel(es) extra</small>
@@ -313,7 +394,7 @@ onMounted(loadRangos);
 
 .rank-row {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 42px 16px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 12px;
@@ -392,6 +473,81 @@ onMounted(loadRangos);
   color: var(--vy-danger);
   background: rgba(196, 69, 42, 0.08);
   font-weight: 800;
+}
+
+.nivel-extra-box {
+  margin-top: 14px;
+  border-top: 1px dashed var(--vy-line);
+  padding-top: 12px;
+}
+
+.nivel-extra-box h3 {
+  font-size: 14px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.nivel-extra-box .muted {
+  font-size: 12px;
+  color: var(--vy-ink-3);
+  margin-bottom: 8px;
+}
+
+.nivel-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nivel-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.nivel-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.nivel-form label {
+  margin-bottom: 0;
+}
+
+.color-label .color-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-input {
+  width: 52px !important;
+  height: 42px;
+  padding: 4px !important;
+  cursor: pointer;
+}
+
+.color-text {
+  flex: 1;
+}
+
+.rank-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid rgba(0, 0, 0, 0.12);
 }
 
 @media (max-width: 900px) {

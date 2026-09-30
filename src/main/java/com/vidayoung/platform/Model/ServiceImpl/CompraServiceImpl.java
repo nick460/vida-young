@@ -934,16 +934,7 @@ public class CompraServiceImpl implements CompraService {
                     .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
             PlanActivacion plan = obtenerPlanActivacionVigente(billetera).orElse(null);
             boolean nivelAplica = nivel <= billeteraService.calcularAlcanceEfectivo(beneficiario, plan);
-            int maxNivelConfigurado = plan == null
-                    ? 0
-                    : planActivacionNivelDao.findFirstByPlanActivacionIdOrderByNumeroNivelDesc(plan.getId())
-                    .map(PlanActivacionNivel::getNumeroNivel)
-                    .orElse(0);
-            PlanActivacionNivel nivelConfig = plan == null || maxNivelConfigurado < 1
-                    ? null
-                    : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(
-                    plan.getId(), Math.min(nivel, maxNivelConfigurado)).orElse(null);
-            BigDecimal montoPorProducto = nivelConfig == null ? BigDecimal.ZERO : zeroIfNull(nivelConfig.getMontoPorProducto());
+            BigDecimal montoPorProducto = zeroIfNull(billeteraService.resolverMontoPorProducto(beneficiario, plan, nivel));
             BigDecimal montoTotal = montoPorProducto.multiply(BigDecimal.valueOf(totalProductos));
             boolean membresiaActiva = beneficiarioReferido
                     .map(this::membresiaActivaReferido)

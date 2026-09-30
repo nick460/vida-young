@@ -39,4 +39,8 @@ public class Rango extends Auditoria {
     @Column(name = "niveles_extra", nullable = false)
     @Builder.Default
     private Integer nivelesExtra = 0;
+
+    @Column(length = 20)
+    @Builder.Default
+    private String color = "#F28705";
 }

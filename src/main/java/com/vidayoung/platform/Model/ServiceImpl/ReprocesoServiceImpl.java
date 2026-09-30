@@ -247,10 +247,6 @@ public class ReprocesoServiceImpl implements ReprocesoService {
 
         Optional<PlanActivacion> planActivo = obtenerPlanActivacionPorPv(billetera.getSaldoPvPropio());
         int alcanceEfectivo = billeteraService.calcularAlcanceEfectivo(persona, planActivo.orElse(null));
-        int maxNivelConfigurado = planActivo
-                .flatMap(plan -> planActivacionNivelDao.findFirstByPlanActivacionIdOrderByNumeroNivelDesc(plan.getId()))
-                .map(PlanActivacionNivel::getNumeroNivel)
-                .orElse(0);
         List<BeneficioActivacionCompra> beneficios = beneficioActivacionCompraDao
                 .findByBeneficiarioIdAndPeriodoId(persona.getId(), periodoActivo.getId()).stream()
                 .filter(beneficio -> Auditoria.ESTADO_ACTIVO.equals(beneficio.getEstado()))
@@ -263,14 +259,9 @@ public class ReprocesoServiceImpl implements ReprocesoService {
         for (BeneficioActivacionCompra beneficio : beneficios) {
             Integer nivel = beneficio.getNivelGenerado();
             boolean nivelAplica = nivel != null && nivel >= 1 && nivel <= alcanceEfectivo;
-            int numeroConfig = nivel == null ? 0 : Math.min(nivel, Math.max(maxNivelConfigurado, 0));
-            PlanActivacionNivel nivelConfig = numeroConfig < 1 || planActivo.isEmpty()
-                    ? null
-                    : planActivacionNivelDao.findByPlanActivacionIdAndNumeroNivel(
-                    planActivo.get().getId(), numeroConfig).orElse(null);
-            BigDecimal nuevoMontoPorProducto = nivelConfig == null
+            BigDecimal nuevoMontoPorProducto = (nivel == null || planActivo.isEmpty())
                     ? BigDecimal.ZERO
-                    : zeroIfNull(nivelConfig.getMontoPorProducto());
+                    : billeteraService.resolverMontoPorProducto(persona, planActivo.get(), nivel);
             BigDecimal nuevoMontoTotal = nuevoMontoPorProducto
                     .multiply(BigDecimal.valueOf(beneficio.getCantidadProductos()));
             boolean pagaNuevo = planActivo.isPresent() && nivelAplica && nuevoMontoTotal.compareTo(BigDecimal.ZERO) > 0;
