@@ -76,6 +76,30 @@ const currentRank = computed(() => {
   }
   return [...orderedRanks.value].reverse().find((rango) => currentQp.value >= Number(rango.qpMinimo || 0)) || null;
 });
+// Maximo historico alcanzado (se conserva hasta superar uno superior).
+// Fuente 1: perfil (ProfileResponse.persona.rangoMaximo + color). Fuente 2: billetera.persona.rangoMaximo.
+// Se resuelve contra la lista de rangos para mostrar niveles extra y color.
+const maxHistorico = computed(() => {
+  const personaPerfil = authStore.usuario?.persona || {};
+  const personaWallet = wallet.value?.persona || walletSummary.value?.billetera?.persona || {};
+  const nombreHistorico = personaPerfil.rangoMaximo
+    || personaWallet.rangoMaximo?.nombre
+    || (typeof personaWallet.rangoMaximo === "string" ? personaWallet.rangoMaximo : null)
+    || null;
+  if (!nombreHistorico) return null;
+  const encontrado = orderedRanks.value.find((rango) => rango.nombre === nombreHistorico) || null;
+  const color = personaPerfil.rangoMaximoColor
+    || personaWallet.rangoMaximo?.color
+    || encontrado?.color
+    || "#C9A227";
+  return {
+    nombre: nombreHistorico,
+    color,
+    qpMinimo: encontrado ? Number(encontrado.qpMinimo || 0) : null,
+    nivelesExtra: encontrado ? Number(encontrado.nivelesExtra || 0) : null,
+    id: encontrado?.id ?? null
+  };
+});
 const nextRank = computed(() => {
   if (rangoSiguienteInfo.value) {
     const encontrado = orderedRanks.value.find((rango) => rango.nombre === rangoSiguienteInfo.value.nombre);
@@ -189,6 +213,9 @@ async function loadDashboardSummary() {
   try {
     if (!personaId.value) {
       await authStore.cargarPerfil();
+    } else {
+      // Refrescar perfil en segundo plano para traer el rango maximo historico actualizado
+      authStore.cargarPerfil().catch(() => {});
     }
 
     if (!personaId.value) {
@@ -257,8 +284,8 @@ onMounted(loadDashboardSummary);
         </section>
 
         <section class="dashboard-grid">
-          <article class="vy-card rank-card">
-            <div class="rank-content">
+          <article class="vy-card rank-card rank-card-split">
+            <div class="rank-content rank-half">
               <span class="vy-chip vy-chip-orange">Tu rango actual</span>
               <h2>{{ currentRank?.nombre || "Sin rango" }}</h2>
               <p>{{ rankSummary }}</p>
@@ -304,6 +331,25 @@ onMounted(loadDashboardSummary);
                   QP contable total: <b>{{ money(rangoSiguienteInfo.qpEfectivo) }}</b> de
                   {{ money(rangoSiguienteInfo.qpMinimo) }} necesarios.
                 </p>
+              </div>
+            </div>
+            <div class="rank-divider"></div>
+            <div class="rank-content rank-half rank-historico" :style="maxHistorico ? { '--rank-max-color': maxHistorico.color } : {}">
+              <span class="vy-chip vy-chip-gold">Máximo histórico</span>
+              <h2 v-if="maxHistorico" class="rank-max-nombre">
+                <span class="rank-max-dot"></span>{{ maxHistorico.nombre }}
+              </h2>
+              <h2 v-else>Sin rango histórico</h2>
+              <p v-if="maxHistorico">
+                Lo conservas hasta superarlo.
+                <span v-if="maxHistorico.nivelesExtra > 0">
+                  Te da +{{ maxHistorico.nivelesExtra }} nivel(es) extra en bonos por activación.
+                </span>
+              </p>
+              <p v-else>Aún no tienes un máximo histórico nivelado o ganado.</p>
+              <div v-if="maxHistorico" class="rank-max-box">
+                <span v-if="maxHistorico.qpMinimo != null">Requirió {{ money(maxHistorico.qpMinimo) }} QP</span>
+                <span v-if="maxHistorico.nivelesExtra > 0">+{{ maxHistorico.nivelesExtra }} extra</span>
               </div>
             </div>
           </article>
@@ -383,7 +429,8 @@ onMounted(loadDashboardSummary);
                   }"
                 ></span>
               </div>
-              <em v-if="currentRank?.id === rango.id">Actual</em>
+              <em v-if="maxHistorico && maxHistorico.id != null && maxHistorico.id === rango.id" class="historico">Histórico</em>
+              <em v-else-if="currentRank?.id === rango.id">Actual</em>
               <em v-else-if="currentQp >= Number(rango.qpMinimo || 0)">Alcanzado</em>
               <em v-else class="pending">{{ rankProgressFor(rango) }}%</em>
             </article>
@@ -589,6 +636,89 @@ onMounted(loadDashboardSummary);
   background: linear-gradient(140deg, var(--vy-cream) 0%, #fff 60%);
   position: relative;
   overflow: hidden;
+}
+
+.rank-card-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) 1px minmax(0, 0.85fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.rank-half {
+  min-width: 0;
+}
+
+.rank-divider {
+  background: var(--vy-line-2);
+  min-height: 100%;
+}
+
+.rank-historico {
+  border-radius: 14px;
+  padding: 16px 18px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--rank-max-color, #C9A227) 14%, #fff) 0%, #fff 70%);
+  border: 1.5px solid color-mix(in srgb, var(--rank-max-color, #C9A227) 55%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--rank-max-color, #C9A227) 18%, transparent);
+}
+
+.vy-chip-gold {
+  background: var(--rank-max-color, #C9A227);
+  color: #fff;
+  font-weight: 900;
+}
+
+.rank-max-nombre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rank-max-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--rank-max-color, #C9A227);
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rank-max-color, #C9A227) 22%, transparent);
+}
+
+.rank-max-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rank-max-box span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid color-mix(in srgb, var(--rank-max-color, #C9A227) 45%, transparent);
+  color: var(--vy-ink);
+}
+
+.rank-modal-row em.historico {
+  background: #C9A227;
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .rank-card-split {
+    grid-template-columns: 1fr;
+  }
+
+  .rank-divider {
+    min-height: 1px;
+    width: 100%;
+  }
 }
 
 .rank-content h2 {

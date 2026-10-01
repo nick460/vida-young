@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import {
+  BadgePercent,
   Boxes,
   CircleMinus,
   Eye,
@@ -54,7 +55,8 @@ const productForm = reactive({
   imagenPublicaUrl: "",
   imagenHerramientaUrl: "",
   listarEnShop: false,
-  listarPublicamente: false
+  listarPublicamente: false,
+  promocion: false
 });
 
 const productDiscountForm = reactive({});
@@ -87,6 +89,10 @@ const shopProductsCount = computed(() =>
 
 const publicProductsCount = computed(() =>
   productos.value.filter((producto) => Boolean(producto.listarPublicamente)).length
+);
+
+const promoProductsCount = computed(() =>
+  productos.value.filter((producto) => Boolean(producto.promocion)).length
 );
 
 const categoriesCount = computed(() =>
@@ -301,7 +307,8 @@ function resetProductForm() {
     imagenPublicaUrl: "",
     imagenHerramientaUrl: "",
     listarEnShop: false,
-    listarPublicamente: false
+    listarPublicamente: false,
+    promocion: false
   });
 }
 
@@ -328,7 +335,8 @@ function openProductModal(producto = null) {
       imagenPublicaUrl: producto.imagenPublicaUrl || "",
       imagenHerramientaUrl: producto.imagenHerramientaUrl || "",
       listarEnShop: Boolean(producto.listarEnShop),
-      listarPublicamente: Boolean(producto.listarPublicamente)
+      listarPublicamente: Boolean(producto.listarPublicamente),
+      promocion: Boolean(producto.promocion)
     });
     resetDiscountForm();
     descuentosCliente.value
@@ -383,7 +391,8 @@ async function saveProduct() {
         qp: Number(productForm.qp || 0),
         cr: Number(productForm.cr || 0),
         listarEnShop: Boolean(productForm.listarEnShop),
-        listarPublicamente: Boolean(productForm.listarPublicamente)
+        listarPublicamente: Boolean(productForm.listarPublicamente),
+        promocion: Boolean(productForm.promocion)
       })
     });
 
@@ -493,6 +502,11 @@ watch(productForm, () => {
           <strong>{{ publicProductsCount }}</strong>
         </article>
         <article class="vy-card summary-card">
+          <div class="summary-icon"><BadgePercent :size="18" stroke-width="1.9" /></div>
+          <span>En promocion</span>
+          <strong>{{ promoProductsCount }}</strong>
+        </article>
+        <article class="vy-card summary-card">
           <div class="summary-icon"><Search :size="18" stroke-width="1.9" /></div>
           <span>Categorias</span>
           <strong>{{ categoriesCount }}</strong>
@@ -562,6 +576,10 @@ watch(productForm, () => {
               <Eye v-if="producto.listarPublicamente" :size="14" />
               <EyeOff v-else :size="14" />
               {{ producto.listarPublicamente ? "Publico" : "Privado" }}
+            </span>
+            <span class="shop-state promo-state" :class="{ disabled: !producto.promocion }">
+              <BadgePercent :size="14" />
+              {{ producto.promocion ? "Promo" : "Sin promo" }}
             </span>
             <span class="price">
               Bs. {{ money(producto.precio) }}
@@ -646,6 +664,10 @@ watch(productForm, () => {
               <input v-model="productForm.listarPublicamente" type="checkbox" />
               <span>Listar este producto publicamente en /tienda/nombreusuario</span>
             </label>
+            <label class="toggle-field full-field">
+              <input v-model="productForm.promocion" type="checkbox" />
+              <span>Marcar como promocion (aparece en la venta en promocion de /ventanilla)</span>
+            </label>
             <section class="image-field full-field">
               <label>
                 <span>Imagen interna</span>
@@ -722,6 +744,8 @@ watch(productForm, () => {
 .shop-state.disabled { background: rgba(31, 26, 20, 0.08); color: var(--vy-ink-3); }
 .public-state { background: rgba(242, 135, 5, 0.14); color: var(--vy-orange-deep); }
 .public-state.disabled { background: rgba(31, 26, 20, 0.08); color: var(--vy-ink-3); }
+.promo-state { background: rgba(168, 85, 247, 0.14); color: #7e22ce; }
+.promo-state.disabled { background: rgba(31, 26, 20, 0.08); color: var(--vy-ink-3); }
 .price { font-size: 13px; font-weight: 900; text-align: right; }
 .price small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 10px; font-weight: 800; white-space: nowrap; }
 .row-actions { display: inline-flex; gap: 6px; }

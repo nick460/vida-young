@@ -77,4 +77,8 @@ public class Producto extends Auditoria {
     @Column(name = "listar_publicamente", nullable = false)
     @Builder.Default
     private Boolean listarPublicamente = Boolean.FALSE;
+
+    @Column(name = "promocion", nullable = false)
+    @Builder.Default
+    private Boolean promocion = Boolean.FALSE;
 }

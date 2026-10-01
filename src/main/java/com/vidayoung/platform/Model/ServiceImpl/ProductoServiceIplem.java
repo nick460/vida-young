@@ -91,6 +91,10 @@ public class ProductoServiceIplem implements ProductoService {
             producto.setListarPublicamente(Boolean.FALSE);
         }
 
+        if (producto.getPromocion() == null) {
+            producto.setPromocion(Boolean.FALSE);
+        }
+
         return productoDao.save(producto);
     }
 

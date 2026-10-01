@@ -45,6 +45,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -234,14 +235,27 @@ public class BilleteraRestController {
     }
 
     @PostMapping("/retiros/{retiroId}/anular")
-    public ResponseEntity<RetiroBilletera> anularRetiro(
-            @PathVariable Long retiroId,
+    public ResponseEntity<RetiroBilletera> anularRetiro(            @PathVariable Long retiroId,
             @RequestBody AnularRetiroRequest request,
             @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails
     ) {
         String motivo = request == null ? null : request.getMotivo();
         String usuario = userDetails == null ? null : userDetails.getUsername();
         return ResponseEntity.ok(billeteraService.anularRetiro(retiroId, motivo, usuario));
+    }
+
+    /**
+     * Nivelacion manual del HISTORICO (migracion del sistema anterior).
+     * Solo toca rangoMaximo, nunca el rangoActual. ADMIN.
+     */
+    @PutMapping("/persona/{personaId}/rango-historico")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<Persona> fijarRangoHistorico(
+            @PathVariable Long personaId,
+            @RequestBody(required = false) RangoHistoricoRequest request
+    ) {
+        Long rangoId = request == null ? null : request.getRangoId();
+        return ResponseEntity.ok(billeteraService.fijarRangoHistorico(personaId, rangoId));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -645,6 +659,13 @@ public class BilleteraRestController {
     public static class AnularRetiroRequest {
 
         private String motivo;
+    }
+
+    @Getter
+    @Setter
+    public static class RangoHistoricoRequest {
+
+        private Long rangoId;
     }
 
     @Getter

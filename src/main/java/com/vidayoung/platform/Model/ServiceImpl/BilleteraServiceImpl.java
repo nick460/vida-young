@@ -211,13 +211,59 @@ public class BilleteraServiceImpl implements BilleteraService {
     }
 
     @Override
-    public int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan) {        int base = plan == null || plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
-        int extra = 0;
-        if (persona != null && persona.getRangoActual() != null
-                && persona.getRangoActual().getNivelesExtra() != null) {
-            extra = persona.getRangoActual().getNivelesExtra();
-        }
+    public int calcularAlcanceEfectivo(Persona persona, PlanActivacion plan) {
+        int base = plan == null || plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
+        int extra = nivelesExtraVigentes(persona);
         return Math.min(NIVELES_TOTALES, base + extra);
+    }
+
+    /**
+     * Lee el rango fresco desde BD para no usar una entidad desactualizada dentro de la
+     * misma transaccion de validacion (el QP de esta compra puede haber subido de rango
+     * al upline justo antes de generar sus beneficios).
+     * Regla de negocio: una vez alcanzado un rango se conserva hasta superar uno superior,
+     * por eso el bono usa el MAXIMO rango historico (rangoMaximo), no el rangoActual
+     * (que puede bajar a 0 en el cierre mensual).
+     */
+    private Rango rangoEfectivoParaBono(Persona persona) {
+        if (persona == null) {
+            return null;
+        }
+        Persona fuente = persona;
+        if (persona.getId() != null) {
+            try {
+                fuente = personaDao.findById(persona.getId())
+                        .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                        .orElse(persona);
+            } catch (Exception ignored) {
+                // Fallback al objeto en memoria si la recarga falla
+            }
+        }
+        Rango maximo = fuente.getRangoMaximo();
+        Rango actual = fuente.getRangoActual();
+        if (maximo == null) {
+            return actual;
+        }
+        if (actual == null) {
+            return maximo;
+        }
+        // Ante cualquier inconsistencia historica, quedarse con el mayor por qpMinimo
+        BigDecimal qpMax = maximo.getQpMinimo() == null ? BigDecimal.ZERO : maximo.getQpMinimo();
+        BigDecimal qpAct = actual.getQpMinimo() == null ? BigDecimal.ZERO : actual.getQpMinimo();
+        return qpAct.compareTo(qpMax) > 0 ? actual : maximo;
+    }
+
+    private int nivelesExtraVigentes(Persona persona) {
+        Rango efectivo = rangoEfectivoParaBono(persona);
+        if (efectivo != null && efectivo.getNivelesExtra() != null) {
+            return Math.max(0, efectivo.getNivelesExtra());
+        }
+        return 0;
+    }
+
+    private Long rangoIdVigente(Persona beneficiario) {
+        Rango efectivo = rangoEfectivoParaBono(beneficiario);
+        return efectivo == null ? null : efectivo.getId();
     }
 
     @Override
@@ -234,9 +280,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .orElse(BigDecimal.ZERO);
         }
         int indiceExtra = nivel - base;
-        Long rangoId = beneficiario == null || beneficiario.getRangoActual() == null
-                ? null
-                : beneficiario.getRangoActual().getId();
+        Long rangoId = rangoIdVigente(beneficiario);
         if (rangoId == null) {
             return BigDecimal.ZERO;
         }
@@ -333,6 +377,45 @@ public class BilleteraServiceImpl implements BilleteraService {
         } else if (persistente.getRangoMaximo() != null) {
             personaDao.save(persistente);
         }
+    }
+
+    @Override
+    @Transactional
+    public Persona fijarRangoHistorico(Long personaId, Long rangoId) {
+        Persona persona = personaDao.findById(personaId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("Persona no encontrada."));
+
+        if (rangoId == null) {
+            // Limpiar nivelacion: vuelve a depender solo de lo ganado en este sistema
+            persona.setRangoMaximo(null);
+            personaDao.save(persona);
+            recalcularBeneficiosActivacion(persona, false);
+            return persona;
+        }
+
+        Rango rango = rangoDao.findById(rangoId)
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .orElseThrow(() -> new IllegalArgumentException("El rango no existe."));
+
+        // Solo historico (rangoMaximo), jamas el actual. Y nunca bajar lo ya ganado.
+        Rango efectivo = masAlto(persona.getRangoMaximo(), rango);
+        efectivo = masAlto(efectivo, persona.getRangoActual());
+        persona.setRangoMaximo(efectivo);
+        personaDao.save(persona);
+
+        notificacionService.notificarPersona(
+                persona.getId(),
+                Notificacion.TIPO_RANGO,
+                "Rango historico nivelado",
+                "Se te nivelo al rango historico " + efectivo.getNombre() + " del sistema anterior. Lo conservas hasta revalidar o alcanzar uno superior.",
+                "wallet"
+        );
+
+        // El nuevo alcance (plan + niveles extra del historico) puede volver cobrables
+        // beneficios pendientes del periodo activo
+        recalcularBeneficiosActivacion(persona, false);
+        return persona;
     }
 
     private Rango masAlto(Rango actual, Rango candidato) {

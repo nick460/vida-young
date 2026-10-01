@@ -61,6 +61,15 @@ public interface BilleteraService {
 
     void actualizarRangoActual(Persona persona, java.math.BigDecimal qpActual);
 
+    /**
+     * Nivelacion manual del HISTORICO (migracion del sistema anterior).
+     * Solo toca rangoMaximo, nunca el rangoActual: la persona conserva su nivel
+     * heredado para bonos por niveles extra hasta revalidar o alcanzar uno superior.
+     * Nunca baja el historico ya ganado (se queda con el mayor por qpMinimo).
+     * rangoId null = limpiar el historico nivelado.
+     */
+    Persona fijarRangoHistorico(Long personaId, Long rangoId);
+
     void registrarAfiliacionInicial(Referido referido);
 
     HistorialMembresia registrarActivacion(Long personaId, Long planId);

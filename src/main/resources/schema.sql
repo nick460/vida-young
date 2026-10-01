@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS productos (
     imagen_herramienta_url VARCHAR(255),
     listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE,
     listar_publicamente BOOLEAN NOT NULL DEFAULT FALSE,
+    promocion BOOLEAN NOT NULL DEFAULT FALSE,
     estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -187,7 +188,8 @@ ALTER TABLE productos
     ADD COLUMN IF NOT EXISTS imagen_publica_url VARCHAR(255),
     ADD COLUMN IF NOT EXISTS imagen_herramienta_url VARCHAR(255),
     ADD COLUMN IF NOT EXISTS listar_en_shop BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS listar_publicamente BOOLEAN;
+    ADD COLUMN IF NOT EXISTS listar_publicamente BOOLEAN,
+    ADD COLUMN IF NOT EXISTS promocion BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE productos
     ALTER COLUMN listar_publicamente SET DEFAULT FALSE,

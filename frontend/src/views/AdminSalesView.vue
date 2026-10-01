@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { jsPDF } from "jspdf";
 import {
+  BadgePercent,
   CheckCircle2,
   CircleX,
   Ban,
@@ -50,6 +51,7 @@ const discountAmount = ref("");
 const discountConcept = ref("");
 const editingCompra = ref(null);
 const saleModalOpen = ref(false);
+const ventaPromoMode = ref(false);
 const publicSaleModalOpen = ref(false);
 const personaSelect = ref(null);
 const periodoSelect = ref(null);
@@ -121,8 +123,11 @@ const filteredPersonas = computed(() => {
 
 const filteredProducts = computed(() => {
   const text = productQuery.value.trim().toLowerCase();
-  if (!text) return productos.value;
-  return productos.value.filter((producto) => [
+  const base = ventaPromoMode.value
+    ? productos.value.filter((producto) => Boolean(producto.promocion))
+    : productos.value;
+  if (!text) return base;
+  return base.filter((producto) => [
     producto.nombre,
     producto.sku,
     producto.categoria
@@ -694,9 +699,14 @@ function resetPublicSaleForm() {
   });
 }
 
-function openSaleModal() {
+function openSaleModal(soloPromocion = false) {
   resetSaleForm();
+  ventaPromoMode.value = Boolean(soloPromocion);
   saleModalOpen.value = true;
+}
+
+function openPromoSaleModal() {
+  openSaleModal(true);
 }
 
 function openPublicSaleModal() {
@@ -706,6 +716,7 @@ function openPublicSaleModal() {
 
 function openEditSaleModal(compra) {
   editingCompra.value = compra;
+  ventaPromoMode.value = false;
   selectedPersonaId.value = String(compra.persona?.id || "");
   cajaCode.value = compra.codigoPago || generateCajaCode();
   discountAmount.value = Number(compra.descuentoMonto || 0);
@@ -727,6 +738,7 @@ function openEditSaleModal(compra) {
 
 function closeSaleModal() {
   saleModalOpen.value = false;
+  ventaPromoMode.value = false;
   destroyPersonaSelect2();
 }
 
@@ -1392,7 +1404,29 @@ async function updateCompraEstado(compra, estadoCompra) {
       body: JSON.stringify({ estadoCompra })
     });
     if (estadoCompra === "VALIDADA") {
-      await showSuccess("Compra validada", `Compra #${compra.id} validada. Se notificó a todas las personas que recibieron QP y beneficios de esta compra.`);
+      let detalle = "Se notificó a todas las personas que recibieron QP y beneficios de esta compra.";
+      try {
+        const beneficios = await apiRequest(`/api/compras/${compra.id}/beneficios`);
+        const pagados = (Array.isArray(beneficios) ? beneficios : []).filter((b) => b.paga);
+        const total = pagados.reduce((acc, b) => acc + Number(b.montoTotal || 0), 0);
+        const extras = pagados.filter((b) => {
+          const base = Number(b.planActivacion?.nivelesAlcance ?? 0);
+          return base > 0 && Number(b.nivelGenerado || 0) > base;
+        });
+        detalle = `Se generaron ${pagados.length} beneficio(s) pagados por Bs. ${money(total)}.`;
+        if (extras.length) {
+          const lineas = extras.map((b) => {
+            const nombre = `${b.beneficiario?.nombres || ""} ${b.beneficiario?.apellidos || ""}`.trim() || "beneficiario";
+            return `• ${nombre} (nivel ${b.nivelGenerado}, extra por rango): Bs. ${money(b.montoTotal)} (${money(b.montoPorProducto)} x ${b.cantidadProductos} prod.)`;
+          });
+          detalle += `\n\nBonos por rango extra:\n${lineas.join("\n")}`;
+        } else {
+          detalle += "\n\nSin bonos por niveles extra de rango en esta compra (ningún upline cobró más allá del alcance base de su plan).";
+        }
+      } catch {
+        // Si falla el detalle, mantener mensaje base
+      }
+      await showSuccess("Compra validada", `Compra #${compra.id} validada. ${detalle}`);
     } else {
       await showSuccess("Compra actualizada", `Compra #${compra.id} actualizada a ${estadoCompra}.`);
     }
@@ -1985,7 +2019,11 @@ onMounted(() => {
         <Store :size="20" />
         <span>Venta publica</span>
       </button>
-      <button class="floating-sale-button" type="button" @click="openSaleModal">
+      <button class="floating-sale-button promo" type="button" @click="openPromoSaleModal">
+        <BadgePercent :size="20" />
+        <span>Promocion</span>
+      </button>
+      <button class="floating-sale-button" type="button" @click="openSaleModal(false)">
         <Plus :size="20" />
         <span>Venta interna</span>
       </button>
@@ -1997,8 +2035,8 @@ onMounted(() => {
           <header>
             <div>
               <span class="vy-eyebrow">Ventanilla</span>
-              <h2>{{ editingCompra ? `Modificar venta #${editingCompra.id}` : "Nueva venta" }}</h2>
-              <p>{{ editingCompra ? "Ajusta productos, cantidades o descuento antes de validar." : "Genera una compra pendiente con pago en caja." }}</p>
+              <h2>{{ editingCompra ? `Modificar venta #${editingCompra.id}` : (ventaPromoMode ? "Nueva venta en promocion" : "Nueva venta") }}</h2>
+              <p>{{ editingCompra ? "Ajusta productos, cantidades o descuento antes de validar." : (ventaPromoMode ? "Venta interna con pago en caja. Solo productos marcados en promocion." : "Genera una compra pendiente con pago en caja.") }}</p>
             </div>
             <button type="button" aria-label="Cerrar" @click="closeSaleModal">
               <X :size="18" />
@@ -2006,6 +2044,10 @@ onMounted(() => {
           </header>
 
           <section class="sale-modal-body">
+            <div v-if="ventaPromoMode && !editingCompra" class="promo-mode-banner">
+              <BadgePercent :size="18" />
+              <span>Modo <strong>promocion</strong>: solo se listan productos marcados como promocion en /inventario. El procedimiento de venta y validacion es el mismo.</span>
+            </div>
             <div class="sale-card">
               <label class="field">
                 <span>Persona</span>
@@ -2040,9 +2082,13 @@ onMounted(() => {
                     <strong>{{ producto.nombre }}</strong>
                     <small>{{ producto.sku }} - {{ producto.categoria || "Producto" }}</small>
                     <em v-if="isClubRoyaleProduct(producto)" class="club-royale-badge">Producto Club Royale</em>
+                    <em v-if="producto.promocion" class="promo-badge">Promocion</em>
                   </span>
                   <b>Bs. {{ money(producto.precio) }}</b>
                 </button>
+                <div v-if="!filteredProducts.length" class="product-picker-empty">
+                  {{ ventaPromoMode ? "No hay productos marcados en promocion. Marcalos en /inventario." : "No hay productos para mostrar." }}
+                </div>
               </div>
 
               <div class="sale-items">
@@ -2616,8 +2662,10 @@ onMounted(() => {
   transition: transform .16s ease, box-shadow .16s ease;
 }
 .floating-sale-button.public { background: linear-gradient(135deg, #3f8f5c 0%, #166534 100%); box-shadow: 0 18px 36px rgba(22, 101, 52, .24); }
+.floating-sale-button.promo { background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%); box-shadow: 0 18px 36px rgba(126, 34, 206, .28); }
 .floating-sale-button:hover { transform: translateY(-2px); box-shadow: 0 22px 44px rgba(242, 135, 5, .38); }
 .floating-sale-button.public:hover { box-shadow: 0 22px 44px rgba(22, 101, 52, .3); }
+.floating-sale-button.promo:hover { box-shadow: 0 22px 44px rgba(126, 34, 206, .36); }
 .floating-sale-button:active { transform: translateY(0); }
 .ventanilla-skeleton { display: grid; gap: 18px; }
 .skeleton-card { padding: 20px; overflow: hidden; }
@@ -2736,6 +2784,9 @@ onMounted(() => {
 .person-list strong, .product-picker strong { display: block; color: var(--vy-ink); font-size: 13px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-list small, .product-picker small { display: block; margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
 .club-royale-badge { width: fit-content; min-height: 24px; margin-top: 7px; padding: 0 9px; border: 1px solid rgba(22, 101, 52, 0.24); border-radius: 999px; background: rgba(22, 101, 52, 0.1); color: #166534; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
+.promo-badge { width: fit-content; min-height: 24px; margin-top: 7px; margin-left: 6px; padding: 0 9px; border: 1px solid rgba(126, 34, 206, 0.3); border-radius: 999px; background: rgba(168, 85, 247, 0.12); color: #7e22ce; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
+.promo-mode-banner { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(126, 34, 206, 0.3); background: rgba(168, 85, 247, 0.1); color: #581c87; font-size: 13px; font-weight: 700; }
+.product-picker-empty { padding: 16px; text-align: center; color: var(--vy-ink-3); font-size: 13px; font-weight: 700; }
 .discount-badge { width: fit-content; min-height: 23px; margin-top: 7px; padding: 0 8px; border-radius: 999px; background: #fff3df; color: var(--vy-orange-deep); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; font-weight: 950; text-transform: uppercase; white-space: nowrap; }
 .selected-person { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(63, 143, 92, 0.1); color: var(--vy-success); font-size: 13px; font-weight: 800; }
 .selected-person span { display: block; margin-top: 3px; color: var(--vy-ink-2); font-size: 12px; font-weight: 800; }

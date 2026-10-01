@@ -124,6 +124,51 @@ async function loadAll() {
   }
 }
 
+function resumenBeneficios(beneficios) {
+  const pagados = (Array.isArray(beneficios) ? beneficios : []).filter((b) => b.paga);
+  const total = pagados.reduce((acc, b) => acc + Number(b.montoTotal || 0), 0);
+  const extras = pagados.filter((b) => {
+    const base = Number(b.planActivacion?.nivelesAlcance ?? 0);
+    return base > 0 && Number(b.nivelGenerado || 0) > base;
+  });
+  return { pagados, total, extras };
+}
+
+async function validarCompra(compra) {
+  if (!compra || compra.estadoCompra !== "PENDIENTE") return;
+  const unidades = (compra.detalles || []).reduce((acc, d) => acc + Number(d.cantidad || 0), 0);
+  if (!window.confirm(`Validar compra #${compra.id} de ${fullName(compra.persona)} (${unidades} productos)? Se acreditará volumen y se pagarán beneficios de activación, incluyendo bonos por niveles extra de rango (ej. alcance 5 +1 extra x Bs 2.5 por producto). ¿Continuar?`)) return;
+  saving.value = true;
+  error.value = "";
+  try {
+    await apiRequest(`/api/compras/${compra.id}/estado`, {
+      method: "PUT",
+      body: JSON.stringify({ estadoCompra: "VALIDADA" })
+    });
+    let detalle = "";
+    try {
+      const beneficios = await apiRequest(`/api/compras/${compra.id}/beneficios`);
+      const { pagados, total, extras } = resumenBeneficios(beneficios);
+      detalle = ` Se generaron ${pagados.length} beneficio(s) pagados por Bs. ${money(total)}.`;
+      if (extras.length) {
+        const lineas = extras.map((b) => {
+          const nombre = `${b.beneficiario?.nombres || ""} ${b.beneficiario?.apellidos || ""}`.trim() || "beneficiario";
+          return `• ${nombre} (nivel ${b.nivelGenerado}, extra por rango): Bs. ${money(b.montoTotal)} (${money(b.montoPorProducto)} x ${b.cantidadProductos} prod.)`;
+        });
+        detalle += `\nBonos por rango extra:\n${lineas.join("\n")}`;
+      }
+    } catch {
+      detalle = "";
+    }
+    window.alert(`Compra #${compra.id} validada.${detalle}`);
+    await loadAll();
+  } catch (e) {
+    error.value = e.message || "No se pudo validar la compra.";
+  } finally {
+    saving.value = false;
+  }
+}
+
 function openEditModal(compra) {
   editingCompra.value = compra;
   editItems.value = (compra.detalles || []).map((d) => ({
@@ -320,6 +365,7 @@ onMounted(loadAll);
                 <td>
                   <div style="display:flex;gap:6px;flex-wrap:wrap">
                     <button class="vy-btn vy-btn-ghost" type="button" @click="openDetallesModal(compra)"><ClipboardList :size="14" /> Detalles</button>
+                    <button v-if="compra.estadoCompra==='PENDIENTE'" class="vy-btn vy-btn-primary" type="button" :disabled="saving" title="Validar compra y pagar beneficios (incluye bonos por niveles extra de rango)" @click="validarCompra(compra)">Validar</button>
                     <button class="vy-btn vy-btn-primary" type="button" :disabled="compra.estadoCompra==='ANULADA'" title="Editar" @click="openEditModal(compra)"><Pencil :size="14" /> Editar</button>
                   </div>
                 </td>

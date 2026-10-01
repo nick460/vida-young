@@ -22,11 +22,16 @@ const error = ref("");
 const personas = ref([]);
 const usuarios = ref([]);
 const roles = ref([]);
+const rangos = ref([]);
 const openMenuId = ref(null);
 const searchTerm = ref("");
 const currentPage = ref(1);
 const pageSize = ref(10);
 const impersonatingUserId = ref(null);
+const savingRangoHistorico = ref(false);
+const rangoHistoricoModalOpen = ref(false);
+const rangoHistoricoPersona = ref(null);
+const rangoHistoricoId = ref("");
 
 const personaModalOpen = ref(false);
 const usuarioModalOpen = ref(false);
@@ -111,18 +116,64 @@ async function loadAll() {
   error.value = "";
 
   try {
-    const [personasData, usuariosData, rolesData] = await Promise.all([
+    const [personasData, usuariosData, rolesData, rangosData] = await Promise.all([
       apiRequest("/api/personas"),
       apiRequest("/api/usuarios"),
-      apiRequest("/api/roles")
+      apiRequest("/api/roles"),
+      apiRequest("/api/rangos").catch(() => [])
     ]);
     personas.value = personasData;
     usuarios.value = usuariosData;
     roles.value = rolesData;
+    rangos.value = Array.isArray(rangosData) ? rangosData : [];
   } catch (exception) {
     error.value = "No se pudieron cargar los datos. Verifica que el backend esté activo y la sesión sea válida.";
   } finally {
     loading.value = false;
+  }
+}
+
+function rangoActualNombre(persona) {
+  return persona?.rangoActual?.nombre || "Sin rango";
+}
+
+function rangoHistoricoNombre(persona) {
+  return persona?.rangoMaximo?.nombre || "—";
+}
+
+function openRangoHistoricoModal(persona) {
+  openMenuId.value = null;
+  rangoHistoricoPersona.value = persona;
+  rangoHistoricoId.value = persona?.rangoMaximo?.id ? String(persona.rangoMaximo.id) : "";
+  rangoHistoricoModalOpen.value = true;
+}
+
+function closeRangoHistoricoModal() {
+  rangoHistoricoModalOpen.value = false;
+  rangoHistoricoPersona.value = null;
+  rangoHistoricoId.value = "";
+}
+
+async function saveRangoHistorico() {
+  if (!rangoHistoricoPersona.value) return;
+  savingRangoHistorico.value = true;
+  try {
+    const payload = { rangoId: rangoHistoricoId.value === "" ? null : Number(rangoHistoricoId.value) };
+    await apiRequest(`/api/billeteras/persona/${rangoHistoricoPersona.value.id}/rango-historico`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    await showSuccess(
+      payload.rangoId == null
+        ? "Rango histórico limpiado. La persona vuelve a depender solo de lo ganado en este sistema."
+        : "Rango histórico nivelado. Solo se tocó el histórico (no el actual); lo conserva hasta revalidar o alcanzar uno superior y ya aplica a bonos por niveles extra."
+    );
+    closeRangoHistoricoModal();
+    await loadAll();
+  } catch (exception) {
+    await showError(exception.message || "No se pudo nivelar el rango histórico.");
+  } finally {
+    savingRangoHistorico.value = false;
   }
 }
 
@@ -427,6 +478,7 @@ watch(totalPages, (pages) => {
               <th>Contacto</th>
               <th>Usuario</th>
               <th>Roles</th>
+              <th>Rango actual / histórico</th>
               <th></th>
             </tr>
           </thead>
@@ -454,6 +506,12 @@ watch(totalPages, (pages) => {
                 </span>
               </td>
               <td>{{ userRoles(usuario) }}</td>
+              <td>
+                <span>
+                  <strong>{{ rangoActualNombre(persona) }}</strong>
+                  <small style="display:block;color:var(--vy-ink-3)">Histórico: {{ rangoHistoricoNombre(persona) }}</small>
+                </span>
+              </td>
               <td class="actions-cell">
                 <button class="menu-button" type="button" @click.stop="toggleMenu(persona.id)">
                   <span>Acciones</span>
@@ -470,6 +528,10 @@ watch(totalPages, (pages) => {
                   <button v-if="canEnterAs(usuario)" type="button" :disabled="impersonatingUserId === usuario.id" @click="enterAsUser(persona, usuario)">
                     <LogIn :size="14" stroke-width="2" />
                     {{ impersonatingUserId === usuario.id ? "Ingresando..." : "Ingresar" }}
+                  </button>
+                  <button type="button" @click="openRangoHistoricoModal(persona)">
+                    <Shield :size="14" stroke-width="2" />
+                    Nivelar rango histórico
                   </button>
                   <button type="button" class="danger" @click="removePersona(persona)">
                     <CircleMinus :size="14" stroke-width="2" />
@@ -561,6 +623,43 @@ watch(totalPages, (pages) => {
             <button class="vy-btn vy-btn-ghost" type="button" @click="closeUsuarioModal">Cancelar</button>
             <button class="vy-btn vy-btn-primary" type="submit">
               {{ editingUsuarioId ? "Guardar usuario" : "Crear usuario" }}
+            </button>
+          </footer>
+        </form>
+      </div>
+
+      <div v-if="rangoHistoricoModalOpen" class="modal-backdrop">
+        <form class="entity-modal" @submit.prevent="saveRangoHistorico">
+          <header>
+            <div>
+              <span class="vy-eyebrow">Migración sistema anterior</span>
+              <h2>Nivelar rango histórico</h2>
+              <p v-if="rangoHistoricoPersona">
+                {{ rangoHistoricoPersona.nombres }} {{ rangoHistoricoPersona.apellidos }} ·
+                Actual: {{ rangoActualNombre(rangoHistoricoPersona) }} ·
+                Histórico: {{ rangoHistoricoNombre(rangoHistoricoPersona) }}
+              </p>
+              <p>Solo toca el <strong>histórico</strong> (rango máximo), nunca el actual. Lo conserva hasta revalidar o alcanzar uno superior y ya cuenta para bonos por niveles extra.</p>
+            </div>
+            <button type="button" aria-label="Cerrar" @click="closeRangoHistoricoModal">×</button>
+          </header>
+
+          <div class="modal-grid">
+            <label class="full-field">
+              <span>Rango histórico del sistema anterior</span>
+              <select v-model="rangoHistoricoId">
+                <option value="">— Sin nivelación (limpiar histórico) —</option>
+                <option v-for="rango in rangos" :key="rango.id" :value="String(rango.id)">
+                  {{ rango.nombre }} (requiere {{ Number(rango.qpMinimo || 0).toFixed(2) }} QP · +{{ Number(rango.nivelesExtra || 0) }} extra)
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <footer>
+            <button class="vy-btn vy-btn-ghost" type="button" @click="closeRangoHistoricoModal">Cancelar</button>
+            <button class="vy-btn vy-btn-primary" type="submit" :disabled="savingRangoHistorico">
+              {{ savingRangoHistorico ? "Guardando..." : "Nivelar histórico" }}
             </button>
           </footer>
         </form>

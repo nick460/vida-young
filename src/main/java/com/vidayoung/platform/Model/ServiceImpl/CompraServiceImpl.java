@@ -269,14 +269,16 @@ public class CompraServiceImpl implements CompraService {
 
         // 2. Regenerar los beneficios con la logica vigente:
         //    10 niveles, alcance efectivo = plan + rango, montos del plan actual.
+        //    El volumen/rango va PRIMERO para que los niveles extra del rango
+        //    recien alcanzado ya apliquen a esta misma compra.
+        // 3. Asegurar el volumen de red (PV+QP a los 9 niveles): idempotente.
+        acreditarVolumenRed(compra, notificar);
         int totalProductos = compra.getDetalles().stream()
                 .map(CompraDetalle::getCantidad)
                 .filter(value -> value != null)
                 .reduce(0, Integer::sum);
         generarBeneficiosActivacion(compra, totalProductos, notificar);
-
-        // 3. Asegurar el volumen de red (PV+QP a los 9 niveles): idempotente.
-        acreditarVolumenRed(compra, notificar);
+        recalcularBeneficiosUplines(compra);
 
         return 1;
     }
@@ -751,7 +753,10 @@ public class CompraServiceImpl implements CompraService {
         // La membresia se activa unicamente con el PV de compras propias
         billeteraService.activarMembresiaPorPv(compra.getPersona(), billeteraComprador.getSaldoPvPropio(), compra.getPeriodo());
         billeteraService.recalcularBeneficiosActivacion(compra.getPersona());
-        // El PV y QP de la compra sube por la red hasta 9 niveles (comprador + 9 = 10)
+        // El PV y QP de la compra sube por la red hasta 9 niveles (comprador + 9 = 10).
+        // Esto puede subir de rango a los uplines JUSTO antes de generar sus beneficios,
+        // por eso generarBeneficiosActivacion debe leer el rango fresco desde BD
+        // (BilleteraService.calcularAlcanceEfectivo/resolverMontoPorProducto ya lo hacen).
         acreditarVolumenRed(compra, true);
 
         notificacionService.notificarPersona(
@@ -764,6 +769,36 @@ public class CompraServiceImpl implements CompraService {
 
         if (beneficioActivacionCompraDao.findByCompraId(compra.getId()).isEmpty()) {
             generarBeneficiosActivacion(compra, totalProductos, true);
+        }
+        // Pago retroactivo: si esta compra subio de rango a algun upline (mas QP),
+        // sus beneficios pendientes de compras anteriores ("excede su alcance efectivo")
+        // ahora pueden ser cobrables dentro de su nuevo alcance (plan + niveles extra).
+        recalcularBeneficiosUplines(compra);
+    }
+
+    /**
+     * Recalcula los beneficios pendientes del periodo activo para cada upline del comprador.
+     * Asi, si el upline acaba de ganar un rango con niveles extra (o activo membresia/plan),
+     * cobra retroactivamente lo que antes quedo en paga=false.
+     */
+    private void recalcularBeneficiosUplines(Compra compra) {
+        Persona beneficiario = referidoDao.findByPersonaId(compra.getPersona().getId())
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .map(Referido::getPatrocinador)
+                .orElse(null);
+        int nivel = 1;
+        while (beneficiario != null && nivel <= BilleteraService.NIVELES_TOTALES) {
+            try {
+                billeteraService.recalcularBeneficiosActivacion(beneficiario, false);
+            } catch (Exception ignored) {
+                // No bloquear la validacion por un ajuste retroactivo puntual
+            }
+            final Long actualId = beneficiario.getId();
+            beneficiario = referidoDao.findByPersonaId(actualId)
+                    .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                    .map(Referido::getPatrocinador)
+                    .orElse(null);
+            nivel++;
         }
     }
 
@@ -922,6 +957,11 @@ public class CompraServiceImpl implements CompraService {
         // El beneficio de dinero se genera SIEMPRE hasta 10 niveles hacia arriba,
         // aunque el beneficiario no cobre todavia: queda registrado para el pago
         // retroactivo cuando active membresia o suba de plan/rango.
+        // Bono por rango con niveles extra: alcanceEfectivo = plan.nivelesAlcance + rango.nivelesExtra.
+        // Ej. alcance base 5 + rango +1 extra con Bs 2.5 x producto: si la compra cae en el
+        // nivel 6 de ese beneficiario (nivel validado dentro de su alcance extendido),
+        // cobra cantidadProductos x 2.5. El monto del nivel extra sale de rangos_niveles
+        // (numeroNivelExtra = nivel - base del plan).
         Persona beneficiario = referidoDao.findByPersonaId(compra.getPersona().getId())
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
                 .map(Referido::getPatrocinador)
