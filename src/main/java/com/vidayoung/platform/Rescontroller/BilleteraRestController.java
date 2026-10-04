@@ -122,8 +122,9 @@ public class BilleteraRestController {
         return personaDao.findById(personaId)
                 .map(persona -> {
                     Billetera billetera = billeteraService.asegurarBilletera(persona);
+                    PeriodoGestion periodoActivo = gestionPeriodoService.buscarPeriodoActivo().orElse(null);
                     PeriodoGestion periodoConsulta = periodoId == null
-                            ? gestionPeriodoService.buscarPeriodoActivo().orElse(null)
+                            ? periodoActivo
                             : gestionPeriodoService.buscarPorId(periodoId);
                     List<MovimientoBilletera> movimientos = periodoConsulta == null
                             ? List.of()
@@ -132,16 +133,38 @@ public class BilleteraRestController {
                                     .filter(m -> !esDeCompraAnulada(m))
                                     .toList();
                     List<BilleteraMovimientoResponse> movimientosResponse = movimientosResponse(movimientos);
+                    boolean esHistorico = periodoConsulta != null && periodoActivo != null
+                            && periodoConsulta.getId() != null
+                            && !periodoConsulta.getId().equals(periodoActivo.getId());
+                    Billetera billeteraRespuesta;
+                    BigDecimal efectivoRecompensas;
+                    List<DetalleEfectivoMensualResponse> detalleEfectivo;
+                    BigDecimal efectivoNivel1;
+                    BigDecimal productosNivel1;
+                    if (esHistorico) {
+                        CierreMensualBilletera cierre = buscarCierrePersonaPeriodo(personaId, periodoConsulta);
+                        billeteraRespuesta = billeteraHistorica(billetera, movimientos, cierre);
+                        efectivoRecompensas = efectivoRecompensasHistorico(personaId, periodoConsulta);
+                        detalleEfectivo = detalleEfectivoHistorico(personaId, periodoConsulta);
+                        efectivoNivel1 = efectivoNivel1Historico(personaId, periodoConsulta);
+                        productosNivel1 = productosNivel1Historico(personaId, periodoConsulta);
+                    } else {
+                        billeteraRespuesta = billeteraDesdeMovimientos(billetera, movimientos);
+                        efectivoRecompensas = efectivoRecompensasDisponible(personaId, periodoConsulta);
+                        detalleEfectivo = detalleEfectivoMensual(personaId, periodoConsulta);
+                        efectivoNivel1 = efectivoNivel1Disponible(personaId, periodoConsulta);
+                        productosNivel1 = productosNivel1Disponible(personaId, periodoConsulta);
+                    }
                     return ResponseEntity.ok(new BilleteraResumenResponse(
-                            billeteraDesdeMovimientos(billetera, movimientos),
+                            billeteraRespuesta,
                             movimientosResponse,
                             billeteraService.listarHistorialMembresias(personaId),
                             billeteraService.listarCierresMensuales(personaId),
-                            efectivoRecompensasDisponible(personaId, periodoConsulta),
+                            efectivoRecompensas,
                             BigDecimal.ZERO,
-                            detalleEfectivoMensual(personaId, periodoConsulta),
-                            efectivoNivel1Disponible(personaId, periodoConsulta),
-                            productosNivel1Disponible(personaId, periodoConsulta),
+                            detalleEfectivo,
+                            efectivoNivel1,
+                            productosNivel1,
                             periodoConsulta,
                             membresiaActualDesdeReferido(personaId)
                     ));
@@ -789,12 +812,129 @@ public class BilleteraRestController {
         reconstruida.setPersona(billetera.getPersona());
         reconstruida.setSaldoDinero(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_DINERO).max(BigDecimal.ZERO));
         reconstruida.setSaldoPv(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PV).max(BigDecimal.ZERO));
-        // El PV propio es acumulado de compras propias: es el que determina la membresia
-        reconstruida.setSaldoPvPropio(zeroIfNull(billetera.getSaldoPvPropio()));
+        // PV propio solo del periodo consultado (compras propias COMPRA, sin red).
+        reconstruida.setSaldoPvPropio(pvPropioDelMes(movimientos));
         reconstruida.setSaldoQp(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_QP).max(BigDecimal.ZERO));
         reconstruida.setSaldoCr(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_CR).max(BigDecimal.ZERO));
         reconstruida.setSaldoProductos(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PRODUCTOS).max(BigDecimal.ZERO));
         return reconstruida;
+    }
+
+    /** PV propio del mes: solo compras propias (referencia COMPRA) de ese periodo. */
+    private BigDecimal pvPropioDelMes(List<MovimientoBilletera> movimientos) {
+        if (movimientos == null || movimientos.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return movimientos.stream()
+                .filter(mov -> MovimientoBilletera.TIPO_PV.equals(mov.getTipo()))
+                .filter(mov -> "COMPRA".equals(mov.getReferenciaTipo()))
+                .map(MovimientoBilletera::getMonto)
+                .map(this::zeroIfNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Para meses ya cerrados los movimientos del periodo incluyen los egresos de
+     * cierre/retiro (CIERRE_MENSUAL negativos + RETIRO_BILLETERA negativos), por lo
+     * que sumar todo da 0. Lo recaudado en ese mes es el snapshot del
+     * CierreMensualBilletera; si aun no hay cierre, es la suma neta del periodo.
+     */
+    private CierreMensualBilletera buscarCierrePersonaPeriodo(Long personaId, PeriodoGestion periodo) {
+        if (personaId == null || periodo == null || periodo.getId() == null) {
+            return null;
+        }
+        String key = periodoKey(periodo);
+        return cierreMensualBilleteraDao.findByPersonaIdOrderByPeriodoDesc(personaId).stream()
+                .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
+                .filter(item -> (item.getPeriodoGestion() != null && periodo.getId().equals(item.getPeriodoGestion().getId()))
+                        || (key != null && key.equals(item.getPeriodo())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Billetera billeteraHistorica(Billetera billeteraActual, List<MovimientoBilletera> movimientos, CierreMensualBilletera cierre) {
+        Billetera reconstruida = new Billetera();
+        reconstruida.setId(billeteraActual.getId());
+        reconstruida.setPersona(billeteraActual.getPersona());
+        if (cierre != null) {
+            reconstruida.setSaldoDinero(zeroIfNull(cierre.getSaldoDinero()).max(BigDecimal.ZERO));
+            reconstruida.setSaldoPv(zeroIfNull(cierre.getSaldoPv()).max(BigDecimal.ZERO));
+            reconstruida.setSaldoQp(zeroIfNull(cierre.getSaldoQp()).max(BigDecimal.ZERO));
+            reconstruida.setSaldoCr(zeroIfNull(cierre.getSaldoCr()).max(BigDecimal.ZERO));
+            reconstruida.setSaldoProductos(zeroIfNull(cierre.getSaldoProductos()).max(BigDecimal.ZERO));
+        } else {
+            reconstruida.setSaldoDinero(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_DINERO).max(BigDecimal.ZERO));
+            reconstruida.setSaldoPv(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PV).max(BigDecimal.ZERO));
+            reconstruida.setSaldoQp(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_QP).max(BigDecimal.ZERO));
+            reconstruida.setSaldoCr(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_CR).max(BigDecimal.ZERO));
+            reconstruida.setSaldoProductos(totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PRODUCTOS).max(BigDecimal.ZERO));
+        }
+        // PV propio solo del mes seleccionado (compras propias COMPRA de ese periodo).
+        reconstruida.setSaldoPvPropio(pvPropioDelMes(movimientos));
+        return reconstruida;
+    }
+
+    private String periodoKey(PeriodoGestion periodo) {
+        if (periodo == null || periodo.getGestion() == null || periodo.getGestion().getAnio() == null || periodo.getMes() == null) {
+            return null;
+        }
+        return periodo.getGestion().getAnio() + "-" + String.format("%02d", periodo.getMes());
+    }
+
+    /** Recaudado historico: monto bruto generado en el periodo, sin descontar lo ya retirado. */
+    private BigDecimal efectivoRecompensasHistorico(Long personaId, PeriodoGestion periodo) {
+        return recompensasHistoricasNivel2(personaId, periodo).stream()
+                .map(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).max(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<DetalleEfectivoMensualResponse> detalleEfectivoHistorico(Long personaId, PeriodoGestion periodo) {
+        return recompensasHistoricasNivel2(personaId, periodo).stream()
+                .map(recompensa -> {
+                    Persona referido = recompensa.getReferido() == null ? null : recompensa.getReferido().getPersona();
+                    return new DetalleEfectivoMensualResponse(
+                            recompensa.getId(),
+                            recompensa.getNivelGenerado(),
+                            zeroIfNull(recompensa.getMontoEfectivo()).max(BigDecimal.ZERO),
+                            recompensa.getPlanIngreso() == null ? null : recompensa.getPlanIngreso().getNombre(),
+                            recompensa.getReferido() == null ? null : recompensa.getReferido().getId(),
+                            nombreCompleto(referido),
+                            referido == null ? null : referido.getDocumento()
+                    );
+                })
+                .toList();
+    }
+
+    private List<Recompensa> recompensasHistoricasNivel2(Long personaId, PeriodoGestion periodo) {
+        return recompensaDao.findByBeneficiarioId(personaId).stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> periodo == null || recompensa.getPeriodo() != null && periodo.getId().equals(recompensa.getPeriodo().getId()))
+                .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) >= 2)
+                .filter(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+    }
+
+    private List<Recompensa> recompensasHistoricasNivel1(Long personaId, PeriodoGestion periodo) {
+        return recompensaDao.findByBeneficiarioId(personaId).stream()
+                .filter(recompensa -> Auditoria.ESTADO_ACTIVO.equals(recompensa.getEstado()))
+                .filter(recompensa -> periodo == null || recompensa.getPeriodo() != null && periodo.getId().equals(recompensa.getPeriodo().getId()))
+                .filter(recompensa -> java.util.Optional.ofNullable(recompensa.getNivelGenerado()).orElse(0) == 1)
+                .filter(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).compareTo(BigDecimal.ZERO) > 0
+                        || zeroIfNull(recompensa.getValorProductos()).compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+    }
+
+    private BigDecimal efectivoNivel1Historico(Long personaId, PeriodoGestion periodo) {
+        return recompensasHistoricasNivel1(personaId, periodo).stream()
+                .map(recompensa -> zeroIfNull(recompensa.getMontoEfectivo()).max(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal productosNivel1Historico(Long personaId, PeriodoGestion periodo) {
+        return recompensasHistoricasNivel1(personaId, periodo).stream()
+                .map(recompensa -> zeroIfNull(recompensa.getValorProductos()).max(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private List<BilleteraMovimientoResponse> movimientosResponse(List<MovimientoBilletera> movimientos) {
