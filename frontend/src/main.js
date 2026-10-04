@@ -101,7 +101,7 @@ const routes = [
   { path: "/network", name: "network", component: NetworkView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR"] } },
   { path: "/profile", name: "profile", component: ProfileView, meta: { sidebar: true, roles: ["*"] } },
   { path: "/rewards", name: "rewards", component: RewardsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR"] } },
-  { path: "/stats", name: "stats", component: StatsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/stats", name: "stats", component: StatsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/admin", name: "admin", component: ScreenAdmin, meta: { roles: [ROLE_ADMIN] } },
   { path: "/google31f2ae7a40d7a38f.html", name: "google-verification", component: GoogleVerificationView, meta: { public: true } },
   { path: "/:pathMatch(.*)*", redirect: "/" }

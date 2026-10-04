@@ -33,7 +33,7 @@ export const BASE_MENU_ITEMS = [
   { id: "shop", label: "Tienda", icon: "ShoppingBag", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO", "CLIENTE"] },
   { id: "network", label: "Mi red", icon: "Users", badge: "138", roles: [ROLE_ADMIN, "EMBAJADOR"] },
   { id: "rewards", label: "Recompensas", icon: "Gift", badge: "3", roles: [ROLE_ADMIN, "EMBAJADOR"] },
-  { id: "stats", label: "Estadisticas", icon: "BarChart3", roles: [ROLE_ADMIN] },
+  { id: "stats", label: "Estadisticas", icon: "BarChart3", roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] },
   { id: "profile", label: "Perfil", icon: "User", roles: ["*"] }
 ];
 
