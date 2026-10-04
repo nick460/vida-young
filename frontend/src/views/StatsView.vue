@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { RefreshCw, Sparkles, TrendingUp, Users } from "lucide-vue-next";
+import { Download, RefreshCw, Sparkles, TrendingUp, Users } from "lucide-vue-next";
+import { jsPDF } from "jspdf";
 import { apiRequest } from "../services/api.js";
 import { useAuthStore } from "../stores/authStore.js";
 import { VyBarChart, VyDonut } from "../components/ui.js";
+import logoFull from "../assets/logoFull.png";
 
 const auth = useAuthStore();
 const loading = ref(false);
@@ -16,6 +18,7 @@ const iaLoading = ref(false);
 const iaStatus = ref("");
 const iaInforme = ref("");
 const iaError = ref("");
+const exportandoPdf = ref(false);
 let iaStatusTimer = null;
 
 const personaId = computed(() => auth.usuario?.persona?.id || "");
@@ -197,6 +200,157 @@ async function generarAnalisis() {
     iaStatusTimer = null;
     iaStatus.value = "";
     iaLoading.value = false;
+  }
+}
+
+function imageToDataUrl(src) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext("2d").drawImage(image, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+function nombreEmbajador() {
+  const persona = auth.usuario?.persona;
+  const nombre = `${persona?.nombres || ""} ${persona?.apellidos || ""}`.trim();
+  return nombre || auth.usuario?.username || "Embajador";
+}
+
+async function exportarPdf() {
+  if (!iaInforme.value || exportandoPdf.value) return;
+  exportandoPdf.value = true;
+  try {
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const maxWidth = pageWidth - margin * 2;
+    const periodoNombre = selectedPeriodo.value
+      ? `${selectedPeriodo.value.nombre} - Gestion ${selectedPeriodo.value.gestion?.anio || ""}`
+      : (stats.value?.periodoNombre || "Periodo");
+    const fechaGen = new Date().toLocaleString("es-BO", { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    let page = 1;
+    let y = 0;
+
+    const footer = () => {
+      doc.setDrawColor(234, 223, 202);
+      doc.setLineWidth(0.4);
+      doc.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);
+      doc.setTextColor(137, 127, 112);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`Vida Young - Analisis de red - ${periodoNombre}`, margin, pageHeight - 10);
+      doc.text(`Pag. ${page}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+    };
+    const newPage = () => {
+      footer();
+      doc.addPage();
+      page += 1;
+      y = 16;
+    };
+    const need = (h) => {
+      if (y + h > pageHeight - 18) newPage();
+    };
+
+    // Cabecera con marca
+    y = 12;
+    const logo = await imageToDataUrl(logoFull);
+    if (logo) {
+      doc.addImage(logo, "PNG", margin, y, 44, 14);
+    }
+    doc.setTextColor(137, 127, 112);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Generado ${fechaGen}`, pageWidth - margin, y + 5, { align: "right" });
+    y += 22;
+    doc.setTextColor(31, 26, 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("Analisis IA de mi red", margin, y);
+    y += 8;
+    doc.setFillColor(242, 135, 5);
+    doc.roundedRect(margin, y, 90, 8, 4, 4, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.text(periodoNombre.slice(0, 52), margin + 4, y + 5.5);
+    y += 13;
+    doc.setTextColor(74, 65, 53);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Embajador: ${nombreEmbajador()}`, margin, y);
+    y += 4;
+    doc.setDrawColor(242, 135, 5);
+    doc.setLineWidth(1);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 8;
+
+    // Resumen del mes en cajas
+    need(30);
+    doc.setTextColor(31, 26, 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("Resumen del mes", margin, y);
+    y += 6;
+    const kpis = [
+      ["Miembros en red", String(resumen.value.totalRed || 0)],
+      ["Activos", `${resumen.value.activos || 0} (${pctActivos.value}%)`],
+      ["Afiliacion", `Bs. ${money(ingresosSplit.value?.afiliacionMonto)}`],
+      ["Beneficios ventas", `Bs. ${money(ingresosSplit.value?.ventasBeneficiosMonto)}`],
+      ["Ventas de la red", `Bs. ${money(resumenVentas.value.montoComprasRed)}`],
+      ["Efectivo wallet", `Bs. ${money(conciliacion.value?.totalEfectivoWallet)}`]
+    ];
+    const boxW = (maxWidth - 4) / 2;
+    kpis.forEach(([label, value], index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      const x = margin + col * (boxW + 4);
+      const boxY = y + row * 20;
+      need(index === 0 ? 20 : 0);
+      doc.setFillColor(255, 250, 240);
+      doc.setDrawColor(234, 223, 202);
+      doc.roundedRect(x, boxY, boxW, 16, 3, 3, "FD");
+      doc.setTextColor(137, 127, 112);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.text(String(label).toUpperCase(), x + 4, boxY + 6);
+      doc.setTextColor(31, 26, 20);
+      doc.setFontSize(11);
+      doc.text(String(value).slice(0, 30), x + 4, boxY + 12);
+    });
+    y += Math.ceil(kpis.length / 2) * 20 + 6;
+
+    // Informe IA
+    need(12);
+    doc.setTextColor(31, 26, 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("Informe IA", margin, y);
+    y += 6;
+    doc.setFontSize(10);
+    for (const parrafo of iaInformeParrafos.value) {
+      const esTitulo = /^(\d+[).]|[#*-])/.test(parrafo);
+      doc.setFont("helvetica", esTitulo ? "bold" : "normal");
+      doc.setTextColor(...(esTitulo ? [31, 26, 20] : [74, 65, 53]));
+      const lines = doc.splitTextToSize(parrafo, maxWidth);
+      const h = lines.length * 5 + 3;
+      need(h);
+      doc.text(lines, margin, y);
+      y += h;
+    }
+
+    footer();
+    const fileName = `analisis-red-${String(periodoNombre).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "mes"}.pdf`;
+    doc.save(fileName);
+  } finally {
+    exportandoPdf.value = false;
   }
 }
 
@@ -469,10 +623,16 @@ onMounted(loadStats);
           <h2><Sparkles :size="16" /> Analisis IA de tu red</h2>
           <p v-if="selectedPeriodo">Analiza los datos de {{ selectedPeriodo.nombre }} con todos tus numeros del mes.</p>
           <p v-else>Analiza tus datos con inteligencia artificial.</p>
-          <button class="refresh-button ia-button" type="button" :disabled="iaLoading || loading" @click="generarAnalisis">
-            <Sparkles :size="16" />
-            <span>{{ iaLoading ? "Generando..." : iaInforme ? "Regenerar analisis" : "Generar analisis con IA" }}</span>
-          </button>
+          <div class="ia-actions">
+            <button class="refresh-button ia-button" type="button" :disabled="iaLoading || loading" @click="generarAnalisis">
+              <Sparkles :size="16" />
+              <span>{{ iaLoading ? "Generando..." : iaInforme ? "Regenerar analisis" : "Generar analisis con IA" }}</span>
+            </button>
+            <button v-if="iaInforme && !iaLoading" class="ghost-button" type="button" :disabled="exportandoPdf" @click="exportarPdf">
+              <Download :size="16" />
+              <span>{{ exportandoPdf ? "Exportando..." : "Exportar PDF" }}</span>
+            </button>
+          </div>
           <div v-if="iaLoading" class="ia-status">
             <span class="ia-spinner"></span>
             <strong>{{ iaStatus }}</strong>
@@ -547,7 +707,10 @@ onMounted(loadStats);
 .conciliacion-grid strong { display: block; margin-top: 6px; font-size: 16px; font-weight: 900; }
 .ia-card { padding: 24px; }
 .ia-card h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 800; }
-.ia-button { margin-top: 14px; }
+.ia-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.ia-button { margin-top: 0; }
+.ghost-button { min-height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--vy-line); background: var(--vy-surface); color: var(--vy-ink); display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 900; }
+.ghost-button:disabled { opacity: 0.6; cursor: wait; }
 .ia-status { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--vy-surface-2); font-size: 13px; }
 .ia-spinner { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--vy-line); border-top-color: var(--vy-orange); animation: refresh-spin 0.8s linear infinite; flex-shrink: 0; }
 .ia-informe { display: grid; gap: 10px; margin-top: 16px; }
@@ -563,5 +726,20 @@ tbody tr { border-top: 1px solid var(--vy-line-2); }
 td small { display: block; color: var(--vy-ink-3); font-size: 11px; }
 .amount { text-align: right; font-weight: 900; white-space: nowrap; }
 @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .charts-grid, .tables-grid, .conciliacion-grid { grid-template-columns: 1fr; } .workspace { padding: 24px 20px 32px; } }
-@media (max-width: 680px) { .page-header { flex-direction: column; align-items: stretch; } .kpi-grid { grid-template-columns: 1fr; } }
+@media (max-width: 680px) {
+  .page-header { flex-direction: column; align-items: stretch; }
+  .page-header h1 { font-size: 24px; }
+  .header-actions, .period-filter, .refresh-button { width: 100%; }
+  .kpi-grid { grid-template-columns: 1fr; }
+  .tabs { overflow-x: auto; padding-bottom: 4px; }
+  .tabs button { flex-shrink: 0; }
+  .chart-card, .mix-card, .ia-card, .conciliacion-card { padding: 16px; }
+  .tables-grid .vy-card { padding: 14px; }
+  .table-wrap table { min-width: 460px; }
+  .donut-row { flex-wrap: wrap; }
+  .brazo-row header { flex-direction: column; gap: 2px; }
+  .conciliacion-grid strong { font-size: 15px; }
+  .ia-actions { flex-direction: column; align-items: stretch; }
+  .ia-actions .refresh-button { width: 100%; }
+}
 </style>
