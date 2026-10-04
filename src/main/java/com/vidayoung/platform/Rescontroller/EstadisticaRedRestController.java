@@ -180,6 +180,82 @@ public class EstadisticaRedRestController {
                 .limit(20)
                 .toList();
 
+        // Ventas de la red: compras del periodo (no anulan) agrupadas por comprador.
+        // Son las que generan el volumen COMPRA_RED + recompensas de /wallet.
+        List<Compra> comprasPeriodo = compraDao.findByPeriodoIdOrderByFechaCompraDesc(periodo.getId()).stream()
+                .filter(c -> Auditoria.ESTADO_ACTIVO.equals(c.getEstado()))
+                .filter(c -> !Compra.ESTADO_COMPRA_ANULADA.equals(c.getEstadoCompra()))
+                .toList();
+        Map<Long, List<Compra>> comprasPorPersona = new HashMap<>();
+        for (Compra compra : comprasPeriodo) {
+            Long compradorId = compra.getPersona() == null ? null : compra.getPersona().getId();
+            if (compradorId != null) {
+                comprasPorPersona.computeIfAbsent(compradorId, key -> new ArrayList<>()).add(compra);
+            }
+        }
+        Map<Long, VentasMiembro> ventasPorPersona = new HashMap<>();
+        for (NodoRed nodo : nodos) {
+            Long miembroId = nodo.referido().getPersona() == null ? null : nodo.referido().getPersona().getId();
+            if (miembroId == null) {
+                continue;
+            }
+            List<Compra> compras = comprasPorPersona.getOrDefault(miembroId, List.of());
+            ventasPorPersona.put(miembroId, ventasDe(nodo.referido(), nodo.nivel(), compras, periodo));
+        }
+        List<VentasMiembro> ventasRed = new ArrayList<>(ventasPorPersona.values());
+        List<Compra> misComprasList = comprasPorPersona.getOrDefault(personaId, List.of());
+        BigDecimal miMontoCompras = sumarSubtotal(misComprasList);
+        BigDecimal miPvCompras = sumarPv(misComprasList);
+        BigDecimal montoComprasRed = ventasRed.stream().map(VentasMiembro::getMonto).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal pvComprasRed = ventasRed.stream().map(VentasMiembro::getPv).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal qpComprasRed = ventasRed.stream().map(VentasMiembro::getQp).reduce(BigDecimal.ZERO, BigDecimal::add);
+        long totalComprasRed = ventasRed.stream().mapToLong(VentasMiembro::getCompras).sum();
+        ResumenVentas resumenVentas = new ResumenVentas(
+                totalComprasRed,
+                montoComprasRed,
+                pvComprasRed,
+                qpComprasRed,
+                misComprasList.size(),
+                miMontoCompras,
+                miPvCompras
+        );
+        List<VentasMiembro> topVendedores = ventasRed.stream()
+                .filter(v -> v.getCompras() > 0)
+                .sorted(Comparator.comparing(VentasMiembro::getMonto).reversed())
+                .limit(5)
+                .toList();
+
+        // Split afiliacion vs ventas:
+        // - Afiliacion = recompensas del periodo (nacen cuando ingresan nuevas personas).
+        // - Ventas = beneficios de activacion pagados (dinero por compras de la red).
+        List<BeneficioActivacionCompra> beneficiosPeriodo = beneficioActivacionCompraDao
+                .findByBeneficiarioIdAndPeriodoId(personaId, periodo.getId()).stream()
+                .filter(b -> Auditoria.ESTADO_ACTIVO.equals(b.getEstado()))
+                .filter(b -> Boolean.TRUE.equals(b.getPaga()))
+                .toList();
+        BigDecimal beneficiosVentasMonto = beneficiosPeriodo.stream()
+                .map(BeneficioActivacionCompra::getMontoTotal)
+                .map(this::zeroIfNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal afiliacionMonto = totalEfectivo.add(totalProductos);
+        IngresosSplit split = new IngresosSplit(
+                recompensasPeriodo.size(),
+                afiliacionMonto,
+                beneficiosPeriodo.size(),
+                beneficiosVentasMonto
+        );
+        // Beneficios por brazo segun el comprador que origino cada beneficio.
+        Map<Long, BigDecimal> beneficiosPorRaiz = new HashMap<>();
+        for (BeneficioActivacionCompra beneficio : beneficiosPeriodo) {
+            Long compradorId = beneficio.getCompra() == null || beneficio.getCompra().getPersona() == null
+                    ? null
+                    : beneficio.getCompra().getPersona().getId();
+            Long raiz = raizDeBrazo(compradorId, personaId, referidoPorPersona);
+            if (raiz != null) {
+                beneficiosPorRaiz.merge(raiz, zeroIfNull(beneficio.getMontoTotal()), BigDecimal::add);
+            }
+        }
+
         // Ingresos por brazo: cada directo es un brazo con todo su subtree.
         List<BrazoStats> brazos = new ArrayList<>();
         for (Referido directo : hijosPorPatrocinador.getOrDefault(personaId, List.of())) {
@@ -224,6 +300,49 @@ public class EstadisticaRedRestController {
         }
         brazos.sort(Comparator.comparing(BrazoStats::getMonto).reversed());
 
+        // Ventas por brazo: mismo subtree, agregando compras de sus miembros.
+        List<VentasBrazo> ventasBrazos = new ArrayList<>();
+        for (Referido directo : hijosPorPatrocinador.getOrDefault(personaId, List.of())) {
+            Long raizId = directo.getPersona() == null ? null : directo.getPersona().getId();
+            if (raizId == null) {
+                continue;
+            }
+            Set<Long> subtree = new HashSet<>();
+            ArrayList<Long> pendientes = new ArrayList<>();
+            pendientes.add(raizId);
+            subtree.add(raizId);
+            int pos = 0;
+            while (pos < pendientes.size()) {
+                Long actual = pendientes.get(pos++);
+                for (Referido hijo : hijosPorPatrocinador.getOrDefault(actual, List.of())) {
+                    Long hijoId = hijo.getPersona() == null ? null : hijo.getPersona().getId();
+                    if (hijoId != null && subtree.add(hijoId)) {
+                        pendientes.add(hijoId);
+                    }
+                }
+            }
+            long comprasBrazo = 0;
+            BigDecimal montoBrazo = BigDecimal.ZERO;
+            BigDecimal pvBrazo = BigDecimal.ZERO;
+            for (Long miembroId : subtree) {
+                VentasMiembro ventas = ventasPorPersona.get(miembroId);
+                if (ventas != null) {
+                    comprasBrazo += ventas.getCompras();
+                    montoBrazo = montoBrazo.add(ventas.getMonto());
+                    pvBrazo = pvBrazo.add(ventas.getPv());
+                }
+            }
+            ventasBrazos.add(new VentasBrazo(
+                    raizId,
+                    nombreCompleto(directo.getPersona()),
+                    (int) comprasBrazo,
+                    montoBrazo,
+                    pvBrazo,
+                    beneficiosPorRaiz.getOrDefault(raizId, BigDecimal.ZERO)
+            ));
+        }
+        ventasBrazos.sort(Comparator.comparing(VentasBrazo::getMonto).reversed());
+
         // Distribucion por nivel (para torta/barras).
         Map<Integer, Long> conteoPorNivel = new LinkedHashMap<>();
         Map<Integer, BigDecimal> aportePorNivel = new LinkedHashMap<>();
@@ -243,8 +362,9 @@ public class EstadisticaRedRestController {
                 ))
                 .toList();
 
-        // Evolucion: ultimos 6 periodos con recompensa (por fechaInicio).
+        // Evolucion: ultimos 6 periodos con recompensa o compras en la red (por fechaInicio).
         Map<Long, BigDecimal> montoPorPeriodoId = new HashMap<>();
+        Map<Long, BigDecimal> comprasPorPeriodoId = new HashMap<>();
         Map<Long, PeriodoGestion> periodoPorId = new HashMap<>();
         recompensaDao.findByBeneficiarioId(personaId).stream()
                 .filter(r -> Auditoria.ESTADO_ACTIVO.equals(r.getEstado()))
@@ -256,6 +376,19 @@ public class EstadisticaRedRestController {
                             zeroIfNull(r.getMontoEfectivo()).add(zeroIfNull(r.getValorProductos())),
                             BigDecimal::add);
                 });
+        // Compras de toda la red por periodo (para la evolucion de ventas).
+        for (Compra compra : compraDao.findAll().stream()
+                .filter(c -> Auditoria.ESTADO_ACTIVO.equals(c.getEstado()))
+                .filter(c -> !Compra.ESTADO_COMPRA_ANULADA.equals(c.getEstadoCompra()))
+                .filter(c -> c.getPeriodo() != null && c.getPeriodo().getId() != null)
+                .filter(c -> c.getPersona() != null && c.getPersona().getId() != null)
+                .filter(c -> !personaId.equals(c.getPersona().getId()))
+                .filter(c -> nivelPorPersona.containsKey(c.getPersona().getId()))
+                .toList()) {
+            Long pid = compra.getPeriodo().getId();
+            periodoPorId.putIfAbsent(pid, compra.getPeriodo());
+            comprasPorPeriodoId.merge(pid, zeroIfNull(compra.getSubtotal()), BigDecimal::add);
+        }
         List<PuntoEvolucion> evolucion = periodoPorId.values().stream()
                 .sorted(Comparator.comparing(PeriodoGestion::getFechaInicio))
                 .map(p -> new PuntoEvolucion(
@@ -263,7 +396,8 @@ public class EstadisticaRedRestController {
                         p.getNombre(),
                         p.getGestion() == null ? null : p.getGestion().getAnio(),
                         p.getMes(),
-                        montoPorPeriodoId.getOrDefault(p.getId(), BigDecimal.ZERO)
+                        montoPorPeriodoId.getOrDefault(p.getId(), BigDecimal.ZERO),
+                        comprasPorPeriodoId.getOrDefault(p.getId(), BigDecimal.ZERO)
                 ))
                 .toList();
         if (evolucion.size() > 6) {
@@ -298,7 +432,11 @@ public class EstadisticaRedRestController {
                 menosAportan,
                 inactivosLista,
                 evolucion,
-                conciliacion
+                conciliacion,
+                resumenVentas,
+                ventasBrazos,
+                topVendedores,
+                split
         ));
     }
 
@@ -350,15 +488,22 @@ public class EstadisticaRedRestController {
                 && !periodo.getId().equals(periodoActivo.getId());
         CierreMensualBilletera cierre = esHistorico ? buscarCierrePersonaPeriodo(personaId, periodo) : null;
         BigDecimal dineroBilletera;
+        BigDecimal pvWallet;
+        BigDecimal qpWallet;
+        BigDecimal crWallet;
+        BigDecimal productosWallet;
         if (cierre != null) {
             dineroBilletera = zeroIfNull(cierre.getSaldoDinero()).max(BigDecimal.ZERO);
+            pvWallet = zeroIfNull(cierre.getSaldoPv()).max(BigDecimal.ZERO);
+            qpWallet = zeroIfNull(cierre.getSaldoQp()).max(BigDecimal.ZERO);
+            crWallet = zeroIfNull(cierre.getSaldoCr()).max(BigDecimal.ZERO);
+            productosWallet = zeroIfNull(cierre.getSaldoProductos()).max(BigDecimal.ZERO);
         } else {
-            dineroBilletera = movimientos.stream()
-                    .filter(m -> MovimientoBilletera.TIPO_DINERO.equals(m.getTipo()))
-                    .map(MovimientoBilletera::getMonto)
-                    .map(this::zeroIfNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .max(BigDecimal.ZERO);
+            dineroBilletera = totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_DINERO);
+            pvWallet = totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PV);
+            qpWallet = totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_QP);
+            crWallet = totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_CR);
+            productosWallet = totalMovimientoPorTipo(movimientos, MovimientoBilletera.TIPO_PRODUCTOS);
         }
 
         List<Recompensa> recompensas = recompensaDao.findByBeneficiarioId(personaId).stream()
@@ -421,8 +566,61 @@ public class EstadisticaRedRestController {
                 dineroBilletera.add(montoNivel2),
                 nivel1.size(),
                 efectivoNivel1,
-                productosNivel1
+                productosNivel1,
+                pvWallet,
+                qpWallet,
+                crWallet,
+                productosWallet
         );
+    }
+
+    /** Sube por la cadena de patrocinadores hasta el directo (brazo) que cuelga de personaId. */
+    private Long raizDeBrazo(Long compradorId, Long personaId, Map<Long, Referido> referidoPorPersona) {
+        if (compradorId == null || personaId == null || compradorId.equals(personaId)) {
+            return null;
+        }
+        Long actual = compradorId;
+        Long raiz = compradorId;
+        Set<Long> visitados = new HashSet<>();
+        while (actual != null && !actual.equals(personaId) && visitados.add(actual)) {
+            raiz = actual;
+            Referido referido = referidoPorPersona.get(actual);
+            actual = referido == null || referido.getPatrocinador() == null
+                    ? null
+                    : referido.getPatrocinador().getId();
+        }
+        return personaId.equals(actual) ? raiz : null;
+    }
+
+    private BigDecimal totalMovimientoPorTipo(List<MovimientoBilletera> movimientos, String tipo) {
+        return movimientos.stream()
+                .filter(m -> tipo.equals(m.getTipo()))
+                .map(MovimientoBilletera::getMonto)
+                .map(this::zeroIfNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .max(BigDecimal.ZERO);
+    }
+
+    private VentasMiembro ventasDe(Referido referido, int nivel, List<Compra> compras, PeriodoGestion periodo) {
+        Persona miembro = referido.getPersona();
+        return new VentasMiembro(
+                miembro == null ? null : miembro.getId(),
+                nombreCompleto(miembro),
+                nivel,
+                activoEnPeriodo(referido, periodo),
+                compras.size(),
+                sumarSubtotal(compras),
+                sumarPv(compras),
+                compras.stream().map(Compra::getTotalQp).map(this::zeroIfNull).reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
+    }
+
+    private BigDecimal sumarSubtotal(List<Compra> compras) {
+        return compras.stream().map(Compra::getSubtotal).map(this::zeroIfNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal sumarPv(List<Compra> compras) {
+        return compras.stream().map(Compra::getTotalPv).map(this::zeroIfNull).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal efectivoDisponible(Recompensa recompensa) {
@@ -474,10 +672,12 @@ public class EstadisticaRedRestController {
         StringBuilder prompt = new StringBuilder();
         prompt.append("Eres un coach de negocios multinivel de Vida Young. Analiza las estadisticas mensuales de la red de un embajador ");
         prompt.append("y devuelve un informe en espanol, claro y motivador, con este formato exacto:\n");
-        prompt.append("1) Resumen del mes (3-4 lineas).\n");
-        prompt.append("2) Fortalezas (3 bullets).\n");
-        prompt.append("3) Alertas (2-3 bullets: brazos debiles, inactivos, concentracion de ingresos).\n");
-        prompt.append("4) Recomendaciones accionables para mejorar el proximo mes (4-5 bullets concretos).\n");
+        prompt.append("1) Resumen del mes (3-4 lineas con cifras).\n");
+        prompt.append("2) Ingresos por afiliacion: diagnostico (cuantas recompensas, cuanto dinero, tendencia) + QUE HACER en afiliacion (2-3 acciones concretas: a quienes contactar, como reactivar inactivos para afiliar, que brazos empujar).\n");
+        prompt.append("3) Ingresos por ventas/compras: diagnostico (compras de la red en Bs. y PV, beneficios pagados, brazos que mas/menos venden, top vendedores) + QUE HACER en ventas (2-3 acciones concretas: que brazos y vendedores impulsar, como subir recompras y ticket).\n");
+        prompt.append("4) Alertas (2-3 bullets: brazos debiles, inactivos, concentracion de ingresos en pocas personas).\n");
+        prompt.append("5) Plan del proximo mes: las 3 prioridades ordenadas (1 de afiliacion, 1 de ventas, 1 de equipo).\n");
+        prompt.append("Obligatorio: las secciones 2 y 3 deben existir separadas con sus cifras y sus acciones. Si un origen esta en cero, dilo y recomienda como activarlo.\n");
         prompt.append("Datos del periodo ").append(datos.getPeriodoNombre()).append(":\n");
         ResumenRed resumen = datos.getResumen();
         prompt.append("- Red total: ").append(resumen.getTotalRed())
@@ -490,10 +690,42 @@ public class EstadisticaRedRestController {
                 .append(", productos ").append(resumen.getTotalProductos()).append(").\n");
         ConciliacionWallet wallet = datos.getConciliacionWallet();
         if (wallet != null) {
-            prompt.append("- Wallet del mes: ").append(wallet.getMovimientosCount())
+            prompt.append("- Wallet del mes (todos sus datos): ").append(wallet.getMovimientosCount())
                     .append(" movimientos, dinero billetera Bs. ").append(wallet.getDineroBilletera())
                     .append(", ").append(wallet.getRecompensasNivel2Count()).append(" recompensas N2+ por Bs. ").append(wallet.getRecompensasNivel2Monto())
-                    .append(", total efectivo Bs. ").append(wallet.getTotalEfectivoWallet()).append(".\n");
+                    .append(", total efectivo Bs. ").append(wallet.getTotalEfectivoWallet())
+                    .append(", PV ").append(wallet.getPvWallet())
+                    .append(", QP ").append(wallet.getQpWallet())
+                    .append(", CR ").append(wallet.getCrWallet())
+                    .append(", productos Bs. ").append(wallet.getProductosWallet())
+                    .append(", nivel 1: ").append(wallet.getNivel1Count())
+                    .append(" por Bs. ").append(wallet.getNivel1Efectivo()).append(" + prod. ").append(wallet.getNivel1Productos()).append(".\n");
+        }
+        ResumenVentas ventas = datos.getResumenVentas();
+        if (ventas != null) {
+            prompt.append("- Ventas de la red en el mes: ").append(ventas.getTotalComprasRed())
+                    .append(" compras por Bs. ").append(ventas.getMontoComprasRed())
+                    .append(" (PV ").append(ventas.getPvComprasRed()).append(", QP ").append(ventas.getQpComprasRed()).append("). ")
+                    .append("Mis compras propias: ").append(ventas.getMisCompras())
+                    .append(" por Bs. ").append(ventas.getMiMontoCompras())
+                    .append(" (PV ").append(ventas.getMiPvCompras()).append(").\n");
+            prompt.append("- Brazos que mas venden: ");
+            datos.getVentasBrazos().stream().limit(5).forEach(b -> prompt.append(b.getNombre())
+                    .append(" [").append(b.getCompras()).append(" compras, Bs. ").append(b.getMonto())
+                    .append(", PV ").append(b.getPv())
+                    .append(", beneficios Bs. ").append(b.getBeneficios()).append("]; "));
+            prompt.append("\n- Top vendedores: ");
+            datos.getTopVendedores().stream().limit(5).forEach(v -> prompt.append(v.getNombre())
+                    .append(" (N").append(v.getNivel()).append(", ").append(v.getCompras())
+                    .append(" compras, Bs. ").append(v.getMonto()).append(", PV ").append(v.getPv()).append("); "));
+            prompt.append("\n");
+        }
+        IngresosSplit split = datos.getIngresosSplit();
+        if (split != null) {
+            prompt.append("- Origen de ingresos: afiliacion (nuevas personas) ")
+                    .append(split.getAfiliacionCount()).append(" recompensas por Bs. ").append(split.getAfiliacionMonto())
+                    .append("; ventas (compras de la red) ").append(split.getVentasBeneficiosCount())
+                    .append(" beneficios pagados por Bs. ").append(split.getVentasBeneficiosMonto()).append(".\n");
         }
         prompt.append("- Brazos (").append(datos.getBrazos().size()).append("): ");
         datos.getBrazos().stream().limit(6).forEach(brazo -> prompt.append(brazo.getNombre())
@@ -509,9 +741,10 @@ public class EstadisticaRedRestController {
         prompt.append("\n- Inactivos (").append(datos.getInactivos().size()).append(" mostrados): ");
         datos.getInactivos().stream().limit(10).forEach(m -> prompt.append(m.getNombre())
                 .append(" (N").append(m.getNivel()).append("); "));
-        prompt.append("\n- Evolucion ultimos periodos: ");
+        prompt.append("- Evolucion ultimos periodos (recompensas / ventas): ");
         datos.getEvolucion().forEach(p -> prompt.append(p.getPeriodoNombre())
-                .append(": Bs. ").append(p.getMonto()).append("; "));
+                .append(": Bs. ").append(p.getMonto())
+                .append(" / Bs. ").append(p.getMontoCompras()).append("; "));
         prompt.append("\nResponde solo con el informe, sin preambulos tecnicos.");
         return prompt.toString();
     }
@@ -568,6 +801,20 @@ public class EstadisticaRedRestController {
         private final List<MiembroAporte> inactivos;
         private final List<PuntoEvolucion> evolucion;
         private final ConciliacionWallet conciliacionWallet;
+        private final ResumenVentas resumenVentas;
+        private final List<VentasBrazo> ventasBrazos;
+        private final List<VentasMiembro> topVendedores;
+        private final IngresosSplit ingresosSplit;
+    }
+
+    /** Afiliacion (recompensas por nuevos ingresos) vs ventas (beneficios por compras). */
+    @Getter
+    @RequiredArgsConstructor
+    public static class IngresosSplit {
+        private final int afiliacionCount;
+        private final BigDecimal afiliacionMonto;
+        private final int ventasBeneficiosCount;
+        private final BigDecimal ventasBeneficiosMonto;
     }
 
     /**
@@ -585,6 +832,47 @@ public class EstadisticaRedRestController {
         private final int nivel1Count;
         private final BigDecimal nivel1Efectivo;
         private final BigDecimal nivel1Productos;
+        private final BigDecimal pvWallet;
+        private final BigDecimal qpWallet;
+        private final BigDecimal crWallet;
+        private final BigDecimal productosWallet;
+    }
+
+    /** Ventas de la red en el periodo: las compras que generan volumen y recompensas. */
+    @Getter
+    @RequiredArgsConstructor
+    public static class ResumenVentas {
+        private final long totalComprasRed;
+        private final BigDecimal montoComprasRed;
+        private final BigDecimal pvComprasRed;
+        private final BigDecimal qpComprasRed;
+        private final int misCompras;
+        private final BigDecimal miMontoCompras;
+        private final BigDecimal miPvCompras;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class VentasMiembro {
+        private final Long personaId;
+        private final String nombre;
+        private final int nivel;
+        private final boolean activo;
+        private final int compras;
+        private final BigDecimal monto;
+        private final BigDecimal pv;
+        private final BigDecimal qp;
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class VentasBrazo {
+        private final Long personaId;
+        private final String nombre;
+        private final int compras;
+        private final BigDecimal monto;
+        private final BigDecimal pv;
+        private final BigDecimal beneficios;
     }
 
     @Getter
@@ -648,5 +936,6 @@ public class EstadisticaRedRestController {
         private final Integer gestionAnio;
         private final Integer mes;
         private final BigDecimal monto;
+        private final BigDecimal montoCompras;
     }
 }

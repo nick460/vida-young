@@ -30,6 +30,23 @@ const menosAportan = computed(() => stats.value?.menosAportan || []);
 const inactivos = computed(() => stats.value?.inactivos || []);
 const evolucion = computed(() => stats.value?.evolucion || []);
 const conciliacion = computed(() => stats.value?.conciliacionWallet || null);
+const resumenVentas = computed(() => stats.value?.resumenVentas || {});
+const ventasBrazos = computed(() => stats.value?.ventasBrazos || []);
+const topVendedores = computed(() => stats.value?.topVendedores || []);
+const ingresosSplit = computed(() => stats.value?.ingresosSplit || null);
+const splitChart = computed(() => [
+  { l: "Afil.", v: Number(ingresosSplit.value?.afiliacionMonto || 0) },
+  { l: "Ventas", v: Number(ingresosSplit.value?.ventasBeneficiosMonto || 0) }
+]);
+const splitPieStyle = computed(() => {
+  const afiliacion = Number(ingresosSplit.value?.afiliacionMonto || 0);
+  const ventas = Number(ingresosSplit.value?.ventasBeneficiosMonto || 0);
+  const total = afiliacion + ventas;
+  const pct = total > 0 ? (afiliacion / total) * 100 : 0;
+  return {
+    background: `conic-gradient(var(--vy-orange) 0 ${pct}%, var(--vy-success) ${pct}% 100%)`
+  };
+});
 const iaInformeParrafos = computed(() =>
   String(iaInforme.value || "")
     .split(/\n+/)
@@ -57,6 +74,21 @@ const nivelChart = computed(() =>
 );
 const maxBrazo = computed(() =>
   brazos.value.reduce((max, brazo) => Math.max(max, Number(brazo.monto || 0)), 0)
+);
+const ventasBrazosChart = computed(() =>
+  ventasBrazos.value.slice(0, 8).map((brazo) => ({
+    l: shortName(brazo.nombre),
+    v: Number(brazo.monto || 0)
+  }))
+);
+const evolucionComprasChart = computed(() =>
+  evolucion.value.map((punto) => ({
+    l: shortPeriodo(punto.periodoNombre),
+    v: Number(punto.montoCompras || 0)
+  }))
+);
+const maxVentasBrazo = computed(() =>
+  ventasBrazos.value.reduce((max, brazo) => Math.max(max, Number(brazo.monto || 0)), 0)
 );
 const totalRed = computed(() => Number(resumen.value.totalRed || 0));
 const pctActivos = computed(() => Math.round(Number(resumen.value.pctActivos || 0)));
@@ -228,6 +260,22 @@ onMounted(loadStats);
           <span>Brazos / Profundidad</span>
           <div><strong>{{ brazos.length }}</strong><small>{{ resumen.profundidad || 0 }} niveles</small></div>
         </article>
+        <article class="vy-card kpi-card">
+          <span>Ventas de la red (Bs.)</span>
+          <div><strong>{{ money(resumenVentas.montoComprasRed) }}</strong><small>{{ resumenVentas.totalComprasRed || 0 }} compras</small></div>
+        </article>
+        <article class="vy-card kpi-card">
+          <span>PV de la red / Mis compras</span>
+          <div><strong>{{ money(resumenVentas.pvComprasRed) }}</strong><small>Bs. {{ money(resumenVentas.miMontoCompras) }} propias</small></div>
+        </article>
+        <article class="vy-card kpi-card">
+          <span>Por afiliacion (Bs.)</span>
+          <div><strong>{{ money(ingresosSplit?.afiliacionMonto) }}</strong><small>{{ ingresosSplit?.afiliacionCount || 0 }} recompensas</small></div>
+        </article>
+        <article class="vy-card kpi-card">
+          <span>Por ventas (Bs.)</span>
+          <div><strong>{{ money(ingresosSplit?.ventasBeneficiosMonto) }}</strong><small>{{ ingresosSplit?.ventasBeneficiosCount || 0 }} beneficios</small></div>
+        </article>
       </section>
 
       <section class="charts-grid">
@@ -273,12 +321,59 @@ onMounted(loadStats);
       </section>
 
       <section class="vy-card chart-card">
+        <h2>Ventas por brazo (compras de la red)</h2>
+        <p>Brazos que mas venden en Bs. y PV del mes.</p>
+        <div v-if="ventasBrazosChart.length && maxVentasBrazo > 0" class="chart-scroll">
+          <VyBarChart :data="ventasBrazosChart" :width="640" :height="180" />
+        </div>
+        <p v-else class="empty">Sin ventas en la red este mes.</p>
+        <div class="brazo-list">
+          <div v-for="brazo in ventasBrazos" :key="brazo.personaId" class="brazo-row">
+            <header><span>{{ brazo.nombre }}</span><strong>Bs. {{ money(brazo.monto) }}</strong></header>
+            <div class="track track-green"><span :style="{ width: `${maxVentasBrazo ? (Number(brazo.monto || 0) / maxVentasBrazo) * 100 : 0}%` }"></span></div>
+            <small>{{ brazo.compras }} compras · PV {{ money(brazo.pv) }}</small>
+          </div>
+          <p v-if="!ventasBrazos.length" class="empty">Aun no tienes directos.</p>
+        </div>
+      </section>
+
+      <section class="charts-grid">
+        <article class="vy-card chart-card">
+          <h2>Afiliacion vs ventas (Bs.)</h2>
+          <p>De donde viene tu dinero este mes.</p>
+          <div class="donut-row">
+            <div class="pie" :style="splitPieStyle"></div>
+            <div class="chart-scroll">
+              <VyBarChart :data="splitChart" :width="280" :height="140" />
+            </div>
+          </div>
+          <ul class="legend">
+            <li><i class="dot active"></i>Afiliacion: Bs. {{ money(ingresosSplit?.afiliacionMonto) }} ({{ ingresosSplit?.afiliacionCount || 0 }})</li>
+            <li><i class="dot sales"></i>Ventas: Bs. {{ money(ingresosSplit?.ventasBeneficiosMonto) }} ({{ ingresosSplit?.ventasBeneficiosCount || 0 }})</li>
+          </ul>
+        </article>
+        <article class="vy-card mix-card">
+          <h2>Volumen de red acreditado</h2>
+          <p>PV/QP que te dieron las compras de tu red (ver Wallet).</p>
+          <ul class="nivel-list">
+            <li><span>PV de red en wallet</span><strong>{{ money(conciliacion?.pvWallet) }}</strong></li>
+            <li><span>QP de red en wallet</span><strong>{{ money(conciliacion?.qpWallet) }}</strong></li>
+            <li><span>CR en wallet</span><strong>{{ money(conciliacion?.crWallet) }}</strong></li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="vy-card chart-card">
         <h2>Evolucion de ingresos (ultimos 6 periodos)</h2>
         <p>Para analizar como te va yendo mes a mes.</p>
         <div v-if="evolucionChart.length" class="chart-scroll">
           <VyBarChart :data="evolucionChart" :width="640" :height="180" />
         </div>
         <p v-else class="empty">Sin historial suficiente.</p>
+        <h2 class="sub">Evolucion de ventas de la red (Bs.)</h2>
+        <div v-if="evolucionComprasChart.length" class="chart-scroll">
+          <VyBarChart :data="evolucionComprasChart" :width="640" :height="180" />
+        </div>
       </section>
 
       <section class="tables-grid">
@@ -311,6 +406,34 @@ onMounted(loadStats);
           </table></div>
         </article>
         <article class="vy-card">
+          <h2>Brazos que mas venden</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Brazo</th><th>Compras</th><th>Bs.</th></tr></thead>
+            <tbody>
+              <tr v-for="brazo in ventasBrazos.slice(0, 5)" :key="brazo.personaId">
+                <td><strong>{{ brazo.nombre }}</strong><small>PV {{ money(brazo.pv) }} · benf. Bs. {{ money(brazo.beneficios) }}</small></td>
+                <td>{{ brazo.compras }}</td>
+                <td class="amount">Bs. {{ money(brazo.monto) }}</td>
+              </tr>
+              <tr v-if="!ventasBrazos.length"><td colspan="3" class="empty">Sin ventas.</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+        <article class="vy-card">
+          <h2>Top vendedores de la red</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Miembro</th><th>Niv.</th><th>Bs.</th></tr></thead>
+            <tbody>
+              <tr v-for="miembro in topVendedores" :key="miembro.personaId">
+                <td><strong>{{ miembro.nombre }}</strong><small>{{ miembro.compras }} compras · PV {{ money(miembro.pv) }}</small></td>
+                <td>{{ miembro.nivel }}</td>
+                <td class="amount">Bs. {{ money(miembro.monto) }}</td>
+              </tr>
+              <tr v-if="!topVendedores.length"><td colspan="3" class="empty">Sin ventas.</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+        <article class="vy-card">
           <h2>Inactivos del mes</h2>
           <p class="card-sub">Para reactivar o dar seguimiento.</p>
           <div class="table-wrap"><table>
@@ -335,6 +458,8 @@ onMounted(loadStats);
           <div><span>Recompensas N2+ ({{ conciliacion.recompensasNivel2Count }})</span><strong>Bs. {{ money(conciliacion.recompensasNivel2Monto) }}</strong></div>
           <div class="total"><span>Efectivo total (= wallet)</span><strong>Bs. {{ money(conciliacion.totalEfectivoWallet) }}</strong></div>
           <div><span>Nivel 1 ({{ conciliacion.nivel1Count }})</span><strong>Bs. {{ money(conciliacion.nivel1Efectivo) }} + prod. {{ money(conciliacion.nivel1Productos) }}</strong></div>
+          <div><span>PV / QP / CR wallet</span><strong>{{ money(conciliacion.pvWallet) }} / {{ money(conciliacion.qpWallet) }} / {{ money(conciliacion.crWallet) }}</strong></div>
+          <div><span>Ventas red / Mis compras</span><strong>Bs. {{ money(resumenVentas.montoComprasRed) }} / {{ money(resumenVentas.miMontoCompras) }}</strong></div>
         </div>
       </section>
       </div>
@@ -397,6 +522,7 @@ onMounted(loadStats);
 .brazo-row header { display: flex; justify-content: space-between; font-size: 13px; font-weight: 800; margin-bottom: 5px; }
 .track { height: 8px; border-radius: 999px; background: var(--vy-line-2); }
 .track span { display: block; height: 100%; border-radius: 999px; background: var(--vy-orange); }
+.track-green span { background: var(--vy-success); }
 .brazo-row small { color: var(--vy-ink-3); font-size: 11px; font-weight: 700; }
 .donut-row { display: flex; align-items: center; gap: 18px; margin-top: 14px; }
 .pie { width: 90px; height: 90px; border-radius: 50%; }
@@ -404,6 +530,7 @@ onMounted(loadStats);
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
 .dot.active { background: var(--vy-orange); }
 .dot.inactive { background: var(--vy-cream); border: 1px solid var(--vy-line); }
+.dot.sales { background: var(--vy-success); }
 .sub { margin-top: 18px; }
 .nivel-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .nivel-list li { display: flex; justify-content: space-between; font-size: 13px; font-weight: 800; background: var(--vy-surface-2); border-radius: 10px; padding: 8px 10px; }
