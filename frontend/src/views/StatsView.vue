@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { RefreshCw, TrendingUp, Users } from "lucide-vue-next";
+import { RefreshCw, Sparkles, TrendingUp, Users } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { useAuthStore } from "../stores/authStore.js";
 import { VyBarChart, VyDonut } from "../components/ui.js";
@@ -11,6 +11,12 @@ const error = ref("");
 const periodos = ref([]);
 const selectedPeriodoId = ref("");
 const stats = ref(null);
+const activeTab = ref("estadisticas");
+const iaLoading = ref(false);
+const iaStatus = ref("");
+const iaInforme = ref("");
+const iaError = ref("");
+let iaStatusTimer = null;
 
 const personaId = computed(() => auth.usuario?.persona?.id || "");
 const selectedPeriodo = computed(() =>
@@ -23,6 +29,13 @@ const topAportantes = computed(() => stats.value?.topAportantes || []);
 const menosAportan = computed(() => stats.value?.menosAportan || []);
 const inactivos = computed(() => stats.value?.inactivos || []);
 const evolucion = computed(() => stats.value?.evolucion || []);
+const conciliacion = computed(() => stats.value?.conciliacionWallet || null);
+const iaInformeParrafos = computed(() =>
+  String(iaInforme.value || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+);
 
 const brazosChart = computed(() =>
   brazos.value.slice(0, 8).map((brazo) => ({
@@ -120,6 +133,41 @@ async function loadStats() {
   }
 }
 
+async function generarAnalisis() {
+  if (iaLoading.value) return;
+  iaLoading.value = true;
+  iaError.value = "";
+  iaInforme.value = "";
+  const pasos = [
+    "Analizando tu red...",
+    "Revisando brazos, niveles y aportes...",
+    "Generando tu informe con IA..."
+  ];
+  let paso = 0;
+  iaStatus.value = pasos[0];
+  iaStatusTimer = setInterval(() => {
+    paso = Math.min(paso + 1, pasos.length - 1);
+    iaStatus.value = pasos[paso];
+  }, 2200);
+  try {
+    if (!personaId.value) {
+      await auth.cargarPerfil();
+    }
+    const query = selectedPeriodoId.value
+      ? `?personaId=${personaId.value}&periodoId=${selectedPeriodoId.value}`
+      : `?personaId=${personaId.value}`;
+    const respuesta = await apiRequest(`/api/estadisticas/mi-red/analisis${query}`, { method: "POST" });
+    iaInforme.value = respuesta?.informe || "La IA no devolvio un informe.";
+  } catch (exception) {
+    iaError.value = exception.message || "No se pudo generar el analisis con IA.";
+  } finally {
+    clearInterval(iaStatusTimer);
+    iaStatusTimer = null;
+    iaStatus.value = "";
+    iaLoading.value = false;
+  }
+}
+
 onMounted(loadStats);
 </script>
 
@@ -153,6 +201,16 @@ onMounted(loadStats);
       <div v-if="error" class="error-box">{{ error }}</div>
       <div v-if="loading" class="loading-box">Cargando estadisticas...</div>
 
+      <nav class="tabs">
+        <button type="button" :class="{ active: activeTab === 'estadisticas' }" @click="activeTab = 'estadisticas'">
+          Estadisticas
+        </button>
+        <button type="button" :class="{ active: activeTab === 'analisis' }" @click="activeTab = 'analisis'">
+          <Sparkles :size="14" /> Analisis IA
+        </button>
+      </nav>
+
+      <div v-show="activeTab === 'estadisticas'">
       <section class="kpi-grid">
         <article class="vy-card kpi-card">
           <span><Users :size="13" /> Miembros en red</span>
@@ -268,6 +326,39 @@ onMounted(loadStats);
           </table></div>
         </article>
       </section>
+
+      <section v-if="conciliacion" class="vy-card conciliacion-card">
+        <h2>Conciliacion con Wallet</h2>
+        <p>Mismos datos y criterios que /wallet para este mes: {{ conciliacion.movimientosCount }} movimientos.</p>
+        <div class="conciliacion-grid">
+          <div><span>Dinero billetera</span><strong>Bs. {{ money(conciliacion.dineroBilletera) }}</strong></div>
+          <div><span>Recompensas N2+ ({{ conciliacion.recompensasNivel2Count }})</span><strong>Bs. {{ money(conciliacion.recompensasNivel2Monto) }}</strong></div>
+          <div class="total"><span>Efectivo total (= wallet)</span><strong>Bs. {{ money(conciliacion.totalEfectivoWallet) }}</strong></div>
+          <div><span>Nivel 1 ({{ conciliacion.nivel1Count }})</span><strong>Bs. {{ money(conciliacion.nivel1Efectivo) }} + prod. {{ money(conciliacion.nivel1Productos) }}</strong></div>
+        </div>
+      </section>
+      </div>
+
+      <div v-show="activeTab === 'analisis'">
+        <section class="vy-card ia-card">
+          <h2><Sparkles :size="16" /> Analisis IA de tu red</h2>
+          <p v-if="selectedPeriodo">Analiza los datos de {{ selectedPeriodo.nombre }} con todos tus numeros del mes.</p>
+          <p v-else>Analiza tus datos con inteligencia artificial.</p>
+          <button class="refresh-button ia-button" type="button" :disabled="iaLoading || loading" @click="generarAnalisis">
+            <Sparkles :size="16" />
+            <span>{{ iaLoading ? "Generando..." : iaInforme ? "Regenerar analisis" : "Generar analisis con IA" }}</span>
+          </button>
+          <div v-if="iaLoading" class="ia-status">
+            <span class="ia-spinner"></span>
+            <strong>{{ iaStatus }}</strong>
+          </div>
+          <div v-if="iaError" class="error-box">{{ iaError }}</div>
+          <div v-if="iaInforme && !iaLoading" class="ia-informe">
+            <p v-for="(parrafo, index) in iaInformeParrafos" :key="index">{{ parrafo }}</p>
+          </div>
+          <p v-if="!iaInforme && !iaLoading && !iaError" class="empty">Aun no generas el analisis de este mes. Presiona el boton y la IA te dara recomendaciones para seguir mejorando en el negocio.</p>
+        </section>
+      </div>
     </main>
   </div>
 </template>
@@ -316,6 +407,24 @@ onMounted(loadStats);
 .sub { margin-top: 18px; }
 .nivel-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .nivel-list li { display: flex; justify-content: space-between; font-size: 13px; font-weight: 800; background: var(--vy-surface-2); border-radius: 10px; padding: 8px 10px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 999px; background: var(--vy-gray); color: var(--vy-ink-2); font-size: 13px; font-weight: 800; }
+.tabs button.active { background: var(--vy-ink); color: #fff; }
+.conciliacion-card { padding: 22px; margin-bottom: 18px; border-color: var(--vy-orange); }
+.conciliacion-card h2 { font-size: 16px; font-weight: 800; }
+.conciliacion-card p { font-size: 12px; color: var(--vy-ink-3); margin-top: 2px; }
+.conciliacion-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.conciliacion-grid div { background: var(--vy-surface-2); border-radius: 12px; padding: 12px; }
+.conciliacion-grid div.total { background: rgba(242, 135, 5, 0.08); }
+.conciliacion-grid span { display: block; font-size: 11px; color: var(--vy-ink-3); font-weight: 800; text-transform: uppercase; }
+.conciliacion-grid strong { display: block; margin-top: 6px; font-size: 16px; font-weight: 900; }
+.ia-card { padding: 24px; }
+.ia-card h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 800; }
+.ia-button { margin-top: 14px; }
+.ia-status { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--vy-surface-2); font-size: 13px; }
+.ia-spinner { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--vy-line); border-top-color: var(--vy-orange); animation: refresh-spin 0.8s linear infinite; flex-shrink: 0; }
+.ia-informe { display: grid; gap: 10px; margin-top: 16px; }
+.ia-informe p { font-size: 14px; line-height: 1.6; color: var(--vy-ink-2); background: var(--vy-surface-2); border-radius: 12px; padding: 12px 14px; }
 .tables-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .tables-grid .vy-card { padding: 18px; }
 .tables-grid h2 { font-size: 15px; font-weight: 800; margin-bottom: 10px; }
@@ -326,6 +435,6 @@ th, td { padding: 10px 6px; }
 tbody tr { border-top: 1px solid var(--vy-line-2); }
 td small { display: block; color: var(--vy-ink-3); font-size: 11px; }
 .amount { text-align: right; font-weight: 900; white-space: nowrap; }
-@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .charts-grid, .tables-grid { grid-template-columns: 1fr; } .workspace { padding: 24px 20px 32px; } }
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .charts-grid, .tables-grid, .conciliacion-grid { grid-template-columns: 1fr; } .workspace { padding: 24px 20px 32px; } }
 @media (max-width: 680px) { .page-header { flex-direction: column; align-items: stretch; } .kpi-grid { grid-template-columns: 1fr; } }
 </style>
