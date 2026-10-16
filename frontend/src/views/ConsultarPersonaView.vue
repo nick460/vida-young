@@ -8,7 +8,8 @@ import {
   RefreshCw,
   Search,
   UserRound,
-  Wallet
+  Wallet,
+  X
 } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import { VyAvatar } from "../components/ui.js";
@@ -30,6 +31,11 @@ const compras = ref([]);
 const recompensas = ref([]);
 const retiros = ref([]);
 const movimientoSearch = ref("");
+const networkSearch = ref("");
+const networkStatus = ref("");
+const networkLevel = ref("");
+const selectedNetworkPerson = ref(null);
+const benefitsDialog = ref(null);
 
 const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value)) || null
@@ -55,6 +61,15 @@ const networkRows = computed(() => flattenTree(networkTree.value));
 const networkLevels = computed(() => new Map(
   networkRows.value.map((row) => [Number(row.persona?.id), row.level])
 ));
+const availableNetworkLevels = computed(() => [...new Set(networkRows.value.map((row) => row.level))].sort((a, b) => a - b));
+const networkFiltersActive = computed(() => Boolean(normalize(networkSearch.value) || networkStatus.value || networkLevel.value));
+const filteredNetworkRows = computed(() => networkRows.value.filter((row) => {
+  const matchesSearch = normalize([fullName(row.persona), row.persona?.documento, row.plan?.nombre].join(" "))
+    .includes(normalize(networkSearch.value));
+  return matchesSearch
+    && (!networkStatus.value || row.activo === (networkStatus.value === "activo"))
+    && (!networkLevel.value || row.level === Number(networkLevel.value));
+}).map((row) => ({ ...row, children: [] })));
 
 const selectedPeriodo = computed(() =>
   periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value)) || null
@@ -128,6 +143,16 @@ const filteredMovimientoGroups = computed(() => {
     money(group.dinero), money(group.productos), money(group.pv), money(group.qp), money(group.cr)
   ].join(" ")).includes(query));
 });
+const networkPersonMovimientos = computed(() => selectedNetworkPerson.value
+  ? movimientoGroups.value.filter((group) => group.personaOrigenId === Number(selectedNetworkPerson.value.persona?.id))
+  : []);
+const networkPersonRecompensas = computed(() => selectedNetworkPerson.value
+  ? recompensas.value.filter((item) => Number(item.referido?.persona?.id) === Number(selectedNetworkPerson.value.persona?.id))
+  : []);
+const networkPersonTotals = computed(() => networkPersonMovimientos.value.reduce((total, group) => {
+  for (const key of ["dinero", "productos", "pv", "qp", "cr"]) total[key] += group[key];
+  return total;
+}, { dinero: 0, productos: 0, pv: 0, qp: 0, cr: 0 }));
 
 const walletCards = computed(() => [
   { label: "Dinero", value: `Bs. ${money(billetera.value.saldoDinero)}` },
@@ -232,8 +257,14 @@ function flattenTree(nodes, level = 1) {
 function selectTreePerson(node) {
   const personaId = node?.persona?.id;
   if (!personaId || Number(personaId) === Number(selectedPersonaId.value)) return;
-  router.push({ name: "consultar-detalle", params: { personaId } });
+  selectedNetworkPerson.value = networkRows.value.find((row) => Number(row.persona?.id) === Number(personaId)) || node;
+  benefitsDialog.value?.showModal();
 }
+
+watch([selectedPersonaId, selectedPeriodoId], () => {
+  benefitsDialog.value?.close();
+  selectedNetworkPerson.value = null;
+});
 
 function photoUrl(persona) {
   const photo = persona?.fotoPerfil || usuarioDePersona(persona)?.fotoPerfil || "";
@@ -344,11 +375,12 @@ function movimientoOrigen(group) {
       ? referidos.value.find((item) => Number(item.id) === Number(group.referenciaId))?.persona
       : null;
 
-  if (!persona?.id) return { personaOrigen: "No aplica", nivelRed: "No aplica" };
+  if (!persona?.id) return { personaOrigenId: null, personaOrigen: "No aplica", nivelRed: "No aplica" };
 
   const personaId = Number(persona.id);
   const nivel = networkLevels.value.get(personaId);
   return {
+    personaOrigenId: personaId,
     personaOrigen: fullName(persona),
     nivelRed: personaId === Number(selectedPersonaId.value)
       ? "Propio (nivel 0)"
@@ -632,7 +664,38 @@ onMounted(loadBaseData);
                   <small>Patrocinador</small>
                   <strong>{{ patrocinador ? fullName(patrocinador) : "Sin patrocinador" }}</strong>
                 </div>
-                <div v-if="directos.length" class="consult-tree-stage">
+                <div class="network-filters">
+                  <label class="movement-search">
+                    <Search :size="18" aria-hidden="true" />
+                    <input v-model="networkSearch" type="search" aria-label="Buscar personas en la red" placeholder="Buscar por nombre, documento o plan..." />
+                  </label>
+                  <label class="network-filter">
+                    <span>Estado actual</span>
+                    <select v-model="networkStatus">
+                      <option value="">Activos e inactivos</option>
+                      <option value="activo">Solo activos</option>
+                      <option value="inactivo">Solo inactivos</option>
+                    </select>
+                  </label>
+                  <label class="network-filter">
+                    <span>Nivel en la red</span>
+                    <select v-model="networkLevel">
+                      <option value="">Todos los niveles</option>
+                      <option v-for="level in availableNetworkLevels" :key="level" :value="String(level)">Nivel {{ level }}</option>
+                    </select>
+                  </label>
+                </div>
+                <p class="network-hint">{{ filteredNetworkRows.length }} de {{ networkRows.length }} personas. Selecciona una persona para ver sus beneficios del mes consultado.</p>
+                <div v-if="networkFiltersActive" class="consult-tree-stage">
+                  <ul v-if="filteredNetworkRows.length" class="network-results">
+                    <NetworkTreeNode
+                      v-for="node in filteredNetworkRows" :key="node.id" :node="node" :level="node.level"
+                      interactive @open-details="selectTreePerson"
+                    />
+                  </ul>
+                  <div v-else class="empty-box compact">No hay personas que coincidan con los filtros.</div>
+                </div>
+                <div v-else-if="directos.length" class="consult-tree-stage">
                   <div class="consult-tree-canvas">
                     <div class="consult-root-row">
                       <article class="consult-root-node">
@@ -651,6 +714,7 @@ onMounted(loadBaseData);
                         :key="node.id"
                         :node="node"
                         :level="1"
+                        interactive
                         @open-details="selectTreePerson"
                       />
                     </ul>
@@ -805,6 +869,54 @@ onMounted(loadBaseData);
       </section>
     </main>
   </div>
+  <dialog ref="benefitsDialog" class="network-benefits-dialog" aria-labelledby="network-benefits-title" @click="($event.target === benefitsDialog) && benefitsDialog.close()" @close="selectedNetworkPerson = null">
+    <template v-if="selectedNetworkPerson">
+      <header class="benefits-header">
+        <div>
+          <h3 id="network-benefits-title">Beneficios de {{ fullName(selectedNetworkPerson.persona) }}</h3>
+          <p>Para {{ fullName(selectedPersona) }} · {{ selectedPeriodo?.nombre || periodoActivo?.nombre || "Periodo seleccionado" }}</p>
+          <p>Nivel {{ selectedNetworkPerson.level }} · {{ selectedNetworkPerson.activo ? "Activo" : "Inactivo" }} en la red actual</p>
+        </div>
+        <button type="button" class="vy-btn vy-btn-ghost" aria-label="Cerrar beneficios" @click="benefitsDialog.close()"><X :size="18" /></button>
+      </header>
+      <h4>Aportes registrados en billetera</h4>
+      <div class="benefits-totals">
+        <div><span>Efectivo</span><strong>Bs. {{ money(networkPersonTotals.dinero) }}</strong></div>
+        <div><span>Productos</span><strong>Bs. {{ money(networkPersonTotals.productos) }}</strong></div>
+        <div><span>PV</span><strong>{{ money(networkPersonTotals.pv) }}</strong></div>
+        <div><span>QP</span><strong>{{ money(networkPersonTotals.qp) }}</strong></div>
+        <div><span>CR</span><strong>{{ money(networkPersonTotals.cr) }}</strong></div>
+      </div>
+      <div class="table-wrap movement-scroll">
+        <table>
+          <thead><tr><th>Fecha</th><th>Movimiento / detalle</th><th>Efectivo</th><th>Productos</th><th>PV</th><th>QP</th><th>CR</th></tr></thead>
+          <tbody>
+            <tr v-for="group in networkPersonMovimientos" :key="group.key">
+              <td>{{ formatDateTime(group.date) }}</td><td>{{ group.title }} · {{ group.subtitle || "Sin detalle" }}</td>
+              <td>Bs. {{ money(group.dinero) }}</td><td>Bs. {{ money(group.productos) }}</td>
+              <td>{{ money(group.pv) }}</td><td>{{ money(group.qp) }}</td><td>{{ money(group.cr) }}</td>
+            </tr>
+            <tr v-if="!networkPersonMovimientos.length"><td colspan="7">Esta persona no genero movimientos de billetera en el mes seleccionado.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h4>Recompensas por afiliacion</h4>
+      <p class="network-hint">Se muestran por separado y no se suman a los aportes de billetera.</p>
+      <div class="table-wrap movement-scroll">
+        <table>
+          <thead><tr><th>Fecha</th><th>Plan</th><th>Nivel generado</th><th>Efectivo</th><th>Productos</th><th>Estado</th></tr></thead>
+          <tbody>
+            <tr v-for="item in networkPersonRecompensas" :key="item.id">
+              <td>{{ formatDateTime(item.fechaRegistro) }}</td><td>{{ item.planIngreso?.nombre || "Sin plan" }}</td>
+              <td>{{ item.nivelGenerado }}</td><td>Bs. {{ money(item.montoEfectivo) }}</td><td>Bs. {{ money(item.valorProductos) }}</td>
+              <td>{{ item.cobrable ? "Cobrable" : "No cobrable" }}</td>
+            </tr>
+            <tr v-if="!networkPersonRecompensas.length"><td colspan="6">Esta persona no genero recompensas en el mes seleccionado.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </dialog>
 </template>
 
 <style scoped>
@@ -844,6 +956,23 @@ onMounted(loadBaseData);
 .wallet-card strong { font-size: 20px; }
 .info-card, .history-card { padding: 18px; min-width: 0; }
 .network-tree-card { grid-column: 1 / -1; }
+.network-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.network-filters .movement-search { flex: 1 1 260px; margin: 0; min-height: 42px; }
+.network-filter { display: grid; gap: 5px; flex: 1 1 170px; }
+.network-filter span { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; }
+.network-filter select { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); color: var(--vy-ink); font: inherit; font-size: 13px; }
+.network-hint { color: var(--vy-ink-3); font-size: 12px; margin: 10px 0; }
+.network-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 16px; list-style: none; padding: 12px; margin: 0; }
+.network-benefits-dialog { width: min(1050px, calc(100vw - 32px)); max-height: 85vh; margin: auto; padding: 22px; border: 1px solid var(--vy-line); border-radius: 16px; background: var(--vy-surface); color: var(--vy-ink); overflow: auto; }
+.network-benefits-dialog::backdrop { background: rgba(31, 26, 20, 0.55); backdrop-filter: blur(3px); }
+.benefits-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.benefits-header h3 { font-size: 18px; }
+.benefits-header p { margin-top: 6px; font-size: 13px; color: var(--vy-ink-3); }
+.network-benefits-dialog h4 { margin: 18px 0 12px; }
+.benefits-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.benefits-totals div { padding: 12px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
+.benefits-totals span, .benefits-totals strong { display: block; }
+.benefits-totals span { font-size: 11px; color: var(--vy-ink-3); margin-bottom: 5px; }
 .info-card header, .history-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .info-card h3, .history-card h3 { font-size: 16px; font-weight: 900; }
 .info-card header span, .history-card header span { color: var(--vy-ink-3); font-size: 12px; font-weight: 900; }

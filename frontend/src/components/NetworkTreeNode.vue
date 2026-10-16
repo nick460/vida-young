@@ -15,6 +15,10 @@ defineProps({
   level: {
     type: Number,
     default: 1
+  },
+  interactive: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -58,7 +62,12 @@ function money(value) {
 
 <template>
   <li class="tree-item">
-    <article class="tree-card" :class="node.activo === undefined ? '' : (node.activo ? 'estado-activo' : 'estado-inactivo')">
+    <article class="tree-card" :class="[node.activo === undefined ? '' : (node.activo ? 'estado-activo' : 'estado-inactivo'), { interactive }]"
+      :role="interactive ? 'button' : undefined" :tabindex="interactive ? 0 : undefined"
+      :aria-label="interactive ? `Ver beneficios de ${fullName(node.persona)}` : undefined"
+      @click="interactive && $emit('open-details', node)"
+      @keydown.enter.self="interactive && $emit('open-details', node)"
+      @keydown.space.self.prevent="interactive && $emit('open-details', node)">
       <header>
         <span class="member-avatar" :class="node.activo === false ? 'avatar-inactivo' : ''">
           <img v-if="photoUrl(node.persona)" :src="photoUrl(node.persona)" :alt="fullName(node.persona)" />
@@ -70,7 +79,7 @@ function money(value) {
           <strong>{{ fullName(node.persona) }}</strong>
           <small>{{ node.plan?.nombre || "Sin plan" }}</small>
         </div>
-        <button class="details-button" type="button" title="Ver detalles" @click.stop="$emit('open-details', node)">
+        <button v-if="!interactive" class="details-button" type="button" title="Ver detalles" @click.stop="$emit('open-details', node)">
           <MoreHorizontal :size="15" stroke-width="2" />
         </button>
       </header>
@@ -81,7 +90,7 @@ function money(value) {
 
       <footer>
         <span>Nivel {{ level }}</span>
-        <strong>{{ node.children?.length || 0 }} directos</strong>
+        <strong>{{ node.directCount ?? node.children?.length ?? 0 }} directos</strong>
       </footer>
 
       <div v-if="node.aporte" class="aporte-box">
@@ -97,6 +106,7 @@ function money(value) {
         :key="child.id"
         :node="child"
         :level="level + 1"
+        :interactive="interactive"
         @open-details="$emit('open-details', $event)"
       />
     </ul>
@@ -131,6 +141,8 @@ function money(value) {
   box-shadow: 0 12px 24px rgba(31, 26, 20, 0.08);
   transform: translateY(-1px);
 }
+.tree-card.interactive { cursor: pointer; }
+.tree-card.interactive:focus-visible { outline: 2px solid var(--vy-orange-deep); outline-offset: 3px; }
 
 .tree-card header {
   display: flex;
