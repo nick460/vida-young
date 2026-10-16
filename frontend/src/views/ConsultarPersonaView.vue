@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Network,
   RefreshCw,
+  Search,
   UserRound,
   Wallet
 } from "lucide-vue-next";
@@ -28,6 +29,7 @@ const walletSummary = ref(null);
 const compras = ref([]);
 const recompensas = ref([]);
 const retiros = ref([]);
+const movimientoSearch = ref("");
 
 const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value)) || null
@@ -50,6 +52,9 @@ const directos = computed(() =>
 );
 const networkTree = computed(() => buildTree(selectedPersonaId.value));
 const networkRows = computed(() => flattenTree(networkTree.value));
+const networkLevels = computed(() => new Map(
+  networkRows.value.map((row) => [Number(row.persona?.id), row.level])
+));
 
 const selectedPeriodo = computed(() =>
   periodos.value.find((periodo) => Number(periodo.id) === Number(selectedPeriodoId.value)) || null
@@ -106,11 +111,22 @@ const movimientoGroups = computed(() => {
   return Array.from(groups.values())
     .map((group) => ({
       ...group,
+      ...movimientoOrigen(group),
       subtitle: group.compra
         ? compraProductosMovimiento(group.compra) || Array.from(group.concepts).join(" / ")
         : Array.from(group.concepts).join(" / ")
     }))
     .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
+});
+
+const filteredMovimientoGroups = computed(() => {
+  const query = normalize(movimientoSearch.value);
+  if (!query) return movimientoGroups.value;
+  return movimientoGroups.value.filter((group) => normalize([
+    group.title, group.subtitle, group.referenciaTipo, group.referenciaId,
+    group.personaOrigen, group.nivelRed, formatDateTime(group.date),
+    money(group.dinero), money(group.productos), money(group.pv), money(group.qp), money(group.cr)
+  ].join(" ")).includes(query));
 });
 
 const walletCards = computed(() => [
@@ -318,6 +334,26 @@ function movimientoTitle(movimiento) {
     MOVIMIENTO: "Movimiento de billetera"
   };
   return `${labels[movimiento.referenciaTipo] || movimiento.referenciaTipo || "Movimiento de billetera"}${reference}`;
+}
+
+function movimientoOrigen(group) {
+  const compra = group.compra;
+  const persona = compra
+    ? { id: compra.personaId, nombres: compra.personaNombres, apellidos: compra.personaApellidos }
+    : group.referenciaTipo === "REFERIDO_AFILIACION"
+      ? referidos.value.find((item) => Number(item.id) === Number(group.referenciaId))?.persona
+      : null;
+
+  if (!persona?.id) return { personaOrigen: "No aplica", nivelRed: "No aplica" };
+
+  const personaId = Number(persona.id);
+  const nivel = networkLevels.value.get(personaId);
+  return {
+    personaOrigen: fullName(persona),
+    nivelRed: personaId === Number(selectedPersonaId.value)
+      ? "Propio (nivel 0)"
+      : nivel != null ? `Nivel ${nivel}` : "Sin nivel en la red actual"
+  };
 }
 
 function movementGroupSummary(group) {
@@ -535,14 +571,25 @@ onMounted(loadBaseData);
             <section class="vy-card history-card">
               <header>
                 <h3>Movimientos de billetera</h3>
-                <span>{{ movimientoGroups.length }} eventos agrupados</span>
+                <span>{{ filteredMovimientoGroups.length }} de {{ movimientoGroups.length }} eventos agrupados</span>
               </header>
-              <div class="table-wrap">
+              <label class="movement-search">
+                <Search :size="18" aria-hidden="true" />
+                <input
+                  v-model="movimientoSearch"
+                  type="search"
+                  aria-label="Buscar en movimientos de billetera"
+                  placeholder="Buscar por persona, nivel, detalle o referencia..."
+                />
+              </label>
+              <div class="table-wrap movement-scroll" tabindex="0" role="region" aria-label="Movimientos de billetera">
                 <table class="movement-table">
                   <thead>
                     <tr>
                       <th>Movimiento</th>
                       <th>Detalle</th>
+                      <th>Persona de origen</th>
+                      <th>Nivel actual en la red</th>
                       <th>Fecha</th>
                       <th>Efectivo</th>
                       <th>Productos</th>
@@ -552,12 +599,14 @@ onMounted(loadBaseData);
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="group in movimientoGroups" :key="group.key">
+                    <tr v-for="group in filteredMovimientoGroups" :key="group.key">
                       <td>
                         <strong>{{ group.title }}</strong>
                         <small>{{ group.referenciaTipo }} #{{ group.referenciaId }}</small>
                       </td>
                       <td>{{ group.subtitle || "Sin detalle" }}</td>
+                      <td>{{ group.personaOrigen }}</td>
+                      <td>{{ group.nivelRed }}</td>
                       <td>{{ formatDateTime(group.date) }}</td>
                       <td>Bs. {{ money(group.dinero) }}</td>
                       <td>Bs. {{ money(group.productos) }}</td>
@@ -565,8 +614,8 @@ onMounted(loadBaseData);
                       <td>{{ money(group.qp) }}</td>
                       <td>{{ money(group.cr) }}</td>
                     </tr>
-                    <tr v-if="!movimientoGroups.length">
-                      <td colspan="8">No hay movimientos de billetera para el mes seleccionado.</td>
+                    <tr v-if="!filteredMovimientoGroups.length">
+                      <td colspan="10">{{ movimientoGroups.length ? "No hay movimientos que coincidan con la busqueda." : "No hay movimientos de billetera para el mes seleccionado." }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -827,11 +876,17 @@ table { width: 100%; border-collapse: collapse; min-width: 760px; }
 th, td { padding: 11px 10px; border-bottom: 1px solid var(--vy-line-2); text-align: left; font-size: 12px; vertical-align: top; }
 th { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; background: var(--vy-surface-2); }
 td { color: var(--vy-ink-2); font-weight: 700; }
-.movement-table { min-width: 980px; }
+.movement-table { min-width: 1200px; }
+.movement-search { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 14px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); color: var(--vy-ink-3); }
+.movement-search:focus-within { border-color: var(--vy-orange-deep); }
+.movement-search svg { flex-shrink: 0; }
+.movement-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--vy-ink); font: inherit; font-size: 13px; }
+.movement-scroll { max-height: 480px; }
+.movement-scroll th { position: sticky; top: 0; z-index: 1; }
 .movement-table td:first-child strong, .movement-table td:first-child small { display: block; }
 .movement-table td:first-child strong { color: var(--vy-ink); font-weight: 900; }
 .movement-table td:first-child small { margin-top: 3px; color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
-.movement-table td:nth-child(n + 4) { white-space: nowrap; font-weight: 900; }
+.movement-table td:nth-child(n + 5) { white-space: nowrap; font-weight: 900; }
 .status-pill { padding: 4px 9px; border-radius: 999px; background: rgba(63, 143, 92, 0.12); color: var(--vy-success); font-size: 11px; font-weight: 900; }
 .empty-state { min-height: 360px; padding: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--vy-ink-3); }
 .empty-state h2 { margin-top: 12px; color: var(--vy-ink); font-size: 22px; font-weight: 900; }
