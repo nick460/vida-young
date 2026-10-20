@@ -23,6 +23,7 @@ import com.vidayoung.platform.Model.Entity.Persona;
 import com.vidayoung.platform.Model.Entity.PlanActivacion;
 import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
 import com.vidayoung.platform.Model.Entity.Producto;
+import com.vidayoung.platform.Model.Entity.Rango;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
@@ -39,10 +40,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CompraServiceImpl implements CompraService {
     private static final String REFERENCIA_COMPRA_RED = "COMPRA_RED";
     private static final int NIVELES_ALCANCE_RED = 9;
@@ -967,13 +970,23 @@ public class CompraServiceImpl implements CompraService {
                 .map(Referido::getPatrocinador)
                 .orElse(null);
         int nivel = 1;
+        int beneficiariosEvaluados = 0;
+        int beneficiariosPagados = 0;
+        BigDecimal montoTotalPagado = BigDecimal.ZERO;
+
+        log.info("[BENEFICIO_COMPRA] Inicio compraId={} compradorId={} cantidadProductos={} primerBeneficiarioId={}",
+                compra.getId(), compra.getPersona().getId(), totalProductos,
+                beneficiario == null ? null : beneficiario.getId());
 
         while (beneficiario != null && nivel <= BilleteraService.NIVELES_TOTALES) {
             Billetera billetera = billeteraService.asegurarBilletera(beneficiario);
             Optional<Referido> beneficiarioReferido = referidoDao.findByPersonaId(beneficiario.getId())
                     .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()));
             PlanActivacion plan = obtenerPlanActivacionVigente(billetera).orElse(null);
-            boolean nivelAplica = nivel <= billeteraService.calcularAlcanceEfectivo(beneficiario, plan);
+            int alcanceBase = plan == null || plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
+            int alcanceEfectivo = billeteraService.calcularAlcanceEfectivo(beneficiario, plan);
+            int nivelesExtraAplicados = Math.max(0, alcanceEfectivo - alcanceBase);
+            boolean nivelAplica = nivel <= alcanceEfectivo;
             BigDecimal montoPorProducto = zeroIfNull(billeteraService.resolverMontoPorProducto(beneficiario, plan, nivel));
             BigDecimal montoTotal = montoPorProducto.multiply(BigDecimal.valueOf(totalProductos));
             boolean membresiaActiva = beneficiarioReferido
@@ -983,6 +996,18 @@ public class CompraServiceImpl implements CompraService {
                     && nivelAplica
                     && membresiaActiva
                     && montoTotal.compareTo(BigDecimal.ZERO) > 0;
+            String motivo = paga ? "PAGA" : (!nivelAplica
+                    ? "NIVEL_EXCEDE_ALCANCE"
+                    : (membresiaActiva ? "SIN_PLAN_O_MONTO_CONFIGURADO" : "MEMBRESIA_INACTIVA"));
+
+            log.info("[BENEFICIO_COMPRA] Evaluacion compraId={} beneficiarioId={} nivel={} planId={} planNombre={} alcanceBase={} rangoActual={} rangoHistorico={} nivelesExtraAplicados={} alcanceEfectivo={} membresiaActiva={} montoPorProducto={} cantidadProductos={} montoTotal={} paga={} motivo={}",
+                    compra.getId(), beneficiario.getId(), nivel,
+                    plan == null ? null : plan.getId(), plan == null ? null : plan.getNombre(),
+                    alcanceBase, describirRango(beneficiario.getRangoActual()),
+                    describirRango(beneficiario.getRangoMaximo()), nivelesExtraAplicados,
+                    alcanceEfectivo, membresiaActiva, montoPorProducto, totalProductos,
+                    montoTotal, paga, motivo);
+            beneficiariosEvaluados++;
 
             BeneficioActivacionCompra beneficio = beneficioActivacionCompraDao.save(BeneficioActivacionCompra.builder()
                     .compra(compra)
@@ -1004,11 +1029,14 @@ public class CompraServiceImpl implements CompraService {
             if (paga) {
                 billetera.setSaldoDinero(zeroIfNull(billetera.getSaldoDinero()).add(montoTotal));
                 billetera = billeteraDao.save(billetera);
+                beneficiariosPagados++;
+                montoTotalPagado = montoTotalPagado.add(montoTotal);
                 movimientoBilleteraDao.save(MovimientoBilletera.builder()
                         .billetera(billetera)
                         .periodo(compra.getPeriodo())
                         .tipo(MovimientoBilletera.TIPO_DINERO)
-                        .concepto("Beneficio activacion compra #" + compra.getId() + " nivel " + nivel)
+                        .concepto("Beneficio activacion compra #" + compra.getId() + " nivel " + nivel
+                                + " de " + nombreCompleto(compra.getPersona()))
                         .referenciaTipo("BENEFICIO_ACTIVACION_COMPRA")
                         .referenciaId(beneficio.getId())
                         .monto(montoTotal)
@@ -1031,6 +1059,17 @@ public class CompraServiceImpl implements CompraService {
                     .orElse(null);
             nivel++;
         }
+
+        log.info("[BENEFICIO_COMPRA] Fin compraId={} beneficiariosEvaluados={} beneficiariosPagados={} montoTotalPagado={}",
+                compra.getId(), beneficiariosEvaluados, beneficiariosPagados, montoTotalPagado);
+    }
+
+    private String describirRango(Rango rango) {
+        if (rango == null) {
+            return "SIN_RANGO";
+        }
+        return String.format("%s:%s(qp=%s,extras=%s)",
+                rango.getId(), rango.getNombre(), rango.getQpMinimo(), rango.getNivelesExtra());
     }
 
     private Optional<PlanActivacion> obtenerPlanActivacionVigente(Billetera billetera) {

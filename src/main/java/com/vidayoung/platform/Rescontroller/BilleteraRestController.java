@@ -954,11 +954,13 @@ public class BilleteraRestController {
                 .filter(id -> id != null)
                 .distinct()
                 .toList();
-        Map<Long, Long> compraIdPorBeneficio = beneficioIds.isEmpty()
+        Map<Long, BeneficioActivacionCompra> beneficiosPorId = beneficioIds.isEmpty()
                 ? Map.of()
                 : beneficioActivacionCompraDao.findAllById(beneficioIds).stream()
-                        .filter(beneficio -> beneficio.getCompra() != null)
-                        .collect(Collectors.toMap(BeneficioActivacionCompra::getId, beneficio -> beneficio.getCompra().getId()));
+                        .collect(Collectors.toMap(BeneficioActivacionCompra::getId, Function.identity()));
+        Map<Long, Long> compraIdPorBeneficio = beneficiosPorId.values().stream()
+                .filter(beneficio -> beneficio.getCompra() != null)
+                .collect(Collectors.toMap(BeneficioActivacionCompra::getId, beneficio -> beneficio.getCompra().getId()));
 
         Set<Long> todasLasCompras = new LinkedHashSet<>(compraIds);
         todasLasCompras.addAll(compraIdPorBeneficio.values());
@@ -976,7 +978,11 @@ public class BilleteraRestController {
                                 ? movimiento.getReferenciaId()
                                 : compraIdPorBeneficio.get(movimiento.getReferenciaId());
                     }
-                    return movimientoResponse(movimiento, compraId == null ? null : comprasPorId.get(compraId));
+                    return movimientoResponse(
+                            movimiento,
+                            compraId == null ? null : comprasPorId.get(compraId),
+                            movimiento.getReferenciaId() == null ? null : beneficiosPorId.get(movimiento.getReferenciaId())
+                    );
                 })
                 .toList();
     }
@@ -999,11 +1005,15 @@ public class BilleteraRestController {
         return null;
     }
 
-    private BilleteraMovimientoResponse movimientoResponse(MovimientoBilletera movimiento, Compra compra) {
+    private BilleteraMovimientoResponse movimientoResponse(
+            MovimientoBilletera movimiento,
+            Compra compra,
+            BeneficioActivacionCompra beneficio
+    ) {
         return new BilleteraMovimientoResponse(
                 movimiento.getId(),
                 movimiento.getTipo(),
-                movimiento.getConcepto(),
+                conceptoMovimiento(movimiento, beneficio, compra),
                 movimiento.getReferenciaTipo(),
                 movimiento.getReferenciaId(),
                 zeroIfNull(movimiento.getMonto()),
@@ -1011,6 +1021,42 @@ public class BilleteraRestController {
                 movimiento.getFechaRegistro(),
                 compra == null ? null : compraMovimientoResponse(compra)
         );
+    }
+
+    private String conceptoMovimiento(
+            MovimientoBilletera movimiento,
+            BeneficioActivacionCompra beneficio,
+            Compra compra
+    ) {
+        if ("BENEFICIO_ACTIVACION_COMPRA".equals(movimiento.getReferenciaTipo())
+                && beneficio != null
+                && beneficio.getNivelGenerado() != null
+                && compra != null) {
+            return "Beneficio activacion compra #" + compra.getId()
+                    + " nivel " + beneficio.getNivelGenerado()
+                    + " de " + nombreCompleto(compra.getPersona());
+        }
+
+        if (!"ACTUALIZACION_BENEFICIO_ACTIVACION".equals(movimiento.getReferenciaTipo())
+                || zeroIfNull(movimiento.getMonto()).compareTo(BigDecimal.ZERO) <= 0
+                || beneficio == null
+                || beneficio.getNivelGenerado() == null
+                || beneficio.getPlanActivacion() == null) {
+            return movimiento.getConcepto();
+        }
+
+        int alcanceBase = beneficio.getPlanActivacion().getNivelesAlcance() == null
+                ? 0
+                : beneficio.getPlanActivacion().getNivelesAlcance();
+        Persona beneficiario = beneficio.getBeneficiario();
+        Rango rangoMaximo = beneficiario == null ? null : beneficiario.getRangoMaximo();
+        if (beneficio.getNivelGenerado() <= alcanceBase || rangoMaximo == null || compra == null) {
+            return movimiento.getConcepto();
+        }
+
+        return "Recompensa especial por rango " + rangoMaximo.getNombre()
+                + " - compra #" + compra.getId()
+                + " de " + nombreCompleto(compra.getPersona());
     }
 
     private CompraMovimientoResponse compraMovimientoResponse(Compra compra) {

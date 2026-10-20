@@ -729,10 +729,7 @@ public class BilleteraServiceImpl implements BilleteraService {
                         .billetera(billetera)
                         .periodo(periodoActivo)
                         .tipo(MovimientoBilletera.TIPO_DINERO)
-                        .concepto("Ajuste retroactivo de beneficio de activacion #" + beneficio.getId()
-                                + (diferencia.compareTo(BigDecimal.ZERO) > 0
-                                ? " por membresia superior"
-                                : " por membresia no activa"))
+                        .concepto(conceptoAjusteBeneficio(beneficio, persona, planActivo.orElse(null), diferencia))
                         .referenciaTipo("ACTUALIZACION_BENEFICIO_ACTIVACION")
                         .referenciaId(beneficio.getId())
                         .monto(diferencia)
@@ -749,6 +746,33 @@ public class BilleteraServiceImpl implements BilleteraService {
                 }
             }
         }
+    }
+
+    private String conceptoAjusteBeneficio(
+            BeneficioActivacionCompra beneficio,
+            Persona beneficiario,
+            PlanActivacion plan,
+            BigDecimal diferencia
+    ) {
+        Integer nivel = beneficio.getNivelGenerado();
+        int alcanceBase = plan == null || plan.getNivelesAlcance() == null ? 0 : plan.getNivelesAlcance();
+        Rango rango = rangoEfectivoParaBono(beneficiario);
+        Compra compra = beneficio.getCompra();
+
+        if (diferencia.compareTo(BigDecimal.ZERO) > 0
+                && nivel != null
+                && nivel > alcanceBase
+                && rango != null
+                && compra != null) {
+            return "Recompensa especial por rango " + rango.getNombre()
+                    + " - compra #" + compra.getId()
+                    + " de " + nombreCompleto(compra.getPersona());
+        }
+
+        return "Ajuste retroactivo de beneficio de activacion #" + beneficio.getId()
+                + (diferencia.compareTo(BigDecimal.ZERO) > 0
+                ? " por membresia superior"
+                : " por membresia no activa");
     }
 
     private boolean membresiaActiva(Persona persona, PeriodoGestion periodoActivo) {

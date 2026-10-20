@@ -50,7 +50,7 @@ import PublicCartView from "./views/PublicCartView.vue";
 import { ScreenLanding } from "./screens/publico.js";
 import { ScreenAdmin } from "./screens/admin.js";
 import { useAuthStore } from "./stores/authStore.js";
-import { ROLE_ADMIN, canAccessMenu, getDefaultRouteName, hasAnyRole } from "./navigation/menuConfig.js";
+import { ROLE_ADMIN, ROLE_ADMINISTRACION, canAccessMenu, getDefaultRouteName, hasAnyRole } from "./navigation/menuConfig.js";
 import { useMenuStore } from "./stores/menuStore.js";
 
 const GoogleVerificationView = {
@@ -74,7 +74,7 @@ const routes = [
   { path: "/asistente-config", name: "asistente-config", component: AssistantConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/consultar", name: "consultar", component: ConsultarPersonaSearchView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/consultar/:personaId", name: "consultar-detalle", component: ConsultarPersonaView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "consultar" } },
-  { path: "/personas", name: "personas", component: PersonasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/personas", name: "personas", component: PersonasView, meta: { sidebar: true, roles: [ROLE_ADMIN, ROLE_ADMINISTRACION] } },
   { path: "/rangos", name: "rangos", component: RangosView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes", name: "planes", component: PlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/planes-activacion", name: "planes-activacion", component: ActivationPlansView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },

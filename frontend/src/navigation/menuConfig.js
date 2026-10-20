@@ -1,4 +1,5 @@
 export const ROLE_ADMIN = "ADMIN";
+export const ROLE_ADMINISTRACION = "ADMINISTRACION";
 export const MENU_PERMISSIONS_STORAGE_KEY = "vy_role_menu_permissions";
 export const CUSTOM_MENUS_STORAGE_KEY = "vy_custom_menus";
 
@@ -11,7 +12,7 @@ export const BASE_MENU_ITEMS = [
   { id: "asistente", label: "Asistente", icon: "Bot", roles: ["*"] },
   { id: "asistente-config", label: "Config asistente", icon: "Settings", roles: [ROLE_ADMIN] },
   { id: "consultar", label: "Consultar", icon: "Search", roles: [ROLE_ADMIN] },
-  { id: "personas", label: "Personas", icon: "User", roles: [ROLE_ADMIN] },
+  { id: "personas", label: "Personas", icon: "User", roles: [ROLE_ADMIN, ROLE_ADMINISTRACION] },
   { id: "rangos", label: "Rangos", icon: "Trophy", roles: [ROLE_ADMIN] },
   { id: "planes", label: "Planes", icon: "BadgePercent", roles: [ROLE_ADMIN] },
   { id: "planes-activacion", label: "Activaciones", icon: "Activity", roles: [ROLE_ADMIN] },

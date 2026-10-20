@@ -80,7 +80,7 @@ public class AuthRestController {
     }
 
     @PostMapping("/impersonate/{usuarioId}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'ADMINISTRACION')")
     public ResponseEntity<LoginResponse> impersonate(@PathVariable Long usuarioId) {
         Usuario usuario = usuarioDao.findById(usuarioId)
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
