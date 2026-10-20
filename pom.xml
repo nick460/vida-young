@@ -96,11 +96,6 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-        <dependency>
-            <groupId>com.google.cloud</groupId>
-            <artifactId>google-cloud-service-management-bom</artifactId>
-            <version>3.53.0</version>
-        </dependency>
     </dependencies>
 
 	<build>
