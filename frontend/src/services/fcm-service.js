@@ -27,12 +27,38 @@ export async function solicitarPermisoYObtenerToken() {
       } catch (e) {
         console.warn("⚠️ Service Worker no disponible:", e);
       }
-      const token = await getToken(messaging, {
-        vapidKey: "BFNiZSzfqIJOpcdnJ7dSojccHc0CJcifiDyt6aJxexoMW1Aecgol-TK_TOrfW_thlpWwz--YeJGog6Ne0b3-pzc",
-        ...(registro ? { serviceWorkerRegistration: registro } : {})
-      });
-      console.log("📱 FCM Token obtenido:", token);
-      return token;
+      try {
+        const suscripcion = registro ? await registro.pushManager.getSubscription() : null;
+        console.info("FCM: solicitando token", {
+          permission: Notification.permission,
+          secureContext: window.isSecureContext,
+          serviceWorker: registro ? {
+            scope: registro.scope,
+            active: registro.active?.state || null,
+            waiting: registro.waiting?.state || null,
+            existingPushSubscription: Boolean(suscripcion),
+            pushEndpoint: suscripcion?.endpoint ? new URL(suscripcion.endpoint).origin : null
+          } : null
+        });
+
+        const token = await getToken(messaging, {
+          vapidKey: "BFNiZSzfqIJOpcdnJ7dSojccHc0CJcifiDyt6aJxexoMW1Aecgol-TK_TOrfW_thlpWwz--YeJGog6Ne0b3-pzc",
+          ...(registro ? { serviceWorkerRegistration: registro } : {})
+        });
+        console.info("FCM: token obtenido", { length: token?.length || 0, prefix: token?.slice(0, 12) || null });
+        return token;
+      } catch (error) {
+        console.error("FCM: no se pudo registrar la suscripción Push", {
+          name: error?.name,
+          message: error?.message,
+          code: error?.code || null,
+          permission: Notification.permission,
+          secureContext: window.isSecureContext,
+          serviceWorkerScope: registro?.scope || null,
+          activeServiceWorker: registro?.active?.state || null
+        }, error);
+        return null;
+      }
     } else if (permiso === "denied") {
       console.log("⚠️ Permiso de notificación denegado");
       return null;
@@ -41,7 +67,7 @@ export async function solicitarPermisoYObtenerToken() {
       return null;
     }
   } catch (error) {
-    console.error("❌ Error obteniendo token FCM:", error);
+    console.error("FCM: no se pudo solicitar el permiso de notificaciones", error);
     return null;
   }
 }
