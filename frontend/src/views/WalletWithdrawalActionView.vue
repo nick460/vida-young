@@ -43,7 +43,7 @@ const patrocinioFiltrado = computed(() => detalleEfectivo.value.filter((item) =>
 const dineroPatrocinioFiltrado = computed(() => patrocinioFiltrado.value
   .reduce((total, item) => total + Number(item.montoDisponible || 0), 0));
 const comprasConBeneficio = computed(() => movimientos.value.filter((movimiento) => {
-  if (!movimiento.compra || Number(movimiento.monto || 0) <= 0 || Number(movimiento.nivelGenerado) < 2) return false;
+  if (!movimiento.compra || Number(movimiento.monto || 0) <= 0 || Number(movimiento.nivelGenerado) < 1) return false;
   return !nivelFiltro.value || Number(movimiento.nivelGenerado) === Number(nivelFiltro.value);
 }));
 const comprasFiltradas = computed(() => {
