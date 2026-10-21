@@ -366,6 +366,8 @@ public class BilleteraRestController {
         private final java.time.LocalDateTime fechaRegistro;
 
         private final CompraMovimientoResponse compra;
+
+        private final Integer nivelGenerado;
     }
 
     @Getter
@@ -1019,7 +1021,8 @@ public class BilleteraRestController {
                 zeroIfNull(movimiento.getMonto()),
                 zeroIfNull(movimiento.getSaldoResultado()),
                 movimiento.getFechaRegistro(),
-                compra == null ? null : compraMovimientoResponse(compra)
+                compra == null ? null : compraMovimientoResponse(compra),
+                beneficio == null ? null : beneficio.getNivelGenerado()
         );
     }
 

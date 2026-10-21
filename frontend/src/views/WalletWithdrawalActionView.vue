@@ -14,6 +14,7 @@ const error = ref("");
 const wallet = ref(null);
 const retiro = ref(null);
 const observacion = ref("");
+const nivelFiltro = ref("");
 
 const personaId = computed(() => Number(route.params.personaId));
 const periodoId = computed(() => route.query.periodoId ? Number(route.query.periodoId) : null);
@@ -25,6 +26,19 @@ const efectivoDisponible = computed(() =>
   Number(billetera.value.saldoDinero || 0) + Number(wallet.value?.efectivoRecompensasDisponible || 0)
 );
 const movimientos = computed(() => wallet.value?.movimientos || []);
+const nivelesDisponibles = computed(() => [...new Set([
+  ...detalleEfectivo.value.map((item) => Number(item.nivelGenerado)),
+  ...movimientos.value.map((item) => Number(item.nivelGenerado))
+].filter((nivel) => nivel >= 2))].sort((left, right) => left - right));
+const patrocinioFiltrado = computed(() => detalleEfectivo.value.filter((item) =>
+  !nivelFiltro.value || Number(item.nivelGenerado) === Number(nivelFiltro.value)
+));
+const dineroPatrocinioFiltrado = computed(() => patrocinioFiltrado.value
+  .reduce((total, item) => total + Number(item.montoDisponible || 0), 0));
+const comprasConBeneficio = computed(() => movimientos.value.filter((movimiento) => {
+  if (!movimiento.compra || Number(movimiento.monto || 0) <= 0) return false;
+  return !nivelFiltro.value || Number(movimiento.nivelGenerado) === Number(nivelFiltro.value);
+}));
 const persona = computed(() => ({
   nombres: route.query.nombres || retiro.value?.nombres || "",
   apellidos: route.query.apellidos || retiro.value?.apellidos || "",
@@ -121,6 +135,7 @@ onMounted(cargar);
       <template v-else>
         <section class="summary-grid">
           <article><small>Efectivo disponible</small><strong>Bs. {{ money(efectivoDisponible) }}</strong><span>Compras y recompensas mensuales</span></article>
+          <article><small>Patrocinio niveles 2+</small><strong>Bs. {{ money(dineroPatrocinioFiltrado) }}</strong><span>{{ nivelFiltro ? `Solo nivel ${nivelFiltro}` : "Todos los niveles" }}</span></article>
           <article><small>Productos nivel 1</small><strong>Bs. {{ money(wallet?.productosRecompensasDisponible) }}</strong><span>Se retiran desde su módulo específico</span></article>
           <article v-if="retiro"><small>Retiro procesado</small><strong>Bs. {{ money(retiro.montoDinero) }}</strong><span>{{ formatDateTime(retiro.fechaRetiro) }}</span></article>
         </section>
@@ -130,6 +145,13 @@ onMounted(cargar);
 
           <template v-if="esRetiro">
             <div class="total-box"><span>Retiro total obligatorio</span><strong>Bs. {{ money(efectivoDisponible) }}</strong></div>
+            <section class="detail-section">
+              <header class="section-heading"><div><small>Dinero que recibirá</small><h3>Desglose antes de registrar</h3></div><label>Filtrar patrocinio<select v-model="nivelFiltro"><option value="">Todos los niveles</option><option v-for="nivel in nivelesDisponibles" :key="nivel" :value="nivel">Nivel {{ nivel }}</option></select></label></header>
+              <div class="breakdown"><span><b>Dinero por compras y activaciones</b><small>Saldo directo disponible de la billetera.</small></span><b>Bs. {{ money(billetera.saldoDinero) }}</b></div>
+              <div class="table-wrap"><table><thead><tr><th>Compra</th><th>Realizada por</th><th>Nivel</th><th>Dinero recibido</th></tr></thead><tbody><tr v-for="movimiento in comprasConBeneficio" :key="movimiento.id"><td>#{{ movimiento.compra.id }}<small>{{ formatDateTime(movimiento.compra.fechaCompra || movimiento.fechaRegistro) }}</small></td><td>{{ movimiento.compra.personaNombres }} {{ movimiento.compra.personaApellidos }}<small>{{ movimiento.compra.personaDocumento || "Sin documento" }}</small></td><td>{{ movimiento.nivelGenerado ? `Nivel ${movimiento.nivelGenerado}` : "Directo" }}</td><td>Bs. {{ money(movimiento.monto) }}</td></tr><tr v-if="!comprasConBeneficio.length"><td colspan="4">No hay compras para el filtro seleccionado.</td></tr></tbody></table></div>
+              <div class="breakdown"><span><b>Dinero por patrocinio, niveles 2+</b><small>Recompensas disponibles de los referidos.</small></span><b>Bs. {{ money(dineroPatrocinioFiltrado) }}</b></div>
+              <div v-for="item in patrocinioFiltrado" :key="item.recompensaId" class="breakdown detail-row"><span><b>Nivel {{ item.nivelGenerado }} · {{ item.referidoNombre || "Referido" }}</b><small>{{ item.planIngreso || "Plan" }}<template v-if="item.referidoDocumento"> · CI {{ item.referidoDocumento }}</template></small></span><b>Bs. {{ money(item.montoDisponible) }}</b></div>
+            </section>
             <label>Observación interna<textarea v-model.trim="observacion" rows="4" placeholder="Detalle interno del retiro"></textarea></label>
             <footer><button class="primary" type="button" :disabled="processing || efectivoDisponible <= 0" @click="registrarRetiro"><ArrowDownToLine :size="17" /> {{ processing ? "Procesando..." : "Registrar retiro" }}</button></footer>
           </template>
@@ -141,9 +163,9 @@ onMounted(cargar);
           </template>
 
           <template v-else>
-            <div class="breakdown"><span><b>Dinero de compras</b><small>Beneficios de compras y activaciones del período.</small></span><b>Bs. {{ money(billetera.saldoDinero) }}</b></div>
-            <div v-for="item in detalleEfectivo" :key="item.recompensaId" class="breakdown"><span><b>Nivel {{ item.nivelGenerado }} - {{ item.referidoNombre || "Referido" }}</b><small>{{ item.planIngreso || "Plan" }}<template v-if="item.referidoDocumento"> · CI {{ item.referidoDocumento }}</template></small></span><b>Bs. {{ money(item.montoDisponible) }}</b></div>
-            <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th>Monto</th></tr></thead><tbody><tr v-for="movimiento in movimientos" :key="movimiento.id"><td>{{ formatDateTime(movimiento.fechaRegistro) }}</td><td>{{ movimiento.concepto || "Movimiento" }}</td><td>{{ movimiento.tipo }}</td><td>Bs. {{ money(movimiento.monto) }}</td></tr><tr v-if="!movimientos.length"><td colspan="4">No hay movimientos para el período seleccionado.</td></tr></tbody></table></div>
+            <header class="section-heading"><div><small>Filtro de patrocinio</small><h3>Detalle de dinero recibido</h3></div><label>Mostrar<select v-model="nivelFiltro"><option value="">Todos los niveles</option><option v-for="nivel in nivelesDisponibles" :key="nivel" :value="nivel">Nivel {{ nivel }}</option></select></label></header>
+            <section class="detail-section"><h3>Dinero por compras y activaciones</h3><div class="breakdown"><span><b>Saldo directo</b><small>Beneficios de compras y activaciones del período.</small></span><b>Bs. {{ money(billetera.saldoDinero) }}</b></div><div class="table-wrap"><table><thead><tr><th>Compra</th><th>Realizada por</th><th>Nivel</th><th>Dinero recibido</th></tr></thead><tbody><tr v-for="movimiento in comprasConBeneficio" :key="movimiento.id"><td>#{{ movimiento.compra.id }}<small>{{ formatDateTime(movimiento.compra.fechaCompra || movimiento.fechaRegistro) }}</small></td><td>{{ movimiento.compra.personaNombres }} {{ movimiento.compra.personaApellidos }}<small>{{ movimiento.compra.personaDocumento || "Sin documento" }}</small></td><td>{{ movimiento.nivelGenerado ? `Nivel ${movimiento.nivelGenerado}` : "Directo" }}</td><td>Bs. {{ money(movimiento.monto) }}</td></tr><tr v-if="!comprasConBeneficio.length"><td colspan="4">No hay compras para el filtro seleccionado.</td></tr></tbody></table></div></section>
+            <section class="detail-section"><h3>Dinero por patrocinio, niveles 2+</h3><div class="breakdown"><span><b>Total de patrocinio</b><small>Recompensas disponibles para el período.</small></span><b>Bs. {{ money(dineroPatrocinioFiltrado) }}</b></div><div v-for="item in patrocinioFiltrado" :key="item.recompensaId" class="breakdown detail-row"><span><b>Nivel {{ item.nivelGenerado }} · {{ item.referidoNombre || "Referido" }}</b><small>{{ item.planIngreso || "Plan" }}<template v-if="item.referidoDocumento"> · CI {{ item.referidoDocumento }}</template></small></span><b>Bs. {{ money(item.montoDisponible) }}</b></div><div v-if="!patrocinioFiltrado.length" class="empty">No hay recompensas de patrocinio para el filtro seleccionado.</div></section>
           </template>
         </section>
       </template>
