@@ -18,6 +18,7 @@ import StatsView from "./views/StatsView.vue";
 import WalletView from "./views/WalletView.vue";
 import CompanyWalletView from "./views/CompanyWalletView.vue";
 import WalletWithdrawalsView from "./views/WalletWithdrawalsView.vue";
+import WalletWithdrawalActionView from "./views/WalletWithdrawalActionView.vue";
 import LevelOneWithdrawalsView from "./views/LevelOneWithdrawalsView.vue";
 import LogsView from "./views/LogsView.vue";
 import UsuariosEnLineaView from "./views/UsuariosEnLineaView.vue";
@@ -90,6 +91,7 @@ const routes = [
   { path: "/gestiones", name: "gestiones", component: GestionPeriodsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/caja-empresa", name: "caja-empresa", component: CompanyWalletView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/retiros-billeteras", name: "retiros-billeteras", component: WalletWithdrawalsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
+  { path: "/retiros-billeteras/:personaId/:modo", name: "retiros-billeteras-accion", component: WalletWithdrawalActionView, meta: { roles: [ROLE_ADMIN], parentMenu: "retiros-billeteras" } },
   { path: "/retiros-nivel-1", name: "retiros-nivel-1", component: LevelOneWithdrawalsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/logs", name: "logs", component: LogsView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/usuarios-en-linea", name: "usuarios-en-linea", component: UsuariosEnLineaView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },

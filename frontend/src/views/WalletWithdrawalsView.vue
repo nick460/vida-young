@@ -8,8 +8,10 @@ import "sweetalert2/dist/sweetalert2.min.css";
 import { ArrowDownToLine, CalendarClock, CheckCircle2, Download, Eye, PackageCheck, Printer, RefreshCw, Search, WalletCards, X } from "lucide-vue-next";
 import { apiRequest } from "../services/api.js";
 import logoFull from "../assets/logoFull.png";
+import { useRouter } from "vue-router";
 
 select2($);
+const router = useRouter();
 
 const loading = ref(false);
 const processing = ref(false);
@@ -523,7 +525,17 @@ async function loadSaldos() {
 }
 
 function openRetiroDetalle(retiro) {
-  selectedRetiroDetalle.value = retiro;
+  router.push({
+    name: "retiros-billeteras-accion",
+    params: { personaId: retiro.personaId, modo: "detalle" },
+    query: {
+      periodoId: selectedPeriodoId.value,
+      retiroId: retiro.id,
+      nombres: retiro.nombres,
+      apellidos: retiro.apellidos,
+      documento: retiro.documento
+    }
+  });
 }
 
 function closeRetiroDetalle() {
@@ -610,19 +622,16 @@ function compraDetalleTexto(compra) {
 }
 
 async function openSaldoDetalle(saldo) {
-  selectedSaldoDetalle.value = saldo;
-  selectedDetalleWallet.value = null;
-  detalleModalOpen.value = true;
-  detalleLoading.value = true;
-  lockPageScroll();
-  try {
-    const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
-    selectedDetalleWallet.value = await apiRequest(`/api/billeteras/persona/${saldo.personaId}${query}`);
-  } catch (exception) {
-    error.value = exception.message || "No se pudo cargar el detalle de la persona.";
-  } finally {
-    detalleLoading.value = false;
-  }
+  router.push({
+    name: "retiros-billeteras-accion",
+    params: { personaId: saldo.personaId, modo: "detalle" },
+    query: {
+      ...(selectedPeriodoId.value ? { periodoId: selectedPeriodoId.value } : {}),
+      nombres: saldo.nombres,
+      apellidos: saldo.apellidos,
+      documento: saldo.documento
+    }
+  });
 }
 
 function closeSaldoDetalle() {
@@ -650,15 +659,16 @@ async function loadSelectedWallet() {
 
 async function openRetiroModal(saldo) {
   if (!canRegisterWithdrawals.value) return;
-  selectedSaldo.value = saldo;
-  selectedWallet.value = null;
-  selectedProductoId.value = "";
-  retiroForm.value = { montoDinero: 0, productos: [], observacion: "" };
-  retiroModalOpen.value = true;
-  lockPageScroll();
-  await loadSelectedWallet();
-  setMaxRetiro();
-  await initProductoSelect2();
+  router.push({
+    name: "retiros-billeteras-accion",
+    params: { personaId: saldo.personaId, modo: "retiro" },
+    query: {
+      ...(selectedPeriodoId.value ? { periodoId: selectedPeriodoId.value } : {}),
+      nombres: saldo.nombres,
+      apellidos: saldo.apellidos,
+      documento: saldo.documento
+    }
+  });
 }
 
 function closeRetiroModal() {
