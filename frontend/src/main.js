@@ -46,6 +46,7 @@ import CompanyHomeView from "./views/CompanyHomeView.vue";
 import ProductLandingConfigView from "./views/ProductLandingConfigView.vue";
 import ProductLandingView from "./views/ProductLandingView.vue";
 import PreinscripcionReferidoPublicView from "./views/PreinscripcionReferidoPublicView.vue";
+import PreinscripcionInternaView from "./views/PreinscripcionInternaView.vue";
 import PublicStoreView from "./views/PublicStoreView.vue";
 import PublicCartView from "./views/PublicCartView.vue";
 import { ScreenLanding } from "./screens/publico.js";
@@ -84,6 +85,7 @@ const routes = [
   { path: "/ventanilla", name: "ventanilla", component: AdminSalesView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/admin/compras", name: "admin-compras", component: AdminComprasView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/registro-referido", name: "registro-referido", component: RegistroReferidoView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "ventanilla" } },
+  { path: "/nuevo-referido", name: "nuevo-referido", component: PreinscripcionInternaView, meta: { sidebar: true, roles: [ROLE_ADMIN] } },
   { path: "/herramientas-digitales", name: "herramientas-digitales", component: DigitalToolsView, meta: { sidebar: true, roles: [ROLE_ADMIN, "EMBAJADOR", "USUARIO"] } },
   { path: "/landings-productos-config", name: "landing-productos-config", component: ProductLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },
   { path: "/landings-temas-config", name: "landing-temas-config", component: DigitalLandingConfigView, meta: { sidebar: true, roles: [ROLE_ADMIN], parentMenu: "herramientas-digitales" } },

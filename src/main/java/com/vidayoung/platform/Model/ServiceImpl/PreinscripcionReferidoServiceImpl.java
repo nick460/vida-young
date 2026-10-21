@@ -65,7 +65,7 @@ public class PreinscripcionReferidoServiceImpl implements PreinscripcionReferido
         Persona patrocinador = personaDao.findById(patrocinadorId)
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
                 .orElseThrow(() -> new IllegalArgumentException("La persona que refiere no existe."));
-        Plan plan = planDao.findById(planId)
+        Plan plan = planId == null ? null : planDao.findById(planId)
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
                 .orElseThrow(() -> new IllegalArgumentException("El plan seleccionado no existe."));
         String documentoNormalizado = requerido(documento, "El CI es obligatorio.");

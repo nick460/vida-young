@@ -65,6 +65,34 @@ public class PreinscripcionReferidoRestController {
         ));
     }
 
+    @PostMapping("/api/preinscripciones-referidos/interna")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<PreinscripcionReferido> crearInterna(
+            @RequestBody PreinscripcionInternaRequest request,
+            Principal principal
+    ) {
+        String username = principal == null ? null : principal.getName();
+        Long patrocinadorId = username == null ? null : usuarioDao.findByUsername(username)
+                .map(usuario -> usuario.getPersona() == null ? null : usuario.getPersona().getId())
+                .orElse(null);
+        if (patrocinadorId == null) {
+            throw new IllegalArgumentException("El usuario actual no tiene una persona asignada para referir.");
+        }
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(preinscripcionReferidoService.crear(
+                patrocinadorId,
+                null,
+                request.getNombres(),
+                request.getApellidos(),
+                request.getDocumento(),
+                request.getTelefono(),
+                request.getEmail(),
+                request.getUsername(),
+                request.getPassword(),
+                request.getConfirmPassword()
+        ));
+    }
+
     @GetMapping("/api/public/preinscripciones-referidos/usuarios/{username}/disponible")
     public ResponseEntity<UsernameDisponibleResponse> usuarioDisponible(@PathVariable String username) {
         boolean disponible = usuarioDao.findByUsername(username.trim().toLowerCase()).isEmpty();
@@ -137,6 +165,19 @@ public class PreinscripcionReferidoRestController {
     public static class PreinscripcionPublicaRequest {
         private Long patrocinadorId;
         private Long planId;
+        private String nombres;
+        private String apellidos;
+        private String documento;
+        private String telefono;
+        private String email;
+        private String username;
+        private String password;
+        private String confirmPassword;
+    }
+
+    @Getter
+    @Setter
+    public static class PreinscripcionInternaRequest {
         private String nombres;
         private String apellidos;
         private String documento;
