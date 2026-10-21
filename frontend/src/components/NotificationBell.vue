@@ -9,6 +9,8 @@ const router = useRouter();
 const notifStore = useNotificacionesStore();
 const authStore = useAuthStore();
 const open = ref(false);
+const habilitando = ref(false);
+const mensajeHabilitacion = ref("");
 
 const TIPO_CLASE = {
   INFO: "info",
@@ -20,13 +22,13 @@ const TIPO_CLASE = {
 };
 
 const badgeVisible = computed(() => notifStore.noLeidas > 0);
-const notificacionesHabilitadas = computed(() => authStore.fcmToken !== null);
+const notificacionesHabilitadas = computed(() => authStore.permisoNotificaciones === "granted" && authStore.fcmToken !== null);
 const mensajeEstadoNotificaciones = computed(() => {
-  if (!authStore.fcmToken) {
-    return "Notificaciones no habilitadas";
-  }
   if (authStore.permisoNotificaciones === "denied") {
     return "Notificaciones desactivadas en configuración";
+  }
+  if (!authStore.fcmToken) {
+    return "Notificaciones no habilitadas";
   }
   return "Notificaciones habilitadas";
 });
@@ -55,6 +57,21 @@ function irA(notificacion) {
 
 function marcarTodas() {
   notifStore.marcarTodasLeidas().catch(() => {});
+}
+
+async function habilitarNotificaciones() {
+  habilitando.value = true;
+  mensajeHabilitacion.value = "";
+  try {
+    await authStore.inicializarNotificaciones();
+    mensajeHabilitacion.value = notificacionesHabilitadas.value
+      ? "Notificaciones habilitadas en este dispositivo."
+      : authStore.permisoNotificaciones === "denied"
+        ? "El navegador las bloqueó. Habilítalas desde la configuración del sitio."
+        : "No se pudieron habilitar las notificaciones.";
+  } finally {
+    habilitando.value = false;
+  }
 }
 
 function formatearFecha(iso) {
@@ -90,7 +107,6 @@ function clickFuera(event) {
 onMounted(() => {
   notifStore.cargar();
   notifStore.conectar();
-  authStore.inicializarNotificaciones();
   document.addEventListener("click", clickFuera);
 });
 
@@ -118,10 +134,12 @@ onBeforeUnmount(() => {
           <button v-if="notificacionesHabilitadas && notifStore.noLeidas > 0" type="button" class="vy-notif-mark-all" @click="marcarTodas">
             Marcar todas
           </button>
-          <button v-else type="button" class="vy-notif-habilitar" @click="authStore.inicializarNotificaciones">
-            Habilitar
+          <button v-else type="button" class="vy-notif-habilitar" :disabled="habilitando" @click="habilitarNotificaciones">
+            {{ habilitando ? "Habilitando..." : "Habilitar" }}
           </button>
         </header>
+
+        <p v-if="mensajeHabilitacion" class="vy-notif-permission-message">{{ mensajeHabilitacion }}</p>
 
         <div class="vy-notif-list">
           <p v-if="!notifStore.notificaciones.length" class="vy-notif-empty">
@@ -248,6 +266,30 @@ onBeforeUnmount(() => {
 
 .vy-notif-mark-all:hover {
   background: rgba(242, 135, 5, 0.1);
+}
+
+.vy-notif-habilitar {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--vy-orange);
+  color: #1f1a14;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.vy-notif-habilitar:disabled { opacity: .6; cursor: wait; }
+
+.vy-notif-permission-message {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--vy-line-2);
+  background: #fff7e8;
+  color: var(--vy-orange-deep);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .vy-notif-list {

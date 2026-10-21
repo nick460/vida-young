@@ -66,10 +66,15 @@ export const useAuthStore = defineStore("auth", {
       localStorage.removeItem("vy_permiso");
     },
     async inicializarNotificaciones() {
-      // Registrar service worker primero
-      registrarServiceWorker();
+      if (!("Notification" in window)) {
+        this.permisoNotificaciones = "unsupported";
+        localStorage.setItem("vy_permiso", this.permisoNotificaciones);
+        return null;
+      }
+
+      // El navegador solo permite el diálogo de permiso tras una acción del usuario.
+      await registrarServiceWorker();
       
-      // Solicitar permiso y obtener token FCM
       const token = await solicitarPermisoYObtenerToken();
       if (token) {
         this.fcmToken = token;

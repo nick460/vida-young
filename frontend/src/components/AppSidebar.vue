@@ -10,6 +10,7 @@ import logoMark from "../assets/logoMark.png";
 
 const collapsed = ref(false);
 const mobileOpen = ref(false);
+const menuSearch = ref("");
 
 const route = useRoute();
 const router = useRouter();
@@ -28,10 +29,11 @@ mobileQuery.addEventListener("change", applyResponsive);
 applyResponsive();
 const {
   ChevronLeft,
-  ChevronRight,
-  Home,
-  Menu,
-  X
+   ChevronRight,
+   Home,
+   Menu,
+   Search,
+   X
 } = LucideIcons;
 
 watch(
@@ -52,6 +54,11 @@ const menuItems = computed(() =>
     icon: LucideIcons[item.icon] || Home
   }))
 );
+const filteredMenuItems = computed(() => {
+  const term = menuSearch.value.trim().toLowerCase();
+  if (!term) return menuItems.value;
+  return menuItems.value.filter((item) => item.label.toLowerCase().includes(term));
+});
 </script>
 
 <template>
@@ -83,8 +90,12 @@ const menuItems = computed(() =>
 
       <nav class="sidebar-nav" aria-label="Principal">
         <p v-if="!collapsed">General</p>
+        <label v-if="!collapsed" class="menu-search">
+          <Search :size="15" />
+          <input v-model.trim="menuSearch" type="search" placeholder="Buscar en el menú" />
+        </label>
         <button
-          v-for="item in menuItems"
+          v-for="item in filteredMenuItems"
           :key="item.id"
           type="button"
           :class="{ active: item.id === route.name }"
@@ -95,6 +106,7 @@ const menuItems = computed(() =>
           <span v-if="!collapsed">{{ item.label }}</span>
           <small v-if="item.badge && !collapsed">{{ item.badge }}</small>
         </button>
+        <p v-if="!collapsed && !filteredMenuItems.length" class="no-menu-results">No se encontraron menús.</p>
       </nav>
     </aside>
   </div>
@@ -212,6 +224,37 @@ const menuItems = computed(() =>
   font-weight: 700;
   white-space: nowrap;
 }
+
+.menu-search {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 8px;
+  padding: 0 10px;
+  border: 1px solid var(--vy-line);
+  border-radius: 10px;
+  background: var(--vy-surface-2);
+  color: var(--vy-ink-3);
+}
+
+.menu-search:focus-within {
+  border-color: var(--vy-orange);
+  box-shadow: 0 0 0 3px rgba(242, 135, 5, 0.12);
+}
+
+.menu-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--vy-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.no-menu-results { text-transform: none !important; letter-spacing: 0 !important; line-height: 1.4; }
 
 .sidebar-nav button {
   display: flex;
