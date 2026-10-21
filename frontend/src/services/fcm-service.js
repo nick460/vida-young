@@ -14,6 +14,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const messaging = getMessaging(app);
+let serviceWorkerRegistration;
 
 // Solicitar permiso y obtener token FCM
 export async function solicitarPermisoYObtenerToken() {
@@ -59,14 +60,19 @@ export function onMensajeForeground(callback) {
 
 // Registrar el service worker en el navegador
 export function registrarServiceWorker() {
+  if (serviceWorkerRegistration) {
+    return serviceWorkerRegistration;
+  }
   if ("serviceWorker" in navigator) {
-    return navigator.serviceWorker.register("/firebase-messaging-sw.js").then((reg) => {
+    serviceWorkerRegistration = navigator.serviceWorker.register("/firebase-messaging-sw.js").then((reg) => {
       console.log("✅ Service Worker registrado:", reg.scope);
       return reg;
     }).catch((err) => {
+      serviceWorkerRegistration = null;
       console.warn("⚠️ No se pudo registrar el Service Worker:", err);
       return null;
     });
+    return serviceWorkerRegistration;
   }
   return Promise.resolve(null);
 }

@@ -1,7 +1,7 @@
 /* Service Worker de Firebase Cloud Messaging
    Los service workers clasicos no soportan "import", se usa importScripts con el SDK compat */
-importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging-compat.js");
 
 const firebaseConfig = {
   apiKey: "AIzaSyCF8J9BEKa1YWAL68Hl0jHx8wLzgpbeJEE",
