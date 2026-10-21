@@ -51,10 +51,9 @@ const canRegisterWithdrawals = computed(() => selectedPeriodo.value?.estadoPerio
 const canCloseMonth = computed(() => isPeriodoActivo.value && !loading.value && saldos.value.length === 0);
 const filteredSaldos = computed(() => {
   const term = searchTerm.value.trim().toLowerCase();
-  if (!term) return saldos.value;
-  return saldos.value.filter((saldo) =>
-    `${saldo.nombres || ""} ${saldo.apellidos || ""} ${saldo.documento || ""}`.toLowerCase().includes(term)
-  );
+  return saldos.value
+    .filter((saldo) => Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0) > 0)
+    .filter((saldo) => !term || `${saldo.nombres || ""} ${saldo.apellidos || ""} ${saldo.documento || ""}`.toLowerCase().includes(term));
 });
 const retiroRows = computed(() =>
   retirosProcesados.value.map((retiro) => ({
