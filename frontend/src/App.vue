@@ -79,6 +79,9 @@ function mostrarToastNotificacion(notificacion) {
   });
 }
 
+let latidoIntervalo = null;
+let latidoEnCurso = null;
+
 watch(
   () => notificacionesStore.ultimaNotificacion,
   (notificacion) => mostrarToastNotificacion(notificacion)
@@ -97,9 +100,6 @@ watch(
   },
   { immediate: true }
 );
-
-let latidoIntervalo = null;
-let latidoEnCurso = null;
 
 function latir() {
   if (!authStore.isAuthenticated) return;
