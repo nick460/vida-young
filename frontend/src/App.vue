@@ -99,10 +99,16 @@ watch(
 );
 
 let latidoIntervalo = null;
+let latidoEnCurso = null;
 
 function latir() {
   if (!authStore.isAuthenticated) return;
-  enviarLatido(route.fullPath);
+  if (latidoEnCurso) return latidoEnCurso;
+
+  latidoEnCurso = enviarLatido(route.fullPath).finally(() => {
+    latidoEnCurso = null;
+  });
+  return latidoEnCurso;
 }
 
 onMounted(() => {

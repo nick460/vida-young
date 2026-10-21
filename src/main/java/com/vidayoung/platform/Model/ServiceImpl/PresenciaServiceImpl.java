@@ -35,16 +35,13 @@ public class PresenciaServiceImpl implements PresenciaService {
         }
         Long personaId = usuario.getPersona().getId();
 
-        PresenciaUsuario presencia = presenciaDao.findByPersonaId(personaId)
-                .orElse(PresenciaUsuario.builder().persona(usuario.getPersona()).build());
-        presencia.setPersona(usuario.getPersona());
-        presencia.setUsername(usuario.getUsername());
-        presencia.setUltimoLatido(LocalDateTime.now());
-        presencia.setIp(truncar(ip, 45));
-        presencia.setUserAgent(truncar(userAgent, 300));
-        presencia.setRutaActual(truncar(rutaActual, 200));
-        presencia.setEstado(Auditoria.ESTADO_ACTIVO);
-        presenciaDao.save(presencia);
+        presenciaDao.registrarLatido(
+                personaId,
+                usuario.getUsername(),
+                truncar(ip, 45),
+                truncar(userAgent, 300),
+                truncar(rutaActual, 200)
+        );
     }
 
     @Override
