@@ -1,10 +1,11 @@
 <script setup>
-import { computed, onMounted, onUnmounted, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import { LogOut } from "lucide-vue-next";
 import AppSidebar from "./components/AppSidebar.vue";
 import NotificationBell from "./components/NotificationBell.vue";
+import SplashScreen from "./components/SplashScreen.vue";
 import { VyAvatar } from "./components/ui.js";
 import { useAuthStore } from "./stores/authStore.js";
 import { useNotificacionesStore } from "./stores/notificacionesStore.js";
@@ -14,6 +15,12 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const notificacionesStore = useNotificacionesStore();
+const showSplash = ref(true);
+
+function closeSplash() {
+  showSplash.value = false;
+  if (splashTimeout) clearTimeout(splashTimeout);
+}
 
 const showSidebar = computed(() => route.meta.sidebar === true);
 
@@ -81,6 +88,7 @@ function mostrarToastNotificacion(notificacion) {
 
 let latidoIntervalo = null;
 let latidoEnCurso = null;
+let splashTimeout = null;
 
 watch(
   () => notificacionesStore.ultimaNotificacion,
@@ -112,12 +120,15 @@ function latir() {
 }
 
 onMounted(() => {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  splashTimeout = window.setTimeout(closeSplash, reduceMotion ? 500 : 2850);
   latir();
   latidoIntervalo = setInterval(latir, 60000);
   window.addEventListener("beforeunload", marcarSalida);
 });
 
 onUnmounted(() => {
+  if (splashTimeout) clearTimeout(splashTimeout);
   if (latidoIntervalo) clearInterval(latidoIntervalo);
   window.removeEventListener("beforeunload", marcarSalida);
 });
@@ -134,6 +145,9 @@ function nav(id) {
 </script>
 
 <template>
+  <Transition name="splash">
+    <SplashScreen v-if="showSplash" @skip="closeSplash" />
+  </Transition>
   <div class="vy app-layout" :class="{ 'with-sidebar': showSidebar }">
     <AppSidebar v-if="showSidebar" />
     <div v-if="showSidebar" class="app-main">
