@@ -499,7 +499,9 @@ async function loadPersonaDetail() {
       walletSummary.value = walletResult.value || null;
     }
     if (comprasResult.status === "fulfilled") {
-      compras.value = Array.isArray(comprasResult.value) ? comprasResult.value : [];
+      compras.value = Array.isArray(comprasResult.value)
+        ? comprasResult.value.filter((compra) => String(compra?.estadoCompra || "").toUpperCase() !== "ANULADA")
+        : [];
     }
     if (recompensasResult.status === "fulfilled") {
       recompensas.value = Array.isArray(recompensasResult.value) ? recompensasResult.value : [];

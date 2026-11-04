@@ -1163,6 +1163,8 @@ public class BilleteraRestController {
         }
 
         BigDecimal qpPeriodo = movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdOrderByFechaRegistroDesc(personaId, periodo.getId()).stream()
+                .filter(movimiento -> Auditoria.ESTADO_ACTIVO.equals(movimiento.getEstado()))
+                .filter(movimiento -> !esDeCompraAnulada(movimiento))
                 .filter(movimiento -> MovimientoBilletera.TIPO_QP.equals(movimiento.getTipo()))
                 .map(MovimientoBilletera::getMonto)
                 .map(this::zeroIfNull)
