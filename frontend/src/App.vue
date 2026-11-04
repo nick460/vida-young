@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import { LogOut } from "lucide-vue-next";
@@ -15,7 +15,10 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const notificacionesStore = useNotificacionesStore();
-const showSplash = ref(true);
+const showSplash = ref(route.path === "/");
+const publicIntroReady = computed(() => !showSplash.value);
+
+provide("publicIntroReady", publicIntroReady);
 
 function closeSplash() {
   showSplash.value = false;
@@ -120,8 +123,10 @@ function latir() {
 }
 
 onMounted(() => {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  splashTimeout = window.setTimeout(closeSplash, reduceMotion ? 500 : 2850);
+  if (showSplash.value) {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    splashTimeout = window.setTimeout(closeSplash, reduceMotion ? 500 : 2850);
+  }
   latir();
   latidoIntervalo = setInterval(latir, 60000);
   window.addEventListener("beforeunload", marcarSalida);
@@ -135,7 +140,10 @@ onUnmounted(() => {
 
 watch(
   () => route.fullPath,
-  () => latir()
+  () => {
+    if (route.path !== "/" && showSplash.value) closeSplash();
+    latir();
+  }
 );
 
 function nav(id) {
@@ -146,7 +154,7 @@ function nav(id) {
 
 <template>
   <Transition name="splash">
-    <SplashScreen v-if="showSplash" @skip="closeSplash" />
+    <SplashScreen v-if="showSplash && route.path === '/'" @skip="closeSplash" />
   </Transition>
   <div class="vy app-layout" :class="{ 'with-sidebar': showSidebar }">
     <AppSidebar v-if="showSidebar" />
