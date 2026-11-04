@@ -89,6 +89,17 @@ const movimientos = computed(() => walletSummary.value?.movimientos || []);
 const membresias = computed(() => (walletSummary.value?.membresias || []).filter(membershipInSelectedPeriod));
 const cierres = computed(() => (walletSummary.value?.cierresMensuales || []).filter(cierreInSelectedPeriod));
 const periodoActivo = computed(() => selectedPeriodo.value || walletSummary.value?.periodoActivo || null);
+const membresiaActivaEnPeriodo = computed(() => {
+  if (membresias.value.length > 0) return true;
+  if (!selectedPeriodo.value) return Boolean(referido.value?.membresiaActiva);
+
+  const inicioMembresia = dateOnly(referido.value?.fechaInicioMembresia);
+  const finMembresia = dateOnly(referido.value?.fechaFinMembresia);
+  const inicioPeriodo = dateOnly(selectedPeriodo.value.fechaInicio);
+  const finPeriodo = dateOnly(selectedPeriodo.value.fechaFin);
+  if (!inicioMembresia || !finMembresia || !inicioPeriodo || !finPeriodo) return false;
+  return inicioMembresia <= finPeriodo && finMembresia >= inicioPeriodo;
+});
 const movimientoGroups = computed(() => {
   const groups = new Map();
 
@@ -623,9 +634,11 @@ onMounted(loadBaseData);
               </article>
               <article class="summary-card vy-card">
                 <span class="summary-icon"><BadgeCheck :size="18" /></span>
-                <small>Plan actual</small>
+                <small>Membresia en el mes</small>
                 <strong>{{ referido?.plan?.nombre || "Sin plan" }}</strong>
-                <p>{{ referido?.membresiaActiva ? "Membresia activa" : "Sin membresia activa" }}</p>
+                <p class="membership-state" :class="{ active: membresiaActivaEnPeriodo }">
+                  {{ membresiaActivaEnPeriodo ? "Activa en el periodo seleccionado" : "Inactiva en el periodo seleccionado" }}
+                </p>
               </article>
               <article class="summary-card vy-card">
                 <span class="summary-icon"><Network :size="18" /></span>
@@ -1053,6 +1066,8 @@ onMounted(loadBaseData);
 .summary-card small, .wallet-card span, .info-row small { display: block; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .summary-card strong, .wallet-card strong { display: block; margin-top: 5px; font-size: 18px; font-weight: 900; overflow-wrap: anywhere; }
 .summary-card p { margin-top: 5px; color: var(--vy-ink-2); font-size: 12px; line-height: 1.35; }
+.summary-card .membership-state { color: var(--vy-danger); font-weight: 900; }
+.summary-card .membership-state.active { color: var(--vy-success); }
 .summary-card.warning .summary-icon { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); }
 .summary-card.warning strong { color: var(--vy-danger); }
 .summary-card.pv-own-card { border-color: rgba(242, 135, 5, 0.3); background: linear-gradient(145deg, var(--vy-surface), var(--vy-cream)); }
