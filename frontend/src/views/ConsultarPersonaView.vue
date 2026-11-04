@@ -36,6 +36,15 @@ const networkStatus = ref("");
 const networkLevel = ref("");
 const selectedNetworkPerson = ref(null);
 const benefitsDialog = ref(null);
+const activeTab = ref("resumen");
+
+const detailTabs = [
+  { id: "resumen", label: "Resumen" },
+  { id: "billetera", label: "Billetera" },
+  { id: "red", label: "Red" },
+  { id: "actividad", label: "Actividad" },
+  { id: "historial", label: "Historial" }
+];
 
 const selectedPersona = computed(() =>
   personas.value.find((persona) => Number(persona.id) === Number(selectedPersonaId.value)) || null
@@ -398,6 +407,23 @@ function movementGroupSummary(group) {
   ].filter(Boolean).join(" - ") || group.subtitle || "Sin valores";
 }
 
+function selectTab(tabId) {
+  activeTab.value = tabId;
+}
+
+function handleTabKeydown(event, tabIndex) {
+  let nextIndex = tabIndex;
+  if (event.key === "ArrowRight") nextIndex = (tabIndex + 1) % detailTabs.length;
+  else if (event.key === "ArrowLeft") nextIndex = (tabIndex - 1 + detailTabs.length) % detailTabs.length;
+  else if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = detailTabs.length - 1;
+  else return;
+
+  event.preventDefault();
+  selectTab(detailTabs[nextIndex].id);
+  event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[nextIndex]?.focus();
+}
+
 async function loadPeriodos() {
   const [activePeriodo, gestiones] = await Promise.all([
     apiRequest("/api/gestiones/periodos/activo"),
@@ -560,6 +586,32 @@ onMounted(loadBaseData);
 
             <div v-if="detailLoading" class="loading-box">Cargando detalle...</div>
 
+            <nav class="detail-tabs" role="tablist" aria-label="Secciones de la consulta">
+              <button
+                v-for="(tab, tabIndex) in detailTabs"
+                :id="`tab-${tab.id}`"
+                :key="tab.id"
+                type="button"
+                role="tab"
+                :aria-selected="activeTab === tab.id"
+                :aria-controls="`panel-${tab.id}`"
+                :tabindex="activeTab === tab.id ? 0 : -1"
+                :class="{ active: activeTab === tab.id }"
+                @click="selectTab(tab.id)"
+                @keydown="handleTabKeydown($event, tabIndex)"
+              >
+                {{ tab.label }}
+              </button>
+            </nav>
+
+            <section
+              v-show="activeTab === 'resumen'"
+              id="panel-resumen"
+              class="tab-panel"
+              role="tabpanel"
+              tabindex="0"
+              aria-labelledby="tab-resumen"
+            >
             <section class="summary-grid">
               <article class="summary-card vy-card">
                 <span class="summary-icon"><UserRound :size="18" /></span>
@@ -585,6 +637,12 @@ onMounted(loadBaseData);
                 <strong>{{ periodoActivo?.nombre || "Sin periodo" }}</strong>
                 <p>{{ periodoActivo?.gestion?.anio || "" }}</p>
               </article>
+              <article class="summary-card vy-card pv-own-card">
+                <span class="summary-icon"><BadgeCheck :size="18" /></span>
+                <small>PV propio del mes</small>
+                <strong>{{ money(totals.pv) }} PV</strong>
+                <p>Generado por las compras propias del período seleccionado.</p>
+              </article>
               <article class="summary-card vy-card" :class="{ warning: !retiroMensual.realizado }">
                 <span class="summary-icon"><Wallet :size="18" /></span>
                 <small>Retiro mensual</small>
@@ -600,6 +658,31 @@ onMounted(loadBaseData);
               </article>
             </section>
 
+            <article class="vy-card info-card totals-card">
+              <header>
+                <h3>Totales del mes</h3>
+                <span>{{ compras.length }} compras del mes</span>
+              </header>
+              <div class="metrics-list">
+                <div><span>Compras</span><strong>Bs. {{ money(totals.compras) }}</strong></div>
+                <div><span>PV compras</span><strong>{{ money(totals.pv) }}</strong></div>
+                <div><span>QP compras</span><strong>{{ money(totals.qp) }}</strong></div>
+                <div><span>Recompensas efectivo</span><strong>Bs. {{ money(totals.recompensasEfectivo) }}</strong></div>
+                <div><span>Recompensas productos</span><strong>Bs. {{ money(totals.recompensasProductos) }}</strong></div>
+                <div><span>Retiros efectivo</span><strong>Bs. {{ money(totals.retirosDinero) }}</strong></div>
+                <div><span>Retiros productos</span><strong>Bs. {{ money(totals.retirosProductos) }}</strong></div>
+              </div>
+            </article>
+            </section>
+
+            <section
+              v-show="activeTab === 'billetera'"
+              id="panel-billetera"
+              class="tab-panel"
+              role="tabpanel"
+              tabindex="0"
+              aria-labelledby="tab-billetera"
+            >
             <section class="vy-card history-card">
               <header>
                 <h3>Movimientos de billetera</h3>
@@ -654,7 +737,47 @@ onMounted(loadBaseData);
               </div>
             </section>
 
-            <section class="content-grid">
+            <section class="vy-card history-card">
+              <header>
+                <h3>Retiros mensuales</h3>
+                <span>{{ retiroMensual.realizado ? `${retiroMensual.cantidad} realizado(s)` : "Pendiente" }}</span>
+              </header>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Estado</th>
+                      <th>Efectivo</th>
+                      <th>Productos</th>
+                      <th>Observacion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="retiro in retiros" :key="retiro.id">
+                      <td>{{ formatDateTime(retiro.fechaRetiro) }}</td>
+                      <td><span class="status-pill">{{ retiro.estadoRetiro }}</span></td>
+                      <td>Bs. {{ money(retiro.montoDinero) }}</td>
+                      <td>Bs. {{ money(retiro.montoProductos) }}</td>
+                      <td>{{ retiro.observacion || "Sin observacion" }}</td>
+                    </tr>
+                    <tr v-if="!retiros.length">
+                      <td colspan="5">No realizo retiros en el mes seleccionado.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            </section>
+
+            <section
+              v-show="activeTab === 'red'"
+              id="panel-red"
+              class="tab-panel"
+              role="tabpanel"
+              tabindex="0"
+              aria-labelledby="tab-red"
+            >
               <article class="vy-card info-card network-tree-card">
                 <header>
                   <h3>Red</h3>
@@ -722,56 +845,16 @@ onMounted(loadBaseData);
                 </div>
                 <div v-else class="empty-box compact">No tiene referidos directos.</div>
               </article>
-
-              <article class="vy-card info-card">
-                <header>
-                  <h3>Totales del mes</h3>
-                  <span>{{ compras.length }} compras del mes</span>
-                </header>
-                <div class="metrics-list">
-                  <div><span>Compras</span><strong>Bs. {{ money(totals.compras) }}</strong></div>
-                  <div><span>PV compras</span><strong>{{ money(totals.pv) }}</strong></div>
-                  <div><span>QP compras</span><strong>{{ money(totals.qp) }}</strong></div>
-                  <div><span>Recompensas efectivo</span><strong>Bs. {{ money(totals.recompensasEfectivo) }}</strong></div>
-                  <div><span>Recompensas productos</span><strong>Bs. {{ money(totals.recompensasProductos) }}</strong></div>
-                  <div><span>Retiros efectivo</span><strong>Bs. {{ money(totals.retirosDinero) }}</strong></div>
-                  <div><span>Retiros productos</span><strong>Bs. {{ money(totals.retirosProductos) }}</strong></div>
-                </div>
-              </article>
             </section>
 
-            <section class="vy-card history-card">
-              <header>
-                <h3>Retiros mensuales</h3>
-                <span>{{ retiroMensual.realizado ? `${retiroMensual.cantidad} realizado(s)` : "Pendiente" }}</span>
-              </header>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Estado</th>
-                      <th>Efectivo</th>
-                      <th>Productos</th>
-                      <th>Observacion</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="retiro in retiros" :key="retiro.id">
-                      <td>{{ formatDateTime(retiro.fechaRetiro) }}</td>
-                      <td><span class="status-pill">{{ retiro.estadoRetiro }}</span></td>
-                      <td>Bs. {{ money(retiro.montoDinero) }}</td>
-                      <td>Bs. {{ money(retiro.montoProductos) }}</td>
-                      <td>{{ retiro.observacion || "Sin observacion" }}</td>
-                    </tr>
-                    <tr v-if="!retiros.length">
-                      <td colspan="5">No realizo retiros en el mes seleccionado.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
+            <section
+              v-show="activeTab === 'actividad'"
+              id="panel-actividad"
+              class="tab-panel"
+              role="tabpanel"
+              tabindex="0"
+              aria-labelledby="tab-actividad"
+            >
             <section class="vy-card history-card">
               <header>
                 <h3>Compras internas</h3>
@@ -835,7 +918,16 @@ onMounted(loadBaseData);
                 </table>
               </div>
             </section>
+            </section>
 
+            <section
+              v-show="activeTab === 'historial'"
+              id="panel-historial"
+              class="tab-panel"
+              role="tabpanel"
+              tabindex="0"
+              aria-labelledby="tab-historial"
+            >
             <section class="content-grid">
               <article class="vy-card history-card">
                 <header>
@@ -864,6 +956,7 @@ onMounted(loadBaseData);
                   <div v-if="!cierres.length" class="empty-box compact">Sin cierres mensuales.</div>
                 </div>
               </article>
+            </section>
             </section>
           </template>
       </section>
@@ -932,6 +1025,14 @@ onMounted(loadBaseData);
 .period-filter span { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .period-filter select { width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface); color: var(--vy-ink); font: inherit; font-size: 13px; font-weight: 800; }
 .detail-panel { min-width: 0; display: grid; gap: 14px; }
+.detail-tabs { min-width: 0; padding: 5px; display: flex; gap: 4px; overflow-x: auto; border: 1px solid var(--vy-line); border-radius: 14px; background: var(--vy-surface); box-shadow: var(--vy-shadow-sm); scrollbar-width: thin; }
+.detail-tabs button { min-width: max-content; min-height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: transparent; color: var(--vy-ink-3); font: inherit; font-size: 13px; font-weight: 900; cursor: pointer; transition: color .18s ease, background-color .18s ease, box-shadow .18s ease; }
+.detail-tabs button:hover { color: var(--vy-ink); background: var(--vy-surface-2); }
+.detail-tabs button.active { color: #fff; background: var(--vy-ink); box-shadow: 0 7px 18px rgba(31, 26, 20, 0.16); }
+.detail-tabs button:focus-visible { outline: 3px solid rgba(242, 135, 5, 0.38); outline-offset: 2px; }
+.tab-panel { min-width: 0; display: grid; gap: 14px; }
+.tab-panel:focus-visible { outline: 3px solid rgba(242, 135, 5, 0.3); outline-offset: 4px; border-radius: 12px; }
+.totals-card .metrics-list { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .profile-strip { padding: 18px; display: flex; align-items: center; gap: 16px; }
 .profile-photo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid #fff; box-shadow: var(--vy-shadow-sm); background: var(--vy-surface-2); }
 .profile-main { min-width: 0; flex: 1; }
@@ -952,6 +1053,8 @@ onMounted(loadBaseData);
 .summary-card p { margin-top: 5px; color: var(--vy-ink-2); font-size: 12px; line-height: 1.35; }
 .summary-card.warning .summary-icon { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); }
 .summary-card.warning strong { color: var(--vy-danger); }
+.summary-card.pv-own-card { border-color: rgba(242, 135, 5, 0.3); background: linear-gradient(145deg, var(--vy-surface), var(--vy-cream)); }
+.summary-card.pv-own-card strong { color: var(--vy-orange-deep); font-size: 22px; }
 .wallet-card { border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
 .wallet-card strong { font-size: 20px; }
 .info-card, .history-card { padding: 18px; min-width: 0; }
@@ -1024,6 +1127,29 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .empty-box { background: var(--vy-surface-2); color: var(--vy-ink-3); text-align: center; }
 .empty-box.compact { padding: 12px; }
 .loading-box { background: var(--vy-surface-2); color: var(--vy-ink-2); }
+
+@media (max-width: 980px) {
+  .workspace { padding: 24px 20px 40px; }
+  .page-header { align-items: flex-start; flex-direction: column; }
+  .header-actions { width: 100%; }
+  .period-filter { flex: 1 1 230px; }
+  .wallet-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .content-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .workspace { padding: 18px 14px 32px; }
+  .page-header h1 { font-size: 25px; }
+  .header-actions, .header-actions .vy-btn, .period-filter { width: 100%; }
+  .header-actions .vy-btn { justify-content: center; }
+  .profile-strip { align-items: flex-start; flex-wrap: wrap; }
+  .profile-status { width: 100%; padding-top: 12px; border-top: 1px solid var(--vy-line); text-align: left; }
+  .detail-tabs { margin-inline: -2px; }
+  .detail-tabs button { min-height: 46px; padding-inline: 16px; }
+  .wallet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary-grid { grid-template-columns: 1fr; }
+  .totals-card .metrics-list { grid-template-columns: 1fr; }
+}
 .error-box { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); }
 .spinning { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

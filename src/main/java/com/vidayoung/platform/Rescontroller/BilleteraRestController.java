@@ -4,6 +4,7 @@ import com.vidayoung.platform.Model.Dao.BeneficioActivacionCompraDao;
 import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.CompraDao;
+import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RangoDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
@@ -29,6 +30,7 @@ import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -59,6 +61,7 @@ public class BilleteraRestController {
     private final BilleteraService billeteraService;
     private final PersonaDao personaDao;
     private final CompraDao compraDao;
+    private final HistorialMembresiaDao historialMembresiaDao;
     private final BeneficioActivacionCompraDao beneficioActivacionCompraDao;
     private final CierreMensualBilleteraDao cierreMensualBilleteraDao;
     private final MovimientoBilleteraDao movimientoBilleteraDao;
@@ -110,8 +113,36 @@ public class BilleteraRestController {
 
         return ResponseEntity.ok(saldosPeriodo.values().stream()
                 .filter(PeriodoSaldo::tieneSaldo)
+                .filter(saldo -> membresiaActivaEnPeriodo(saldo.persona, periodoConsulta))
                 .map(saldo -> BilleteraSaldoResponse.desdePeriodo(saldo, periodoActivoSeleccionado))
                 .toList());
+    }
+
+    private boolean membresiaActivaEnPeriodo(Persona persona, PeriodoGestion periodo) {
+        if (persona == null || persona.getId() == null || periodo == null
+                || periodo.getFechaInicio() == null || periodo.getFechaFin() == null) {
+            return false;
+        }
+
+        LocalDateTime inicioPeriodo = periodo.getFechaInicio().atStartOfDay();
+        LocalDateTime finPeriodo = periodo.getFechaFin().atTime(LocalTime.MAX);
+        boolean tieneHistorialVigente = historialMembresiaDao
+                .existsByPersonaIdAndEstadoAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
+                        persona.getId(),
+                        Auditoria.ESTADO_ACTIVO,
+                        finPeriodo,
+                        inicioPeriodo
+                );
+        if (tieneHistorialVigente) {
+            return true;
+        }
+
+        return referidoDao.findByPersonaId(persona.getId())
+                .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
+                .filter(referido -> referido.getFechaInicioMembresia() != null && referido.getFechaFinMembresia() != null)
+                .map(referido -> !referido.getFechaInicioMembresia().isAfter(finPeriodo)
+                        && !referido.getFechaFinMembresia().isBefore(inicioPeriodo))
+                .orElse(false);
     }
 
     @GetMapping("/persona/{personaId}")
