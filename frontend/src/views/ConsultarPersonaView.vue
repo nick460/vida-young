@@ -125,6 +125,12 @@ function nombrePlanActivacion(m) {
   return membershipName(m) || "Membresía";
 }
 
+function mesKeyDesdeFecha(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 const planesActivacionMap = computed(() => {
   const map = new Map();
   cronologiaPlanesActivacion.value.forEach((p) => {
@@ -133,90 +139,33 @@ const planesActivacionMap = computed(() => {
   return map;
 });
 
-function mesKeyDesdeFecha(date) {
-  if (!date) return null;
-  const d = new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function esMesDentroDePeriodo(mesKey, periodo) {
-  if (!periodo?.fechaInicio || !periodo?.fechaFin) return false;
-  const mk = mesKeyDesdeFecha(periodo.fechaInicio);
-  const mkFin = mesKeyDesdeFecha(periodo.fechaFin);
-  const [y, m] = mesKey.split("-").map(Number);
-  const [yi, mi] = mk.split("-").map(Number);
-  const [yf, mf] = mkFin.split("-").map(Number);
-  return (y > yi || (y === yi && m >= mi)) && (y < yf || (y === yf && m <= mf));
-}
-
-function obtenerPlanParaMes(mesKey, todasMembresias) {
-  // Buscar la membresía cuya vigencia cubra este mes
-  let mejor = null;
-  todasMembresias.forEach((m) => {
-    if (!m || !m.fechaInicio || !m.fechaFin) return;
-    const inicio = new Date(m.fechaInicio);
-    inicio.setDate(1);
-    const fin = new Date(m.fechaFin);
-    fin.setDate(1);
-    const [y, mth] = mesKey.split("-").map(Number);
-    const mesObjetivo = new Date(y, mth - 1, 1);
-    if (mesObjetivo >= inicio && mesObjetivo <= fin) {
-      if (!mejor || new Date(m.fechaInicio) > new Date(mejor.fechaInicio)) {
-        mejor = m;
-      }
-    }
-  });
-  return mejor;
-}
-
 const cronologiaEvents = computed(() => {
   const events = [];
   const todasMembresias = Array.isArray(cronologiaMembresias.value) ? cronologiaMembresias.value : [];
   const periodosSistema = Array.isArray(periodos.value) ? periodos.value : [];
 
-  // Determinar rango de meses: desde fechaUnion hasta hoy
+  // Ordenar membresías por fecha de inicio ascendente
+  const membresiasOrdenadas = todasMembresias
+    .filter((m) => m && m.fechaInicio && m.fechaFin)
+    .sort((a, b) => new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime());
+
+  // Determinar rango de meses: desde fechaUnion hasta mes actual
   let fechaInicioRango = null;
   if (referido.value?.fechaUnion) {
     fechaInicioRango = new Date(referido.value.fechaUnion);
     fechaInicioRango.setDate(1);
-  } else if (todasMembresias.length > 0) {
-    fechaInicioRango = new Date(todasMembresias[0]?.fechaInicio || 0);
-    fechaInicioRango?.setDate(1);
+  } else if (membresiasOrdenadas.length > 0) {
+    fechaInicioRango = new Date(membresiasOrdenadas[0].fechaInicio);
+    fechaInicioRango.setDate(1);
   }
   const hoy = new Date();
   hoy.setDate(1);
   hoy.setMonth(hoy.getMonth() + 1); // incluir mes actual
 
-  // Coleccionar meses únicos del sistema que cubran el rango
-  const mesesSistema = new Map();
-  periodosSistema.forEach((p) => {
-    if (!p.fechaInicio || !p.fechaFin) return;
-    const inicio = new Date(p.fechaInicio);
-    inicio.setDate(1);
-    const fin = new Date(p.fechaFin);
-    fin.setDate(1);
-    let actual = new Date(inicio);
-    while (actual <= fin) {
-      const mk = mesKeyDesdeFecha(actual);
-      if (fechaInicioRango && actual < fechaInicioRango) {
-        actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
-        continue;
-      }
-      if (actual > hoy) {
-        actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
-        continue;
-      }
-      if (!mesesSistema.has(mk)) {
-        mesesSistema.set(mk, { fecha: new Date(actual), periodo: p });
-      }
-      actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
-    }
-  });
-
   // Evento de unión (se fusiona con membresía inicial si coincide en fecha)
   if (referido.value?.fechaUnion) {
     const fechaUnion = referido.value.fechaUnion;
-    const membresiaUnion = todasMembresias.find((m) => m && esMismaFecha(m.fechaInicio, fechaUnion));
+    const membresiaUnion = membresiasOrdenadas.find((m) => m && esMismaFecha(m.fechaInicio, fechaUnion));
 
     if (membresiaUnion) {
       const esActivacion = membresiaUnion.tipo === "ACTIVACION";
@@ -242,25 +191,63 @@ const cronologiaEvents = computed(() => {
   }
 
   // Generar evento de membresía por cada mes del sistema en el rango
-  mesesSistema.forEach((mesInfo) => {
-    const mesKey = mesKeyDesdeFecha(mesInfo.fecha);
-    const membresiaMes = obtenerPlanParaMes(mesKey, todasMembresias);
+  periodosSistema.forEach((p) => {
+    if (!p.fechaInicio || !p.fechaFin) return;
+    const inicio = new Date(p.fechaInicio);
+    inicio.setDate(1);
+    const fin = new Date(p.fechaFin);
+    fin.setDate(1);
+    let actual = new Date(inicio);
 
-    if (!membresiaMes) return; // no hay membresía vigente este mes
+    while (actual <= fin) {
+      const mk = mesKeyDesdeFecha(actual);
+      // Saltar meses antes de la fecha de unión
+      if (fechaInicioRango && actual < fechaInicioRango) {
+        actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
+        continue;
+      }
+      // Saltar meses futuros (más allá del mes actual)
+      if (actual > hoy) {
+        actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
+        continue;
+      }
 
-    const esActivacion = membresiaMes.tipo === "ACTIVACION";
-    const nombrePlan = nombrePlanActivacion(membresiaMes);
-    const finMes = ultimoDiaMes(mesInfo.fecha);
+      // Buscar la membresía vigente en este mes
+      let membresiaMes = null;
+      membresiasOrdenadas.forEach((m) => {
+        const inicioM = new Date(m.fechaInicio);
+        inicioM.setDate(1);
+        const finM = new Date(m.fechaFin);
+        finM.setDate(1);
+        const mesObjetivo = new Date(actual);
+        if (mesObjetivo >= inicioM && mesObjetivo <= finM) {
+          if (!membresiaMes || new Date(m.fechaInicio) > new Date(membresiaMes.fechaInicio)) {
+            membresiaMes = m;
+          }
+        }
+      });
 
-    events.push({
-      fecha: mesInfo.fecha,
-      tipo: esActivacion ? "activacion" : "membresia",
-      titulo: esActivacion ? `Activación: ${nombrePlan}` : nombrePlan,
-      detalle: `${membresiaMes.estadoMembresia || "Sin estado"} · ${formatDate(mesInfo.fecha)} a ${formatDate(finMes)}`,
-      monto: membresiaMes.precioPlan ? `Bs. ${money(membresiaMes.precioPlan)}` : null,
-      estado: membresiaMes.estadoMembresia,
-      icono: "BadgeCheck"
-    });
+      if (!membresiaMes) {
+        actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
+        continue;
+      }
+
+      const esActivacion = membresiaMes.tipo === "ACTIVACION";
+      const nombrePlan = nombrePlanActivacion(membresiaMes);
+      const finMes = ultimoDiaMes(actual);
+
+      events.push({
+        fecha: new Date(actual),
+        tipo: esActivacion ? "activacion" : "membresia",
+        titulo: esActivacion ? `Activación: ${nombrePlan}` : nombrePlan,
+        detalle: `${membresiaMes.estadoMembresia || "Sin estado"} · ${formatDate(actual)} a ${formatDate(finMes)}`,
+        monto: membresiaMes.precioPlan ? `Bs. ${money(membresiaMes.precioPlan)}` : null,
+        estado: membresiaMes.estadoMembresia,
+        icono: "BadgeCheck"
+      });
+
+      actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
+    }
   });
 
   cronologiaCompras.value.forEach((c) => {
