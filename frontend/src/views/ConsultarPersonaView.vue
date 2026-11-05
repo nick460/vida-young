@@ -158,13 +158,47 @@ const planesActivacionMap = computed(() => {
   return map;
 });
 
-const comprasDelMesSeleccionado = computed(() => {
-  if (!mesSeleccionado.value) return [];
+const mesSeleccionadoInfo = computed(() => {
+  if (!mesSeleccionado.value) return null;
   const mk = mesKeyDesdeFecha(mesSeleccionado.value);
-  return cronologiaCompras.value.filter((c) => {
-    if (!c || !c.fechaCompra) return false;
-    return mesKeyDesdeFecha(c.fechaCompra) === mk;
+  const inicio = new Date(mesSeleccionado.value);
+  inicio.setDate(1);
+  const fin = ultimoDiaMes(inicio);
+
+  const todasMembresias = Array.isArray(cronologiaMembresias.value) ? cronologiaMembresias.value : [];
+  const membresiasOrdenadas = todasMembresias
+    .filter((m) => m && m.fechaInicio && m.fechaFin)
+    .sort((a, b) => new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime());
+
+  let membresiaMes = null;
+  membresiasOrdenadas.forEach((m) => {
+    const inicioM = new Date(m.fechaInicio);
+    inicioM.setDate(1);
+    const finM = new Date(m.fechaFin);
+    finM.setDate(1);
+    const mesObjetivo = new Date(inicio);
+    if (mesObjetivo >= inicioM && mesObjetivo <= finM) {
+      if (!membresiaMes || new Date(m.fechaInicio) > new Date(membresiaMes.fechaInicio)) {
+        membresiaMes = m;
+      }
+    }
   });
+
+  const pvMes = pvPropioEnMes(mk, cronologiaCompras.value);
+  const nombrePlanPorPV = planActivacionPorPV(pvMes);
+
+  return {
+    mesKey: mk,
+    inicio,
+    fin,
+    membresia: membresiaMes,
+    pvMes,
+    nombrePlanPorPV,
+    compras: cronologiaCompras.value.filter((c) => {
+      if (!c || !c.fechaCompra) return false;
+      return mesKeyDesdeFecha(c.fechaCompra) === mk;
+    })
+  };
 });
 
 const cronologiaEvents = computed(() => {
@@ -218,7 +252,8 @@ const cronologiaEvents = computed(() => {
     }
   }
 
-  // Generar evento de membresía por cada mes del sistema en el rango
+  // Generar evento de membresía por cada mes del sistema en el rango (único por mes)
+  const mesesVistos = new Map();
   periodosSistema.forEach((p) => {
     if (!p.fechaInicio || !p.fechaFin) return;
     const inicio = new Date(p.fechaInicio);
@@ -239,6 +274,12 @@ const cronologiaEvents = computed(() => {
         actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
         continue;
       }
+      // Evitar duplicados: un mes solo se procesa una vez
+      if (mesesVistos.has(mk)) {
+        actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
+        continue;
+      }
+      mesesVistos.set(mk, actual);
 
       // Buscar la membresía vigente en este mes
       let membresiaMes = null;
@@ -287,7 +328,6 @@ const cronologiaEvents = computed(() => {
           });
         } else {
           // Sin membresía ni PV suficiente: mostrar como no activo
-          const finMes = ultimoDiaMes(actual);
           events.push({
             fecha: new Date(actual),
             tipo: "inactivo",
@@ -1248,16 +1288,25 @@ onMounted(loadBaseData);
                 </div>
               </section>
 
-              <section v-if="mesSeleccionado" class="vy-card history-card">
+              <section v-if="mesSeleccionadoInfo" class="vy-card history-card">
                 <header class="mes-detalle-header">
                   <h3>
-                    <span>{{ formatDate(mesSeleccionado) }}</span>
+                    <span>{{ formatDate(mesSeleccionadoInfo.inicio) }} a {{ formatDate(mesSeleccionadoInfo.fin) }}</span>
                     <button class="vy-btn vy-btn-ghost" type="button" @click="mesSeleccionado = null"><X :size="18" /></button>
                   </h3>
-                  <span>{{ comprasDelMesSeleccionado.length }} compra(s)</span>
                 </header>
+                <div class="mes-info">
+                  <div class="mes-info-item">
+                    <span class="label">Membresía:</span>
+                    <span class="value">{{ mesSeleccionadoInfo.membresia ? (mesSeleccionadoInfo.membresia.tipo === 'ACTIVACION' ? `Activación: ${nombrePlanActivacion(mesSeleccionadoInfo.membresia)}` : membershipName(mesSeleccionadoInfo.membresia)) : mesSeleccionadoInfo.nombrePlanPorPV || 'Sin membresía' }}</span>
+                  </div>
+                  <div class="mes-info-item">
+                    <span class="label">PV propio:</span>
+                    <span class="value">{{ money(mesSeleccionadoInfo.pvMes) }}</span>
+                  </div>
+                </div>
                 <div class="table-wrap">
-                  <table v-if="comprasDelMesSeleccionado.length">
+                  <table v-if="mesSeleccionadoInfo.compras.length">
                     <thead>
                       <tr>
                         <th>Fecha</th>
@@ -1268,7 +1317,7 @@ onMounted(loadBaseData);
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="c in comprasDelMesSeleccionado" :key="c.id">
+                      <tr v-for="c in mesSeleccionadoInfo.compras" :key="c.id">
                         <td>{{ formatDate(c.fechaCompra) }}</td>
                         <td>{{ compraProductos(c) || "Sin detalle" }}</td>
                         <td><span class="status-pill">{{ c.estadoCompra }}</span></td>
@@ -1525,4 +1574,8 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .mes-detalle-header { margin-bottom: 10px; }
 .mes-detalle-header h3 { margin: 0; font-size: 18px; font-weight: 900; }
 .mes-detalle-header h3 span { margin-right: 10px; }
+.mes-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.mes-info-item { padding: 10px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
+.mes-info-item .label { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; display: block; margin-bottom: 3px; }
+.mes-info-item .value { color: var(--vy-ink); font-size: 13px; font-weight: 900; }
 </style>
