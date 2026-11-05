@@ -1602,16 +1602,21 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .mes-info-item { padding: 10px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
 .mes-info-item .label { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; display: block; margin-bottom: 3px; }
 .mes-info-item .value { color: var(--vy-ink); font-size: 13px; font-weight: 900; }
-.mes-detalle-dialog { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.2); backdrop-filter: blur(10px); }
-.mes-detalle-dialog > .vy-card { width: min(860px, 95vw); max-height: calc(100vh - 40px); overflow-y: auto; padding: 24px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); }
-.mes-detalle-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--vy-line-2); }
-.mes-detalle-header h3 { margin: 0; font-size: 22px; font-weight: 900; }
-.mes-detalle-header h3 span { margin-right: 4px; color: var(--vy-ink-2); font-size: 16px; }
-.mes-detalle-header h3 span:first-child { color: var(--vy-ink); font-size: 17px; }
-.mes-detalle-header button { width: 38px; height: 38px; border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border: none; }
+.mes-detalle-dialog { position: fixed; inset: 0; z-index: 140; display: flex; align-items: center; justify-content: center; padding: 32px; background: rgba(31, 26, 20, 0.6); backdrop-filter: blur(8px); }
+.mes-detalle-dialog > .vy-card { width: min(860px, 92vw); max-height: calc(100vh - 40px); overflow-y: auto; padding: 0; border-radius: 24px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3); color: var(--vy-ink); overflow: hidden; }
+.mes-detalle-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 22px 28px 16px; border-bottom: 1px solid var(--vy-line-2); }
+.mes-detalle-header h3 { margin: 0; font-size: 20px; font-weight: 900; color: var(--vy-ink); }
+.mes-detalle-header h3 span { margin-right: 8px; color: var(--vy-ink-2); font-size: 15px; }
+.mes-detalle-header h3 span:first-child { color: var(--vy-ink); font-size: 17px; font-weight: 950; }
+.mes-detalle-header button { width: 36px; height: 36px; border-radius: 10px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--vy-line); transition: background 0.2s; }
+.mes-detalle-header button:hover { background: var(--vy-orange-deep); color: #fff; }
+.mes-detalle-dialog .mes-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; padding: 0 28px; }
+.mes-detalle-dialog .mes-info-item { padding: 16px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
+.mes-detalle-dialog .mes-info-item .label { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px; }
+.mes-detalle-dialog .mes-info-item .value { color: var(--vy-ink); font-size: 15px; font-weight: 950; }
+.mes-detalle-dialog .table-wrap { margin: 0 28px 28px; border: 1px solid var(--vy-line); border-radius: 12px; overflow: hidden; }
+.mes-detalle-dialog table { font-size: 13px; width: 100%; }
+.mes-detalle-dialog th { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vy-ink-3); background: var(--vy-surface-2); padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--vy-line-2); }
+.mes-detalle-dialog td { font-size: 13px; color: var(--vy-ink-2); border-bottom-color: var(--vy-line-2); padding: 12px 16px; }
+.mes-detalle-dialog tr:last-child td { border-bottom: none; }
 </style>
-
-
-
-
-
