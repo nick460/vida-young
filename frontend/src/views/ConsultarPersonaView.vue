@@ -33,6 +33,7 @@ const cronologiaCompras = ref([]);
 const recompensas = ref([]);
 const cronologiaMembresias = ref([]);
 const cronologiaPlanesActivacion = ref([]);
+const mesSeleccionado = ref(null);
 const retiros = ref([]);
 const movimientoSearch = ref("");
 const networkSearch = ref("");
@@ -155,6 +156,15 @@ const planesActivacionMap = computed(() => {
     if (p && p.id != null) map.set(String(p.id), p.nombre);
   });
   return map;
+});
+
+const comprasDelMesSeleccionado = computed(() => {
+  if (!mesSeleccionado.value) return [];
+  const mk = mesKeyDesdeFecha(mesSeleccionado.value);
+  return cronologiaCompras.value.filter((c) => {
+    if (!c || !c.fechaCompra) return false;
+    return mesKeyDesdeFecha(c.fechaCompra) === mk;
+  });
 });
 
 const cronologiaEvents = computed(() => {
@@ -1224,7 +1234,8 @@ onMounted(loadBaseData);
                   <div
                     v-for="(event, index) in cronologiaEvents"
                     :key="`${event.tipo}-${event.fecha}-${index}`"
-                    :class="['timeline-item', event.tipo]"
+                    :class="['timeline-item', event.tipo, { seleccionado: mesSeleccionado.value === event.fecha }]"
+                    @click="mesSeleccionado.value = mesSeleccionado.value === event.fecha ? null : event.fecha"
                   >
                     <div class="timeline-marker">{{ formatDateTime(event.fecha) }}</div>
                     <div class="timeline-content">
@@ -1238,6 +1249,39 @@ onMounted(loadBaseData);
                     </div>
                   </div>
                   <div v-if="!cronologiaEvents.length" class="empty-box compact">Sin eventos registrados.</div>
+                </div>
+              </section>
+
+              <section v-if="mesSeleccionado.value" class="vy-card history-card">
+                <header class="mes-detalle-header">
+                  <h3>
+                    <span>{{ formatDate(mesSeleccionado.value) }}</span>
+                    <button class="vy-btn vy-btn-ghost" type="button" @click="mesSeleccionado.value = null"><X :size="18" /></button>
+                  </h3>
+                  <span>{{ comprasDelMesSeleccionado.length }} compra(s)</span>
+                </header>
+                <div class="table-wrap">
+                  <table v-if="comprasDelMesSeleccionado.length">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Productos</th>
+                        <th>Estado</th>
+                        <th>Total</th>
+                        <th>PV/QP/CR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="c in comprasDelMesSeleccionado" :key="c.id">
+                        <td>{{ formatDate(c.fechaCompra) }}</td>
+                        <td>{{ compraProductos(c) || "Sin detalle" }}</td>
+                        <td><span class="status-pill">{{ c.estadoCompra }}</span></td>
+                        <td>Bs. {{ money(c.subtotal) }}</td>
+                        <td>{{ money(c.totalPv) }} / {{ money(c.totalQp) }} / {{ money(c.totalCr) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div v-else class="empty-box compact">No activo</div>
                 </div>
               </section>
             </section>
@@ -1477,4 +1521,10 @@ td { color: var(--vy-ink-2); font-weight: 700; }
   .summary-grid, .wallet-grid, .content-grid { grid-template-columns: 1fr; }
   .profile-status { text-align: left; }
 }
+.timeline-item.seleccionado { background: rgba(242, 135, 5, 0.08); border-radius: 8px; cursor: pointer; }
+.timeline-item { cursor: pointer; }
+.timeline-item:hover { background: rgba(242, 135, 5, 0.06); border-radius: 8px; }
+.mes-detalle-header { margin-bottom: 10px; }
+.mes-detalle-header h3 { margin: 0; font-size: 18px; font-weight: 900; }
+.mes-detalle-header h3 span { margin-right: 10px; }
 </style>
