@@ -255,57 +255,53 @@ const cronologiaEvents = computed(() => {
         }
       });
 
-      // Si no hay membresía registrada, calcular PV propio del mes desde compras
-      if (!membresiaMes) {
-        const pvMes = pvPropioEnMes(mk, cronologiaCompras.value);
-        const nombrePlanPorPV = planActivacionPorPV(pvMes);
-        if (!nombrePlanPorPV) {
-          actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
-          continue;
-        }
+      // Si hay membresía registrada, mostrarla
+      if (membresiaMes) {
+        const esActivacion = membresiaMes.tipo === "ACTIVACION";
+        const nombrePlan = nombrePlanActivacion(membresiaMes);
         const finMes = ultimoDiaMes(actual);
         events.push({
           fecha: new Date(actual),
-          tipo: "activacion",
-          titulo: `Activación: ${nombrePlanPorPV}`,
-          detalle: `PV propio del mes: ${money(pvMes)} · ${formatDate(actual)} a ${formatDate(finMes)}`,
-          monto: null,
-          estado: "Calculada",
+          tipo: esActivacion ? "activacion" : "membresia",
+          titulo: esActivacion ? `Activación: ${nombrePlan}` : nombrePlan,
+          detalle: `${membresiaMes.estadoMembresia || "Sin estado"} · ${formatDate(actual)} a ${formatDate(finMes)}`,
+          monto: membresiaMes.precioPlan ? `Bs. ${money(membresiaMes.precioPlan)}` : null,
+          estado: membresiaMes.estadoMembresia,
           icono: "BadgeCheck"
         });
-        actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
-        continue;
+      } else {
+        // No hay membresía registrada: calcular PV propio del mes desde compras
+        const pvMes = pvPropioEnMes(mk, cronologiaCompras.value);
+        const nombrePlanPorPV = planActivacionPorPV(pvMes);
+        const finMes = ultimoDiaMes(actual);
+
+        if (nombrePlanPorPV) {
+          events.push({
+            fecha: new Date(actual),
+            tipo: "activacion",
+            titulo: `Activación: ${nombrePlanPorPV}`,
+            detalle: `PV propio del mes: ${money(pvMes)} · ${formatDate(actual)} a ${formatDate(finMes)}`,
+            monto: null,
+            estado: "Calculada",
+            icono: "BadgeCheck"
+          });
+        } else {
+          // Sin membresía ni PV suficiente: mostrar como no activo
+          const finMes = ultimoDiaMes(actual);
+          events.push({
+            fecha: new Date(actual),
+            tipo: "inactivo",
+            titulo: "No activo",
+            detalle: `Sin membresía ni PV suficiente · ${formatDate(actual)} a ${formatDate(finMes)}`,
+            monto: null,
+            estado: "Inactivo",
+            icono: "X"
+          });
+        }
       }
-
-      const esActivacion = membresiaMes.tipo === "ACTIVACION";
-      const nombrePlan = nombrePlanActivacion(membresiaMes);
-      const finMes = ultimoDiaMes(actual);
-
-      events.push({
-        fecha: new Date(actual),
-        tipo: esActivacion ? "activacion" : "membresia",
-        titulo: esActivacion ? `Activación: ${nombrePlan}` : nombrePlan,
-        detalle: `${membresiaMes.estadoMembresia || "Sin estado"} · ${formatDate(actual)} a ${formatDate(finMes)}`,
-        monto: membresiaMes.precioPlan ? `Bs. ${money(membresiaMes.precioPlan)}` : null,
-        estado: membresiaMes.estadoMembresia,
-        icono: "BadgeCheck"
-      });
 
       actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
     }
-  });
-
-  cronologiaCompras.value.forEach((c) => {
-    if (!c) return;
-    events.push({
-      fecha: c.fechaCompra,
-      tipo: "compra",
-      titulo: `Compra #${c.id}`,
-      detalle: compraProductos(c) || "Sin detalle",
-      monto: c.subtotal ? `Bs. ${money(c.subtotal)}` : null,
-      estado: c.estadoCompra,
-      icono: "PackageCheck"
-    });
   });
 
   return events.sort((left, right) => new Date(right.fecha || 0).getTime() - new Date(left.fecha || 0).getTime());
@@ -1497,6 +1493,7 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .timeline-item.activacion::before { background: var(--vy-orange-deep); }
 .timeline-item.membresia::before { background: var(--vy-orange-deep); }
 .timeline-item.compra::before { background: var(--vy-ink); }
+.timeline-item.inactivo::before { background: rgba(194, 168, 133, 0.5); }
 .timeline-marker { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; margin-bottom: 2px; }
 .timeline-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .timeline-header strong { color: var(--vy-ink); font-size: 14px; font-weight: 900; }
@@ -1507,6 +1504,7 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .timeline-estado.validada { background: rgba(63, 143, 92, 0.12); color: var(--vy-success); border: 1px solid rgba(63, 143, 92, 0.2); }
 .timeline-estado.activa { background: rgba(63, 143, 92, 0.12); color: var(--vy-success); border: 1px solid rgba(63, 143, 92, 0.2); }
 .timeline-estado.vencida { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); border: 1px solid rgba(196, 69, 42, 0.2); }
+.timeline-estado.inactivo { background: rgba(194, 168, 133, 0.12); color: rgba(31, 26, 20, 0.45); border: 1px dashed rgba(194, 168, 133, 0.3); }
 .timeline-monto { font-size: 13px; font-weight: 950; color: var(--vy-orange-deep); }
 .error-box { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); }
 .spinning { animation: spin 0.8s linear infinite; }
