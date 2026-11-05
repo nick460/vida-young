@@ -131,6 +131,24 @@ function mesKeyDesdeFecha(date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function pvPropioEnMes(mesKey, compras) {
+  let pv = 0;
+  compras.forEach((c) => {
+    if (!c || !c.fechaCompra) return;
+    const mk = mesKeyDesdeFecha(c.fechaCompra);
+    if (mk === mesKey) {
+      pv += Number(c.totalPv || 0);
+    }
+  });
+  return pv;
+}
+
+function planActivacionPorPV(pv) {
+  if (pv >= 400) return "Activacion Ultra";
+  if (pv >= 200) return "Activacion Estandar";
+  return null;
+}
+
 const planesActivacionMap = computed(() => {
   const map = new Map();
   cronologiaPlanesActivacion.value.forEach((p) => {
@@ -227,7 +245,24 @@ const cronologiaEvents = computed(() => {
         }
       });
 
+      // Si no hay membresía registrada, calcular PV propio del mes desde compras
       if (!membresiaMes) {
+        const pvMes = pvPropioEnMes(mk, cronologiaCompras.value);
+        const nombrePlanPorPV = planActivacionPorPV(pvMes);
+        if (!nombrePlanPorPV) {
+          actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
+          continue;
+        }
+        const finMes = ultimoDiaMes(actual);
+        events.push({
+          fecha: new Date(actual),
+          tipo: "activacion",
+          titulo: `Activación: ${nombrePlanPorPV}`,
+          detalle: `PV propio del mes: ${money(pvMes)} · ${formatDate(actual)} a ${formatDate(finMes)}`,
+          monto: null,
+          estado: "Calculada",
+          icono: "BadgeCheck"
+        });
         actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
         continue;
       }
