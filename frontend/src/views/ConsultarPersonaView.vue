@@ -1234,8 +1234,8 @@ onMounted(loadBaseData);
                   <div
                     v-for="(event, index) in cronologiaEvents"
                     :key="`${event.tipo}-${event.fecha}-${index}`"
-                    :class="['timeline-item', event.tipo, { seleccionado: mesSeleccionado.value === event.fecha }]"
-                    @click="mesSeleccionado.value = mesSeleccionado.value === event.fecha ? null : event.fecha"
+                    :class="['timeline-item', event.tipo, { seleccionado: mesSeleccionado === event.fecha }]"
+                    @click="mesSeleccionado = mesSeleccionado === event.fecha ? null : event.fecha"
                   >
                     <div class="timeline-marker">{{ formatDateTime(event.fecha) }}</div>
                     <div class="timeline-content">
@@ -1252,11 +1252,11 @@ onMounted(loadBaseData);
                 </div>
               </section>
 
-              <section v-if="mesSeleccionado.value" class="vy-card history-card">
+              <section v-if="mesSeleccionado" class="vy-card history-card">
                 <header class="mes-detalle-header">
                   <h3>
-                    <span>{{ formatDate(mesSeleccionado.value) }}</span>
-                    <button class="vy-btn vy-btn-ghost" type="button" @click="mesSeleccionado.value = null"><X :size="18" /></button>
+                    <span>{{ formatDate(mesSeleccionado) }}</span>
+                    <button class="vy-btn vy-btn-ghost" type="button" @click="mesSeleccionado = null"><X :size="18" /></button>
                   </h3>
                   <span>{{ comprasDelMesSeleccionado.length }} compra(s)</span>
                 </header>
