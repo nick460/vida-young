@@ -1602,9 +1602,13 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .mes-info-item { padding: 10px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
 .mes-info-item .label { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; display: block; margin-bottom: 3px; }
 .mes-info-item .value { color: var(--vy-ink); font-size: 13px; font-weight: 900; }
-.mes-detalle-dialog { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(31, 26, 20, 0.5); backdrop-filter: blur(4px); padding: 24px; }
-.mes-detalle-dialog > .vy-card { width: min(95vw, 720px); max-height: 85vh; overflow-y: auto; }
-.mes-detalle-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.mes-detalle-dialog { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(31, 26, 20, 0.5); backdrop-filter: blur(6px); }
+.mes-detalle-dialog > .vy-card { width: min(860px, 95vw); max-height: calc(100vh - 40px); overflow-y: auto; padding: 24px; border-radius: 22px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); }
+.mes-detalle-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--vy-line-2); }
+.mes-detalle-header h3 { margin: 0; font-size: 22px; font-weight: 900; }
+.mes-detalle-header h3 span { margin-right: 4px; color: var(--vy-ink-2); font-size: 16px; }
+.mes-detalle-header h3 span:first-child { color: var(--vy-ink); font-size: 17px; }
+.mes-detalle-header button { width: 38px; height: 38px; border-radius: 12px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border: none; }
 </style>
 
 
