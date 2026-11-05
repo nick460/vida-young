@@ -30,7 +30,10 @@ public class PlanActivacionRestController {
     @GetMapping
     public ResponseEntity<List<PlanActivacion>> listar() {
         List<PlanActivacion> data = planActivacionService.listar();
-        log.info("[DEBUG-PLANES-ACTIVACION] count={} data={}", data.size(), data);
+        String resumen = data.stream().map(p -> String.format(
+            "{id=%s, nombre=%s, pvMinimo=%s}", p.getId(), p.getNombre(), p.getPvMinimoMensual()
+        )).toList().toString();
+        log.info("[DEBUG-PLANES-ACTIVACION] count={} data=[{}]", data.size(), resumen);
         return ResponseEntity.ok(data);
     }
 

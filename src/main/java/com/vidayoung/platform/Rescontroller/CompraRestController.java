@@ -54,7 +54,11 @@ public class CompraRestController {
             @RequestParam(required = false) Long periodoId
     ) {
         List<Compra> data = compraService.listarPorPersonaYPeriodo(personaId, periodoId);
-        log.info("[DEBUG-COMPRAS] personaId={} periodoId={} count={} data={}", personaId, periodoId, data.size(), data);
+        String resumen = data.stream().map(c -> String.format(
+            "{id=%s, fechaCompra=%s, estadoCompra=%s, subtotal=%s}",
+            c.getId(), c.getFechaCompra(), c.getEstadoCompra(), c.getSubtotal()
+        )).toList().toString();
+        log.info("[DEBUG-COMPRAS] personaId={} periodoId={} count={} data=[{}]", personaId, periodoId, data.size(), resumen);
         return ResponseEntity.ok(data);
     }
 

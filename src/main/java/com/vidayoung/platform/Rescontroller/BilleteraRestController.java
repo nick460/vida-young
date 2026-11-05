@@ -222,7 +222,12 @@ public class BilleteraRestController {
     @GetMapping("/persona/{personaId}/membresias")
     public ResponseEntity<List<HistorialMembresia>> membresiasPorPersona(@PathVariable Long personaId) {
         List<HistorialMembresia> data = billeteraService.listarHistorialMembresias(personaId);
-        log.info("[DEBUG-MEMBRESIAS] personaId={} count={} data={}", personaId, data.size(), data);
+        String resumen = data.stream().map(m -> String.format(
+            "{id=%s, fechaInicio=%s, fechaFin=%s, refTipo=%s, refId=%s, estado=%s, precioPlan=%s}",
+            m.getId(), m.getFechaInicio(), m.getFechaFin(), m.getReferenciaTipo(), m.getReferenciaId(),
+            m.getEstadoMembresia(), m.getPrecioPlan()
+        )).toList().toString();
+        log.info("[DEBUG-MEMBRESIAS] personaId={} count={} data=[{}]", personaId, data.size(), resumen);
         return ResponseEntity.ok(data);
     }
 
