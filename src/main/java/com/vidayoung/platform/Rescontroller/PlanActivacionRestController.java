@@ -6,6 +6,7 @@ import com.vidayoung.platform.Model.Entity.PlanActivacionNivel;
 import com.vidayoung.platform.Model.Service.PlanActivacionService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,13 +22,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/planes-activacion")
 @RequiredArgsConstructor
+@Slf4j
 public class PlanActivacionRestController {
 
     private final PlanActivacionService planActivacionService;
 
     @GetMapping
     public ResponseEntity<List<PlanActivacion>> listar() {
-        return ResponseEntity.ok(planActivacionService.listar());
+        List<PlanActivacion> data = planActivacionService.listar();
+        log.info("[DEBUG-PLANES-ACTIVACION] count={} data={}", data.size(), data);
+        return ResponseEntity.ok(data);
     }
 
     @GetMapping("/{id}")

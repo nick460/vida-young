@@ -42,6 +42,9 @@ import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -56,6 +59,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/billeteras")
 @RequiredArgsConstructor
+@Slf4j
 public class BilleteraRestController {
 
     private final BilleteraService billeteraService;
@@ -217,7 +221,9 @@ public class BilleteraRestController {
 
     @GetMapping("/persona/{personaId}/membresias")
     public ResponseEntity<List<HistorialMembresia>> membresiasPorPersona(@PathVariable Long personaId) {
-        return ResponseEntity.ok(billeteraService.listarHistorialMembresias(personaId));
+        List<HistorialMembresia> data = billeteraService.listarHistorialMembresias(personaId);
+        log.info("[DEBUG-MEMBRESIAS] personaId={} count={} data={}", personaId, data.size(), data);
+        return ResponseEntity.ok(data);
     }
 
     @GetMapping("/persona/{personaId}/cierres")

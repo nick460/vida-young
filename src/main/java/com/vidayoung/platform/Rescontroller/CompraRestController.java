@@ -14,6 +14,7 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/compras")
 @RequiredArgsConstructor
+@Slf4j
 public class CompraRestController {
 
     private static final Path PAYMENT_UPLOAD_DIR = Paths.get("uploads", "comprobantes");
@@ -51,7 +53,9 @@ public class CompraRestController {
             @PathVariable Long personaId,
             @RequestParam(required = false) Long periodoId
     ) {
-        return ResponseEntity.ok(compraService.listarPorPersonaYPeriodo(personaId, periodoId));
+        List<Compra> data = compraService.listarPorPersonaYPeriodo(personaId, periodoId);
+        log.info("[DEBUG-COMPRAS] personaId={} periodoId={} count={} data={}", personaId, periodoId, data.size(), data);
+        return ResponseEntity.ok(data);
     }
 
     @GetMapping
