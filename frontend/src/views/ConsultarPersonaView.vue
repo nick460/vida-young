@@ -93,28 +93,55 @@ const membresias = computed(() => (walletSummary.value?.membresias || []).filter
 const cierres = computed(() => (walletSummary.value?.cierresMensuales || []).filter(cierreInSelectedPeriod));
 const periodoActivo = computed(() => selectedPeriodo.value || walletSummary.value?.periodoActivo || null);
 
+function esMismaFecha(a, b) {
+  if (!a || !b) return false;
+  const da = new Date(a);
+  const db = new Date(b);
+  return da.getFullYear() === db.getFullYear()
+    && da.getMonth() === db.getMonth()
+    && da.getDate() === db.getDate();
+}
+
 const cronologiaEvents = computed(() => {
   const events = [];
+  const todasMembresias = Array.isArray(walletSummary.value?.membresias) ? walletSummary.value.membresias : [];
+  const membresiasUsadas = new Set();
 
   if (referido.value?.fechaUnion) {
-    events.push({
-      fecha: referido.value.fechaUnion,
-      tipo: "union",
-      titulo: "Se unió a Vidayoung",
-      detalle: "Ingreso a la plataforma",
-      icono: "UserRound"
-    });
+    const fechaUnion = referido.value.fechaUnion;
+    const membresiaUnion = todasMembresias.find((m) => m && esMismaFecha(m.fechaInicio, fechaUnion));
+
+    if (membresiaUnion) {
+      membresiasUsadas.add(membresiaUnion.id);
+      events.push({
+        fecha: fechaUnion,
+        tipo: "union",
+        titulo: "Se unió y activó membresía",
+        detalle: `${membershipName(membresiaUnion) || "Membresía"} · ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
+        monto: membresiaUnion.precioPlan ? `Bs. ${money(membresiaUnion.precioPlan)}` : null,
+        estado: membresiaUnion.estadoMembresia,
+        icono: "UserRound"
+      });
+    } else {
+      events.push({
+        fecha: fechaUnion,
+        tipo: "union",
+        titulo: "Se unió a Vidayoung",
+        detalle: "Ingreso a la plataforma",
+        icono: "UserRound"
+      });
+    }
   }
 
-  const todasMembresias = Array.isArray(walletSummary.value?.membresias) ? walletSummary.value.membresias : [];
   todasMembresias.forEach((m) => {
-    if (!m) return;
+    if (!m || membresiasUsadas.has(m.id)) return;
     events.push({
       fecha: m.fechaInicio,
       tipo: m.tipo === "ACTIVACION" ? "activacion" : "membresia",
       titulo: membershipName(m) || "Membresía",
       detalle: `${m.estadoMembresia || "Sin estado"} · ${formatDate(m.fechaInicio)} a ${formatDate(m.fechaFin)}`,
       monto: m.precioPlan ? `Bs. ${money(m.precioPlan)}` : null,
+      estado: m.estadoMembresia,
       icono: "BadgeCheck"
     });
   });
@@ -1280,6 +1307,8 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .timeline-estado { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 6px; display: inline-block; margin-bottom: 4px; }
 .timeline-estado.anulada { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); border: 1px solid rgba(196, 69, 42, 0.2); }
 .timeline-estado.validada { background: rgba(63, 143, 92, 0.12); color: var(--vy-success); border: 1px solid rgba(63, 143, 92, 0.2); }
+.timeline-estado.activa { background: rgba(63, 143, 92, 0.12); color: var(--vy-success); border: 1px solid rgba(63, 143, 92, 0.2); }
+.timeline-estado.vencida { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); border: 1px solid rgba(196, 69, 42, 0.2); }
 .timeline-monto { font-size: 13px; font-weight: 950; color: var(--vy-orange-deep); }
 .error-box { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); }
 .spinning { animation: spin 0.8s linear infinite; }
