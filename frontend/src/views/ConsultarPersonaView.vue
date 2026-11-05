@@ -34,6 +34,7 @@ const recompensas = ref([]);
 const cronologiaMembresias = ref([]);
 const cronologiaPlanesActivacion = ref([]);
 const mesSeleccionado = ref(null);
+const mesDialog = ref(null);
 const retiros = ref([]);
 const movimientoSearch = ref("");
 const networkSearch = ref("");
@@ -133,8 +134,20 @@ function mesKeyDesdeFecha(date) {
 }
 
 function isMesSeleccionado(fecha) {
-  if (!mesSeleccionado) return false;
-  return mesKeyDesdeFecha(mesSeleccionado) === mesKeyDesdeFecha(fecha);
+  if (!mesSeleccionado.value) return false;
+  return mesKeyDesdeFecha(mesSeleccionado.value) === mesKeyDesdeFecha(fecha);
+}
+
+function cerrarMesDialog() {
+  mesSeleccionado.value = null;
+}
+
+function seleccionarMes(fecha) {
+  if (isMesSeleccionado(fecha)) {
+    mesSeleccionado.value = null;
+  } else {
+    mesSeleccionado.value = fecha;
+  }
 }
 
 function pvPropioEnMes(mesKey, compras) {
@@ -1276,7 +1289,7 @@ onMounted(loadBaseData);
                     v-for="(event, index) in cronologiaEvents"
                     :key="`${event.tipo}-${event.fecha}-${index}`"
                     :class="['timeline-item', event.tipo, { seleccionado: isMesSeleccionado(event.fecha) }]"
-                    @click="mesSeleccionado = isMesSeleccionado(event.fecha) ? null : event.fecha"
+                    @click="seleccionarMes(event.fecha)"
                   >
                     <div class="timeline-marker">{{ formatDateTime(event.fecha) }}</div>
                     <div class="timeline-content">
@@ -1293,11 +1306,17 @@ onMounted(loadBaseData);
                 </div>
               </section>
 
-              <section v-if="mesSeleccionadoInfo" class="vy-card history-card">
+              <dialog
+                v-if="mesSeleccionadoInfo"
+                class="mes-detalle-dialog"
+                ref="mesDialog"
+                @click="($event.target === mesDialog) && cerrarMesDialog()"
+                @close="cerrarMesDialog()"
+              >
                 <header class="mes-detalle-header">
                   <h3>
                     <span>{{ formatDate(mesSeleccionadoInfo.inicio) }} a {{ formatDate(mesSeleccionadoInfo.fin) }}</span>
-                    <button class="vy-btn vy-btn-ghost" type="button" @click="mesSeleccionado = null"><X :size="18" /></button>
+                    <button class="vy-btn vy-btn-ghost" type="button" @click="cerrarMesDialog()"><X :size="18" /></button>
                   </h3>
                 </header>
                 <div class="mes-info">
@@ -1333,7 +1352,7 @@ onMounted(loadBaseData);
                   </table>
                   <div v-else class="empty-box compact">No activo</div>
                 </div>
-              </section>
+              </dialog>
             </section>
           </template>
       </section>
@@ -1583,4 +1602,7 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .mes-info-item { padding: 10px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
 .mes-info-item .label { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; display: block; margin-bottom: 3px; }
 .mes-info-item .value { color: var(--vy-ink); font-size: 13px; font-weight: 900; }
+.mes-detalle-dialog { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(31, 26, 20, 0.5); backdrop-filter: blur(4px); padding: 24px; }
+.mes-detalle-dialog > .vy-card { width: min(95vw, 720px); max-height: 85vh; overflow-y: auto; }
+.mes-detalle-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 </style>
