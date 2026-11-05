@@ -16,6 +16,20 @@ public interface MovimientoBilleteraDao extends JpaRepository<MovimientoBilleter
 
     @Query("""
             select m from MovimientoBilletera m
+            where m.billetera.persona.id = :personaId
+            and m.periodo.id = :periodoId
+            and m.tipo = :tipo
+            and m.estado = 'ACTIVO'
+            order by m.fechaRegistro desc
+            """)
+    List<MovimientoBilletera> findByBilleteraPersonaIdAndPeriodoIdAndTipoOrderByFechaRegistroDesc(
+            @Param("personaId") Long personaId,
+            @Param("periodoId") Long periodoId,
+            @Param("tipo") String tipo
+    );
+
+    @Query("""
+            select m from MovimientoBilletera m
             join fetch m.billetera b
             join fetch b.persona p
             where m.periodo.id = :periodoId

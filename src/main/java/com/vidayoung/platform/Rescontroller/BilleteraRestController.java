@@ -5,6 +5,7 @@ import com.vidayoung.platform.Model.Dao.PersonaDao;
 import com.vidayoung.platform.Model.Dao.CierreMensualBilleteraDao;
 import com.vidayoung.platform.Model.Dao.CompraDao;
 import com.vidayoung.platform.Model.Dao.HistorialMembresiaDao;
+import com.vidayoung.platform.Model.Dao.PlanActivacionDao;
 import com.vidayoung.platform.Model.Dao.MovimientoBilleteraDao;
 import com.vidayoung.platform.Model.Dao.RangoDao;
 import com.vidayoung.platform.Model.Dao.RecompensaDao;
@@ -75,6 +76,7 @@ public class BilleteraRestController {
     private final RetiroBilleteraDetalleDao retiroBilleteraDetalleDao;
     private final GestionPeriodoService gestionPeriodoService;
     private final ReferidoDao referidoDao;
+    private final PlanActivacionDao planActivacionDao;
 
     @GetMapping("/saldos")
     public ResponseEntity<List<BilleteraSaldoResponse>> listarSaldos(@RequestParam(required = false) Long periodoId) {
@@ -117,12 +119,12 @@ public class BilleteraRestController {
 
         return ResponseEntity.ok(saldosPeriodo.values().stream()
                 .filter(PeriodoSaldo::tieneSaldo)
-                .filter(saldo -> membresiaActivaEnPeriodo(saldo.persona, periodoConsulta))
+                .filter(saldo -> membresiaActivaEnPeriodo(saldo.persona, periodoConsulta, periodoConsultaId))
                 .map(saldo -> BilleteraSaldoResponse.desdePeriodo(saldo, periodoActivoSeleccionado))
                 .toList());
     }
 
-    private boolean membresiaActivaEnPeriodo(Persona persona, PeriodoGestion periodo) {
+    private boolean membresiaActivaEnPeriodo(Persona persona, PeriodoGestion periodo, Long periodoId) {
         if (persona == null || persona.getId() == null || periodo == null
                 || periodo.getFechaInicio() == null || periodo.getFechaFin() == null) {
             return false;
@@ -130,6 +132,8 @@ public class BilleteraRestController {
 
         LocalDateTime inicioPeriodo = periodo.getFechaInicio().atStartOfDay();
         LocalDateTime finPeriodo = periodo.getFechaFin().atTime(LocalTime.MAX);
+
+        // 1. Miembro con membresía vigente (tipo AFILIACION o PV_ACTIVACION)
         boolean tieneHistorialVigente = historialMembresiaDao
                 .existsByPersonaIdAndEstadoAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
                         persona.getId(),
@@ -141,12 +145,29 @@ public class BilleteraRestController {
             return true;
         }
 
+        // 2. Sin membresía vigente, pero tiene PV propio suficiente para activación
         return referidoDao.findByPersonaId(persona.getId())
                 .filter(referido -> Auditoria.ESTADO_ACTIVO.equals(referido.getEstado()))
                 .filter(referido -> referido.getFechaInicioMembresia() != null && referido.getFechaFinMembresia() != null)
                 .map(referido -> !referido.getFechaInicioMembresia().isAfter(finPeriodo)
                         && !referido.getFechaFinMembresia().isBefore(inicioPeriodo))
-                .orElse(false);
+                .orElse(false)
+                || tienePvPropioParaActivacion(persona.getId(), periodo.getId());
+    }
+
+    private boolean tienePvPropioParaActivacion(Long personaId, Long periodoId) {
+        if (personaId == null || periodoId == null) {
+            return false;
+        }
+        BigDecimal pvPropio = movimientoBilleteraDao.findByBilleteraPersonaIdAndPeriodoIdAndTipoOrderByFechaRegistroDesc(
+                personaId, periodoId, MovimientoBilletera.TIPO_PV
+        ).stream()
+                .filter(m -> Auditoria.ESTADO_ACTIVO.equals(m.getEstado()))
+                .map(MovimientoBilletera::getMonto)
+                .map(this::zeroIfNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Umbral mínimo para activación: plan Estandar requiere 200 PV
+        return pvPropio.compareTo(BigDecimal.valueOf(200)) >= 0;
     }
 
     @GetMapping("/persona/{personaId}")
