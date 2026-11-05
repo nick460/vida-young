@@ -5,6 +5,7 @@ import {
   BadgeCheck,
   CalendarClock,
   Network,
+  PackageCheck,
   RefreshCw,
   Search,
   UserRound,
@@ -43,7 +44,8 @@ const detailTabs = [
   { id: "billetera", label: "Billetera" },
   { id: "red", label: "Red" },
   { id: "actividad", label: "Actividad" },
-  { id: "historial", label: "Historial" }
+  { id: "historial", label: "Historial" },
+  { id: "cronologia", label: "Cronología" }
 ];
 
 const selectedPersona = computed(() =>
@@ -89,6 +91,48 @@ const movimientos = computed(() => walletSummary.value?.movimientos || []);
 const membresias = computed(() => (walletSummary.value?.membresias || []).filter(membershipInSelectedPeriod));
 const cierres = computed(() => (walletSummary.value?.cierresMensuales || []).filter(cierreInSelectedPeriod));
 const periodoActivo = computed(() => selectedPeriodo.value || walletSummary.value?.periodoActivo || null);
+
+const cronologiaEvents = computed(() => {
+  const events = [];
+
+  if (referido.value?.fechaUnion) {
+    events.push({
+      fecha: referido.value.fechaUnion,
+      tipo: "union",
+      titulo: "Se unió a Vidayoung",
+      detalle: "Ingreso a la plataforma",
+      icono: "UserRound"
+    });
+  }
+
+  const todasMembresias = Array.isArray(walletSummary.value?.membresias) ? walletSummary.value.membresias : [];
+  todasMembresias.forEach((m) => {
+    if (!m) return;
+    events.push({
+      fecha: m.fechaInicio,
+      tipo: m.tipo === "ACTIVACION" ? "activacion" : "membresia",
+      titulo: membershipName(m) || "Membresía",
+      detalle: `${m.estadoMembresia || "Sin estado"} · ${formatDate(m.fechaInicio)} a ${formatDate(m.fechaFin)}`,
+      monto: m.precioPlan ? `Bs. ${money(m.precioPlan)}` : null,
+      icono: "BadgeCheck"
+    });
+  });
+
+  compras.value.forEach((c) => {
+    if (!c) return;
+    events.push({
+      fecha: c.fechaCompra,
+      tipo: "compra",
+      titulo: `Compra #${c.id}`,
+      detalle: compraProductos(c) || "Sin detalle",
+      monto: c.subtotal ? `Bs. ${money(c.subtotal)}` : null,
+      estado: c.estadoCompra,
+      icono: "PackageCheck"
+    });
+  });
+
+  return events.sort((left, right) => new Date(right.fecha || 0).getTime() - new Date(left.fecha || 0).getTime());
+});
 const membresiaActivaEnPeriodo = computed(() => {
   if (membresias.value.length > 0) return true;
   if (!selectedPeriodo.value) return Boolean(referido.value?.membresiaActiva);
@@ -934,7 +978,6 @@ onMounted(loadBaseData);
               </div>
             </section>
             </section>
-
             <section
               v-show="activeTab === 'historial'"
               id="panel-historial"
@@ -972,6 +1015,40 @@ onMounted(loadBaseData);
                 </div>
               </article>
             </section>
+            </section>
+            <section
+              v-show="activeTab === 'cronologia'"
+              id="panel-cronologia"
+              class="tab-panel"
+              role="tabpanel"
+              tabindex="0"
+              aria-labelledby="tab-cronologia"
+            >
+              <section class="vy-card history-card">
+                <header>
+                  <h3>Cronología</h3>
+                  <span>{{ cronologiaEvents.length }} eventos registrados</span>
+                </header>
+                <div class="timeline">
+                  <div
+                    v-for="(event, index) in cronologiaEvents"
+                    :key="`${event.tipo}-${event.fecha}-${index}`"
+                    :class="['timeline-item', event.tipo]"
+                  >
+                    <div class="timeline-marker">{{ formatDateTime(event.fecha) }}</div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <strong>{{ event.titulo }}</strong>
+                        <span class="timeline-date">{{ formatDateTime(event.fecha) }}</span>
+                      </div>
+                      <div class="timeline-detail">{{ event.detalle }}</div>
+                      <div v-if="event.estado" :class="['timeline-estado', String(event.estado).toLowerCase()]">{{ event.estado }}</div>
+                      <div v-if="event.monto" class="timeline-monto">{{ event.monto }}</div>
+                    </div>
+                  </div>
+                  <div v-if="!cronologiaEvents.length" class="empty-box compact">Sin eventos registrados.</div>
+                </div>
+              </section>
             </section>
           </template>
       </section>
@@ -1167,6 +1244,33 @@ td { color: var(--vy-ink-2); font-weight: 700; }
   .summary-grid { grid-template-columns: 1fr; }
   .totals-card .metrics-list { grid-template-columns: 1fr; }
 }
+.timeline { position: relative; padding: 6px 0 24px 30px; border-left: 2px solid var(--vy-line); }
+.timeline-item { position: relative; margin-bottom: 20px; padding-left: 6px; }
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -40px;
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--vy-orange);
+  border: 2px solid #fff;
+  box-shadow: var(--vy-shadow-sm);
+}
+.timeline-item.union::before { background: var(--vy-success); }
+.timeline-item.activacion::before { background: var(--vy-orange-deep); }
+.timeline-item.membresia::before { background: var(--vy-orange-deep); }
+.timeline-item.compra::before { background: var(--vy-ink); }
+.timeline-marker { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; margin-bottom: 2px; }
+.timeline-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.timeline-header strong { color: var(--vy-ink); font-size: 14px; font-weight: 900; }
+.timeline-date { color: var(--vy-ink-3); font-size: 11px; font-weight: 800; }
+.timeline-detail { color: var(--vy-ink-2); font-size: 13px; margin-bottom: 4px; line-height: 1.4; }
+.timeline-estado { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 6px; display: inline-block; margin-bottom: 4px; }
+.timeline-estado.anulada { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); border: 1px solid rgba(196, 69, 42, 0.2); }
+.timeline-estado.validada { background: rgba(63, 143, 92, 0.12); color: var(--vy-success); border: 1px solid rgba(63, 143, 92, 0.2); }
+.timeline-monto { font-size: 13px; font-weight: 950; color: var(--vy-orange-deep); }
 .error-box { background: rgba(196, 69, 42, 0.1); color: var(--vy-danger); }
 .spinning { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
