@@ -32,6 +32,7 @@ const compras = ref([]);
 const cronologiaCompras = ref([]);
 const recompensas = ref([]);
 const cronologiaMembresias = ref([]);
+const cronologiaPlanesActivacion = ref([]);
 const retiros = ref([]);
 const movimientoSearch = ref("");
 const networkSearch = ref("");
@@ -115,6 +116,23 @@ function ultimoDiaMes(date) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
+function nombrePlanActivacion(m) {
+  if (!m) return membershipName(m) || "Membresía";
+  if (m.referencia_tipo === "PV_ACTIVACION" && m.referencia_id != null) {
+    const nombre = planesActivacionMap.value.get(String(m.referencia_id));
+    if (nombre) return nombre;
+  }
+  return membershipName(m) || "Membresía";
+}
+
+const planesActivacionMap = computed(() => {
+  const map = new Map();
+  cronologiaPlanesActivacion.value.forEach((p) => {
+    if (p && p.id != null) map.set(String(p.id), p.nombre);
+  });
+  return map;
+});
+
 const cronologiaEvents = computed(() => {
   const events = [];
   const todasMembresias = Array.isArray(cronologiaMembresias.value) ? cronologiaMembresias.value : [];
@@ -131,11 +149,12 @@ const cronologiaEvents = computed(() => {
 
     if (membresiaUnion) {
       const esActivacion = membresiaUnion.tipo === "ACTIVACION";
+      const nombrePlan = nombrePlanActivacion(membresiaUnion);
       events.push({
         fecha: fechaUnion,
         tipo: "union",
         titulo: esActivacion ? "Se unió y activó membresía" : "Se unió a Vidayoung",
-        detalle: `${membershipName(membresiaUnion) || "Membresía"} · ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
+        detalle: `${nombrePlan} · ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
         monto: membresiaUnion.precioPlan ? `Bs. ${money(membresiaUnion.precioPlan)}` : null,
         estado: membresiaUnion.estadoMembresia,
         icono: "UserRound"
@@ -154,6 +173,7 @@ const cronologiaEvents = computed(() => {
   // Cada membresía genera un evento por mes que cubra (mes a mes)
   membresiasOrdenadas.forEach((m) => {
     const esMismoQueUnion = referido.value?.fechaUnion && esMismaFecha(m.fechaInicio, referido.value.fechaUnion);
+    const nombrePlan = nombrePlanActivacion(m);
     let actual = new Date(m.fechaInicio);
     actual.setDate(1); // primer día del mes
     const fin = new Date(m.fechaFin);
@@ -164,7 +184,7 @@ const cronologiaEvents = computed(() => {
       mesIndex.push({
         fecha: new Date(actual),
         tipo: m.tipo === "ACTIVACION" ? "activacion" : "membresia",
-        titulo: (m.tipo === "ACTIVACION" ? `Activación: ${membershipName(m) || "Membresía"}` : membershipName(m) || "Membresía"),
+        titulo: (m.tipo === "ACTIVACION" ? `Activación: ${nombrePlan}` : nombrePlan),
         detalle: `${m.estadoMembresia || "Sin estado"} · ${formatDate(actual)} a ${formatDate(finMes)}`,
         monto: m.precioPlan ? `Bs. ${money(m.precioPlan)}` : null,
         estado: m.estadoMembresia,
@@ -196,6 +216,7 @@ const cronologiaEvents = computed(() => {
 
   return events.sort((left, right) => new Date(right.fecha || 0).getTime() - new Date(left.fecha || 0).getTime());
 });
+
 const membresiaActivaEnPeriodo = computed(() => {
   if (membresias.value.length > 0) return true;
   if (!selectedPeriodo.value) return Boolean(referido.value?.membresiaActiva);
@@ -646,6 +667,13 @@ async function loadPersonaDetail() {
       cronologiaMembresias.value = Array.isArray(membresiasTotales) ? membresiasTotales : [];
     } catch {
       cronologiaMembresias.value = [];
+    }
+
+    try {
+      const planes = await apiRequest("/api/planes-activacion");
+      cronologiaPlanesActivacion.value = Array.isArray(planes) ? planes : [];
+    } catch {
+      cronologiaPlanesActivacion.value = [];
     }
   } finally {
     detailLoading.value = false;
