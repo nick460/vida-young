@@ -132,6 +132,11 @@ function mesKeyDesdeFecha(date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function isMesSeleccionado(fecha) {
+  if (!mesSeleccionado) return false;
+  return mesKeyDesdeFecha(mesSeleccionado) === mesKeyDesdeFecha(fecha);
+}
+
 function pvPropioEnMes(mesKey, compras) {
   let pv = 0;
   compras.forEach((c) => {
@@ -159,8 +164,8 @@ const planesActivacionMap = computed(() => {
 });
 
 const mesSeleccionadoInfo = computed(() => {
-  if (!mesSeleccionado.value) return null;
-  const mk = mesKeyDesdeFecha(mesSeleccionado.value);
+  if (!mesSeleccionado) return null;
+  const mk = mesKeyDesdeFecha(mesSeleccionado);
   const inicio = new Date(mesSeleccionado.value);
   inicio.setDate(1);
   const fin = ultimoDiaMes(inicio);
@@ -1270,8 +1275,8 @@ onMounted(loadBaseData);
                   <div
                     v-for="(event, index) in cronologiaEvents"
                     :key="`${event.tipo}-${event.fecha}-${index}`"
-                    :class="['timeline-item', event.tipo, { seleccionado: mesSeleccionado === event.fecha }]"
-                    @click="mesSeleccionado = mesSeleccionado === event.fecha ? null : event.fecha"
+                    :class="['timeline-item', event.tipo, { seleccionado: isMesSeleccionado(event.fecha) }]"
+                    @click="mesSeleccionado = isMesSeleccionado(event.fecha) ? null : event.fecha"
                   >
                     <div class="timeline-marker">{{ formatDateTime(event.fecha) }}</div>
                     <div class="timeline-content">
