@@ -29,6 +29,7 @@ const selectedPeriodoId = ref("");
 const selectedPersonaId = ref(route.params.personaId || "");
 const walletSummary = ref(null);
 const compras = ref([]);
+const cronologiaCompras = ref([]);
 const recompensas = ref([]);
 const retiros = ref([]);
 const movimientoSearch = ref("");
@@ -118,7 +119,7 @@ const cronologiaEvents = computed(() => {
     });
   });
 
-  compras.value.forEach((c) => {
+  cronologiaCompras.value.forEach((c) => {
     if (!c) return;
     events.push({
       fecha: c.fechaCompra,
@@ -567,6 +568,15 @@ async function loadPersonaDetail() {
 
     if ([walletResult, comprasResult, recompensasResult, retirosResult].some((result) => result.status === "rejected")) {
       error.value = "Algunos datos no se pudieron cargar, pero la consulta disponible se mantiene visible.";
+    }
+
+    try {
+      const comprasTotales = await apiRequest(`/api/compras/persona/${selectedPersonaId.value}`);
+      cronologiaCompras.value = Array.isArray(comprasTotales)
+        ? comprasTotales.filter((compra) => String(compra?.estadoCompra || "").toUpperCase() !== "ANULADA")
+        : [];
+    } catch {
+      cronologiaCompras.value = [];
     }
   } finally {
     detailLoading.value = false;
