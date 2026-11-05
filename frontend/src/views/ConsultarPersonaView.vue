@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -50,7 +50,7 @@ const detailTabs = [
   { id: "red", label: "Red" },
   { id: "actividad", label: "Actividad" },
   { id: "historial", label: "Historial" },
-  { id: "cronologia", label: "Cronología" }
+  { id: "cronologia", label: "CronologÃ­a" }
 ];
 
 const selectedPersona = computed(() =>
@@ -119,12 +119,12 @@ function ultimoDiaMes(date) {
 }
 
 function nombrePlanActivacion(m) {
-  if (!m) return membershipName(m) || "Membresía";
+  if (!m) return membershipName(m) || "MembresÃ­a";
   if (m.referencia_tipo === "PV_ACTIVACION" && m.referencia_id != null) {
     const nombre = planesActivacionMap.value.get(String(m.referencia_id));
     if (nombre) return nombre;
   }
-  return membershipName(m) || "Membresía";
+  return membershipName(m) || "MembresÃ­a";
 }
 
 function mesKeyDesdeFecha(date) {
@@ -224,7 +224,7 @@ const cronologiaEvents = computed(() => {
   const todasMembresias = Array.isArray(cronologiaMembresias.value) ? cronologiaMembresias.value : [];
   const periodosSistema = Array.isArray(periodos.value) ? periodos.value : [];
 
-  // Ordenar membresías por fecha de inicio ascendente
+  // Ordenar membresÃ­as por fecha de inicio ascendente
   const membresiasOrdenadas = todasMembresias
     .filter((m) => m && m.fechaInicio && m.fechaFin)
     .sort((a, b) => new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime());
@@ -242,7 +242,7 @@ const cronologiaEvents = computed(() => {
   hoy.setDate(1);
   hoy.setMonth(hoy.getMonth() + 1); // incluir mes actual
 
-  // Evento de unión (se fusiona con membresía inicial si coincide en fecha)
+  // Evento de uniÃ³n (se fusiona con membresÃ­a inicial si coincide en fecha)
   if (referido.value?.fechaUnion) {
     const fechaUnion = referido.value.fechaUnion;
     const membresiaUnion = membresiasOrdenadas.find((m) => m && esMismaFecha(m.fechaInicio, fechaUnion));
@@ -253,8 +253,8 @@ const cronologiaEvents = computed(() => {
       events.push({
         fecha: fechaUnion,
         tipo: "union",
-        titulo: esActivacion ? "Se unió y activó membresía" : "Se unió a Vidayoung",
-        detalle: `${nombrePlan} · ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
+        titulo: esActivacion ? "Se uniÃ³ y activÃ³ membresÃ­a" : "Se uniÃ³ a Vidayoung",
+        detalle: `${nombrePlan} Â· ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
         monto: membresiaUnion.precioPlan ? `Bs. ${money(membresiaUnion.precioPlan)}` : null,
         estado: membresiaUnion.estadoMembresia,
         icono: "UserRound"
@@ -263,14 +263,14 @@ const cronologiaEvents = computed(() => {
       events.push({
         fecha: fechaUnion,
         tipo: "union",
-        titulo: "Se unió a Vidayoung",
+        titulo: "Se uniÃ³ a Vidayoung",
         detalle: "Ingreso a la plataforma",
         icono: "UserRound"
       });
     }
   }
 
-  // Generar evento de membresía por cada mes del sistema en el rango (único por mes)
+  // Generar evento de membresÃ­a por cada mes del sistema en el rango (Ãºnico por mes)
   const mesesVistos = new Map();
   periodosSistema.forEach((p) => {
     if (!p.fechaInicio || !p.fechaFin) return;
@@ -282,12 +282,12 @@ const cronologiaEvents = computed(() => {
 
     while (actual <= fin) {
       const mk = mesKeyDesdeFecha(actual);
-      // Saltar meses antes de la fecha de unión
+      // Saltar meses antes de la fecha de uniÃ³n
       if (fechaInicioRango && actual < fechaInicioRango) {
         actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
         continue;
       }
-      // Saltar meses futuros (más allá del mes actual)
+      // Saltar meses futuros (mÃ¡s allÃ¡ del mes actual)
       if (actual > hoy) {
         actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
         continue;
@@ -299,7 +299,7 @@ const cronologiaEvents = computed(() => {
       }
       mesesVistos.set(mk, actual);
 
-      // Buscar la membresía vigente en este mes
+      // Buscar la membresÃ­a vigente en este mes
       let membresiaMes = null;
       membresiasOrdenadas.forEach((m) => {
         const inicioM = new Date(m.fechaInicio);
@@ -314,7 +314,7 @@ const cronologiaEvents = computed(() => {
         }
       });
 
-      // Si hay membresía registrada, mostrarla
+      // Si hay membresÃ­a registrada, mostrarla
       if (membresiaMes) {
         const esActivacion = membresiaMes.tipo === "ACTIVACION";
         const nombrePlan = nombrePlanActivacion(membresiaMes);
@@ -322,14 +322,14 @@ const cronologiaEvents = computed(() => {
         events.push({
           fecha: new Date(actual),
           tipo: esActivacion ? "activacion" : "membresia",
-          titulo: esActivacion ? `Activación: ${nombrePlan}` : nombrePlan,
-          detalle: `${membresiaMes.estadoMembresia || "Sin estado"} · ${formatDate(actual)} a ${formatDate(finMes)}`,
+          titulo: esActivacion ? `ActivaciÃ³n: ${nombrePlan}` : nombrePlan,
+          detalle: `${membresiaMes.estadoMembresia || "Sin estado"} Â· ${formatDate(actual)} a ${formatDate(finMes)}`,
           monto: membresiaMes.precioPlan ? `Bs. ${money(membresiaMes.precioPlan)}` : null,
           estado: membresiaMes.estadoMembresia,
           icono: "BadgeCheck"
         });
       } else {
-        // No hay membresía registrada: calcular PV propio del mes desde compras
+        // No hay membresÃ­a registrada: calcular PV propio del mes desde compras
         const pvMes = pvPropioEnMes(mk, cronologiaCompras.value);
         const nombrePlanPorPV = planActivacionPorPV(pvMes);
         const finMes = ultimoDiaMes(actual);
@@ -338,19 +338,19 @@ const cronologiaEvents = computed(() => {
           events.push({
             fecha: new Date(actual),
             tipo: "activacion",
-            titulo: `Activación: ${nombrePlanPorPV}`,
-            detalle: `PV propio del mes: ${money(pvMes)} · ${formatDate(actual)} a ${formatDate(finMes)}`,
+            titulo: `ActivaciÃ³n: ${nombrePlanPorPV}`,
+            detalle: `PV propio del mes: ${money(pvMes)} Â· ${formatDate(actual)} a ${formatDate(finMes)}`,
             monto: null,
             estado: "Calculada",
             icono: "BadgeCheck"
           });
         } else {
-          // Sin membresía ni PV suficiente: mostrar como no activo
+          // Sin membresÃ­a ni PV suficiente: mostrar como no activo
           events.push({
             fecha: new Date(actual),
             tipo: "inactivo",
             titulo: "No activo",
-            detalle: `Sin membresía ni PV suficiente · ${formatDate(actual)} a ${formatDate(finMes)}`,
+            detalle: `Sin membresÃ­a ni PV suficiente Â· ${formatDate(actual)} a ${formatDate(finMes)}`,
             monto: null,
             estado: "Inactivo",
             icono: "X"
@@ -520,7 +520,7 @@ function esActivo(referido) {
   return new Date(referido.fechaFinMembresia).getTime() >= Date.now();
 }
 
-/** Cuanto aportó cada comprador a la persona consultada en el mes consultado (PV/QP/dinero). */
+/** Cuanto aportÃ³ cada comprador a la persona consultada en el mes consultado (PV/QP/dinero). */
 const aportesPorPersona = computed(() => {
   const mapa = new Map();
   movimientos.value.forEach((movimiento) => {
@@ -955,7 +955,7 @@ onMounted(loadBaseData);
                 <span class="summary-icon"><BadgeCheck :size="18" /></span>
                 <small>PV propio del mes</small>
                 <strong>{{ money(totals.pv) }} PV</strong>
-                <p>Generado por las compras propias del período seleccionado.</p>
+                <p>Generado por las compras propias del perÃ­odo seleccionado.</p>
               </article>
               <article class="summary-card vy-card" :class="{ warning: !retiroMensual.realizado }">
                 <span class="summary-icon"><Wallet :size="18" /></span>
@@ -1281,7 +1281,7 @@ onMounted(loadBaseData);
             >
               <section class="vy-card history-card">
                 <header>
-                  <h3>Cronología</h3>
+                  <h3>CronologÃ­a</h3>
                   <span>{{ cronologiaEvents.length }} eventos registrados</span>
                 </header>
                 <div class="timeline">
@@ -1321,8 +1321,8 @@ onMounted(loadBaseData);
                 </header>
                 <div class="mes-info">
                   <div class="mes-info-item">
-                    <span class="label">Membresía:</span>
-                    <span class="value">{{ mesSeleccionadoInfo.membresia ? (mesSeleccionadoInfo.membresia.tipo === 'ACTIVACION' ? `Activación: ${nombrePlanActivacion(mesSeleccionadoInfo.membresia)}` : membershipName(mesSeleccionadoInfo.membresia)) : mesSeleccionadoInfo.nombrePlanPorPV || 'Sin membresía' }}</span>
+                    <span class="label">MembresÃ­a:</span>
+                    <span class="value">{{ mesSeleccionadoInfo.membresia ? (mesSeleccionadoInfo.membresia.tipo === 'ACTIVACION' ? `ActivaciÃ³n: ${nombrePlanActivacion(mesSeleccionadoInfo.membresia)}` : membershipName(mesSeleccionadoInfo.membresia)) : mesSeleccionadoInfo.nombrePlanPorPV || 'Sin membresÃ­a' }}</span>
                   </div>
                   <div class="mes-info-item">
                     <span class="label">PV propio:</span>
@@ -1363,8 +1363,8 @@ onMounted(loadBaseData);
       <header class="benefits-header">
         <div>
           <h3 id="network-benefits-title">Beneficios de {{ fullName(selectedNetworkPerson.persona) }}</h3>
-          <p>Para {{ fullName(selectedPersona) }} · {{ selectedPeriodo?.nombre || periodoActivo?.nombre || "Periodo seleccionado" }}</p>
-          <p>Nivel {{ selectedNetworkPerson.level }} · {{ selectedNetworkPerson.activo ? "Activo" : "Inactivo" }} en la red actual</p>
+          <p>Para {{ fullName(selectedPersona) }} Â· {{ selectedPeriodo?.nombre || periodoActivo?.nombre || "Periodo seleccionado" }}</p>
+          <p>Nivel {{ selectedNetworkPerson.level }} Â· {{ selectedNetworkPerson.activo ? "Activo" : "Inactivo" }} en la red actual</p>
         </div>
         <button type="button" class="vy-btn vy-btn-ghost" aria-label="Cerrar beneficios" @click="benefitsDialog.close()"><X :size="18" /></button>
       </header>
@@ -1381,7 +1381,7 @@ onMounted(loadBaseData);
           <thead><tr><th>Fecha</th><th>Movimiento / detalle</th><th>Efectivo</th><th>Productos</th><th>PV</th><th>QP</th><th>CR</th></tr></thead>
           <tbody>
             <tr v-for="group in networkPersonMovimientos" :key="group.key">
-              <td>{{ formatDateTime(group.date) }}</td><td>{{ group.title }} · {{ group.subtitle || "Sin detalle" }}</td>
+              <td>{{ formatDateTime(group.date) }}</td><td>{{ group.title }} Â· {{ group.subtitle || "Sin detalle" }}</td>
               <td>Bs. {{ money(group.dinero) }}</td><td>Bs. {{ money(group.productos) }}</td>
               <td>{{ money(group.pv) }}</td><td>{{ money(group.qp) }}</td><td>{{ money(group.cr) }}</td>
             </tr>
@@ -1606,3 +1606,4 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .mes-detalle-dialog > .vy-card { width: min(95vw, 720px); max-height: 85vh; overflow-y: auto; }
 .mes-detalle-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 </style>
+
