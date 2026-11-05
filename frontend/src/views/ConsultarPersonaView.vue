@@ -102,10 +102,29 @@ function esMismaFecha(a, b) {
     && da.getDate() === db.getDate();
 }
 
+function monthKey(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function ultimoDiaMes(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
 const cronologiaEvents = computed(() => {
   const events = [];
   const todasMembresias = Array.isArray(walletSummary.value?.membresias) ? walletSummary.value.membresias : [];
   const membresiasUsadas = new Set();
+  const mesesCubiertos = new Set();
+
+  todasMembresias.forEach((m) => {
+    if (!m) return;
+    if (m.fechaInicio) mesesCubiertos.add(monthKey(m.fechaInicio));
+    if (m.fechaFin) mesesCubiertos.add(monthKey(m.fechaFin));
+  });
 
   if (referido.value?.fechaUnion) {
     const fechaUnion = referido.value.fechaUnion;
@@ -113,6 +132,7 @@ const cronologiaEvents = computed(() => {
 
     if (membresiaUnion) {
       membresiasUsadas.add(membresiaUnion.id);
+      mesesCubiertos.add(monthKey(fechaUnion));
       events.push({
         fecha: fechaUnion,
         tipo: "union",
@@ -145,6 +165,31 @@ const cronologiaEvents = computed(() => {
       icono: "BadgeCheck"
     });
   });
+
+  // Membresías mes a mes basadas en el rango de vigencia del referido
+  if (referido.value?.fechaInicioMembresia && referido.value?.fechaFinMembresia) {
+    const planNombre = referido.value?.plan?.nombre || "Membresía";
+    let actual = new Date(referido.value.fechaInicioMembresia);
+    actual.setDate(1);
+    const fin = new Date(referido.value.fechaFinMembresia);
+
+    while (actual <= fin) {
+      const mk = monthKey(actual);
+      if (!mesesCubiertos.has(mk)) {
+        const finMes = ultimoDiaMes(actual);
+        events.push({
+          fecha: actual.toISOString(),
+          tipo: "membresia",
+          titulo: planNombre,
+          detalle: `Membresía activa · ${formatDate(actual)} a ${formatDate(finMes)}`,
+          monto: null,
+          estado: "Activa",
+          icono: "BadgeCheck"
+        });
+      }
+      actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
+    }
+  }
 
   cronologiaCompras.value.forEach((c) => {
     if (!c) return;
