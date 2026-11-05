@@ -118,22 +118,18 @@ function ultimoDiaMes(date) {
 const cronologiaEvents = computed(() => {
   const events = [];
   const todasMembresias = Array.isArray(cronologiaMembresias.value) ? cronologiaMembresias.value : [];
-  const membresiasUsadas = new Set();
-  const mesesCubiertos = new Set();
 
-  todasMembresias.forEach((m) => {
-    if (!m) return;
-    if (m.fechaInicio) mesesCubiertos.add(monthKey(m.fechaInicio));
-    if (m.fechaFin) mesesCubiertos.add(monthKey(m.fechaFin));
-  });
+  // Ordenar membresías por fecha de inicio ascendente
+  const membresiasOrdenadas = todasMembresias
+    .filter((m) => m && m.fechaInicio && m.fechaFin)
+    .sort((a, b) => new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime());
 
+  // Evento de unión (se fusiona con membresía inicial si coincide en fecha)
   if (referido.value?.fechaUnion) {
     const fechaUnion = referido.value.fechaUnion;
-    const membresiaUnion = todasMembresias.find((m) => m && esMismaFecha(m.fechaInicio, fechaUnion));
+    const membresiaUnion = membresiasOrdenadas.find((m) => m && esMismaFecha(m.fechaInicio, fechaUnion));
 
     if (membresiaUnion) {
-      membresiasUsadas.add(membresiaUnion.id);
-      mesesCubiertos.add(monthKey(fechaUnion));
       const esActivacion = membresiaUnion.tipo === "ACTIVACION";
       events.push({
         fecha: fechaUnion,
@@ -155,44 +151,35 @@ const cronologiaEvents = computed(() => {
     }
   }
 
-  todasMembresias.forEach((m) => {
-    if (!m || membresiasUsadas.has(m.id)) return;
-    const esActivacion = m.tipo === "ACTIVACION";
-    events.push({
-      fecha: m.fechaInicio,
-      tipo: esActivacion ? "activacion" : "membresia",
-      titulo: esActivacion ? `Activación: ${membershipName(m) || "Membresía"}` : membershipName(m) || "Membresía",
-      detalle: `${m.estadoMembresia || "Sin estado"} · ${formatDate(m.fechaInicio)} a ${formatDate(m.fechaFin)}`,
-      monto: m.precioPlan ? `Bs. ${money(m.precioPlan)}` : null,
-      estado: m.estadoMembresia,
-      icono: "BadgeCheck"
-    });
-  });
-
-  // Membresías mes a mes basadas en el rango de vigencia del referido
-  if (referido.value?.fechaInicioMembresia && referido.value?.fechaFinMembresia) {
-    const planNombre = referido.value?.plan?.nombre || "Membresía";
-    let actual = new Date(referido.value.fechaInicioMembresia);
-    actual.setDate(1);
-    const fin = new Date(referido.value.fechaFinMembresia);
+  // Cada membresía genera un evento por mes que cubra (mes a mes)
+  membresiasOrdenadas.forEach((m) => {
+    const esMismoQueUnion = referido.value?.fechaUnion && esMismaFecha(m.fechaInicio, referido.value.fechaUnion);
+    let actual = new Date(m.fechaInicio);
+    actual.setDate(1); // primer día del mes
+    const fin = new Date(m.fechaFin);
+    const mesIndex = [];
 
     while (actual <= fin) {
-      const mk = monthKey(actual);
-      if (!mesesCubiertos.has(mk)) {
-        const finMes = ultimoDiaMes(actual);
-        events.push({
-          fecha: actual.toISOString(),
-          tipo: "membresia",
-          titulo: planNombre,
-          detalle: `Membresía activa · ${formatDate(actual)} a ${formatDate(finMes)}`,
-          monto: null,
-          estado: "Activa",
-          icono: "BadgeCheck"
-        });
-      }
+      const finMes = ultimoDiaMes(actual);
+      mesIndex.push({
+        fecha: new Date(actual),
+        tipo: m.tipo === "ACTIVACION" ? "activacion" : "membresia",
+        titulo: (m.tipo === "ACTIVACION" ? `Activación: ${membershipName(m) || "Membresía"}` : membershipName(m) || "Membresía"),
+        detalle: `${m.estadoMembresia || "Sin estado"} · ${formatDate(actual)} a ${formatDate(finMes)}`,
+        monto: m.precioPlan ? `Bs. ${money(m.precioPlan)}` : null,
+        estado: m.estadoMembresia,
+        icono: "BadgeCheck"
+      });
       actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
     }
-  }
+
+    if (esMismoQueUnion) {
+      // Ya está en el evento de unión; agregar solo los meses siguientes
+      mesIndex.slice(1).forEach((e) => events.push(e));
+    } else {
+      mesIndex.forEach((e) => events.push(e));
+    }
+  });
 
   cronologiaCompras.value.forEach((c) => {
     if (!c) return;
