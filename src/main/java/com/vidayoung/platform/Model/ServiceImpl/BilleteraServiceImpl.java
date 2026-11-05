@@ -615,7 +615,8 @@ public class BilleteraServiceImpl implements BilleteraService {
                 "wallet"
         );
 
-        if (historialMembresiaDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
+        if (historialMembresiaDao.existsByPersonaIdAndReferenciaTipoAndReferenciaIdAndTipo(
+                persona.getId(),
                 REFERENCIA_PV_ACTIVACION,
                 planActivacion.getId(),
                 HistorialMembresia.TIPO_ACTIVACION
@@ -638,7 +639,8 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .periodo(periodo)
                     .build());
         } catch (DataIntegrityViolationException exception) {
-            if (!historialMembresiaDao.existsByReferenciaTipoAndReferenciaIdAndTipo(
+            if (!historialMembresiaDao.existsByPersonaIdAndReferenciaTipoAndReferenciaIdAndTipo(
+                    persona.getId(),
                     REFERENCIA_PV_ACTIVACION,
                     planActivacion.getId(),
                     HistorialMembresia.TIPO_ACTIVACION
