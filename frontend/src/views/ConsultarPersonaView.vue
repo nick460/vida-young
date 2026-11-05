@@ -31,6 +31,7 @@ const walletSummary = ref(null);
 const compras = ref([]);
 const cronologiaCompras = ref([]);
 const recompensas = ref([]);
+const cronologiaMembresias = ref([]);
 const retiros = ref([]);
 const movimientoSearch = ref("");
 const networkSearch = ref("");
@@ -116,7 +117,7 @@ function ultimoDiaMes(date) {
 
 const cronologiaEvents = computed(() => {
   const events = [];
-  const todasMembresias = Array.isArray(walletSummary.value?.membresias) ? walletSummary.value.membresias : [];
+  const todasMembresias = Array.isArray(cronologiaMembresias.value) ? cronologiaMembresias.value : [];
   const membresiasUsadas = new Set();
   const mesesCubiertos = new Set();
 
@@ -133,10 +134,11 @@ const cronologiaEvents = computed(() => {
     if (membresiaUnion) {
       membresiasUsadas.add(membresiaUnion.id);
       mesesCubiertos.add(monthKey(fechaUnion));
+      const esActivacion = membresiaUnion.tipo === "ACTIVACION";
       events.push({
         fecha: fechaUnion,
         tipo: "union",
-        titulo: "Se unió y activó membresía",
+        titulo: esActivacion ? "Se unió y activó membresía" : "Se unió a Vidayoung",
         detalle: `${membershipName(membresiaUnion) || "Membresía"} · ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
         monto: membresiaUnion.precioPlan ? `Bs. ${money(membresiaUnion.precioPlan)}` : null,
         estado: membresiaUnion.estadoMembresia,
@@ -155,10 +157,11 @@ const cronologiaEvents = computed(() => {
 
   todasMembresias.forEach((m) => {
     if (!m || membresiasUsadas.has(m.id)) return;
+    const esActivacion = m.tipo === "ACTIVACION";
     events.push({
       fecha: m.fechaInicio,
-      tipo: m.tipo === "ACTIVACION" ? "activacion" : "membresia",
-      titulo: membershipName(m) || "Membresía",
+      tipo: esActivacion ? "activacion" : "membresia",
+      titulo: esActivacion ? `Activación: ${membershipName(m) || "Membresía"}` : membershipName(m) || "Membresía",
       detalle: `${m.estadoMembresia || "Sin estado"} · ${formatDate(m.fechaInicio)} a ${formatDate(m.fechaFin)}`,
       monto: m.precioPlan ? `Bs. ${money(m.precioPlan)}` : null,
       estado: m.estadoMembresia,
@@ -649,6 +652,13 @@ async function loadPersonaDetail() {
         : [];
     } catch {
       cronologiaCompras.value = [];
+    }
+
+    try {
+      const membresiasTotales = await apiRequest(`/api/billeteras/persona/${selectedPersonaId.value}/membresias`);
+      cronologiaMembresias.value = Array.isArray(membresiasTotales) ? membresiasTotales : [];
+    } catch {
+      cronologiaMembresias.value = [];
     }
   } finally {
     detailLoading.value = false;
