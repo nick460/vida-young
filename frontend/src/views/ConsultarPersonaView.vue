@@ -177,8 +177,8 @@ const planesActivacionMap = computed(() => {
 });
 
 const mesSeleccionadoInfo = computed(() => {
-  if (!mesSeleccionado) return null;
-  const mk = mesKeyDesdeFecha(mesSeleccionado);
+  if (!mesSeleccionado.value) return null;
+  const mk = mesKeyDesdeFecha(mesSeleccionado.value);
   const inicio = new Date(mesSeleccionado.value);
   inicio.setDate(1);
   const fin = ultimoDiaMes(inicio);
