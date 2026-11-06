@@ -724,8 +724,9 @@ ALTER TABLE cierres_mensuales_billetera
     ADD COLUMN IF NOT EXISTS rango_qp_minimo NUMERIC(12, 2),
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_historial_membresias_referencia
-    ON historial_membresias (referencia_tipo, referencia_id, tipo)
+DROP INDEX IF EXISTS uk_historial_membresias_referencia;
+CREATE UNIQUE INDEX uk_historial_membresias_referencia
+    ON historial_membresias (persona_id, referencia_tipo, referencia_id, tipo)
     WHERE referencia_tipo IS NOT NULL AND referencia_id IS NOT NULL;
 
 -- Unico por billetera: permite el bono referido multi-nivel (varias billeteras

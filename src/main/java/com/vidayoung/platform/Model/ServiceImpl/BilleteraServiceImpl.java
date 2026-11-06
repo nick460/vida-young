@@ -42,6 +42,8 @@ import com.vidayoung.platform.Model.Service.BilleteraService;
 import com.vidayoung.platform.Model.Service.CarteraEmpresaService;
 import com.vidayoung.platform.Model.Service.GestionPeriodoService;
 import com.vidayoung.platform.Model.Service.NotificacionService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -65,6 +67,9 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class BilleteraServiceImpl implements BilleteraService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private static final String REFERENCIA_AFILIACION = "REFERIDO_AFILIACION";
     private static final String REFERENCIA_PV_ACTIVACION = "PV_ACTIVACION";
@@ -624,8 +629,9 @@ public class BilleteraServiceImpl implements BilleteraService {
             return;
         }
 
+        HistorialMembresia historialPv = null;
         try {
-            historialMembresiaDao.save(HistorialMembresia.builder()
+            historialPv = HistorialMembresia.builder()
                     .persona(persona)
                     .plan(referido.getPlan())
                     .tipo(HistorialMembresia.TIPO_ACTIVACION)
@@ -637,15 +643,14 @@ public class BilleteraServiceImpl implements BilleteraService {
                     .referenciaId(planActivacion.getId())
                     .estadoMembresia(HistorialMembresia.MEMBRESIA_ACTIVA)
                     .periodo(periodo)
-                    .build());
+                    .build();
+            historialMembresiaDao.save(historialPv);
         } catch (DataIntegrityViolationException exception) {
-            if (!historialMembresiaDao.existsByPersonaIdAndReferenciaTipoAndReferenciaIdAndTipo(
-                    persona.getId(),
-                    REFERENCIA_PV_ACTIVACION,
-                    planActivacion.getId(),
-                    HistorialMembresia.TIPO_ACTIVACION
-            )) {
-                throw exception;
+            // La restriccion unica del historial puede colisionar (por ejemplo, entre
+            // personas que activan con el mismo plan); desvinculamos la entidad fallida
+            // para no corromper la sesion y no fallamos la validacion de la compra.
+            if (historialPv != null) {
+                entityManager.detach(historialPv);
             }
         }
     }
