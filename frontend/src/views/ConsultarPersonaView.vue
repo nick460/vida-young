@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -34,7 +34,6 @@ const recompensas = ref([]);
 const cronologiaMembresias = ref([]);
 const cronologiaPlanesActivacion = ref([]);
 const mesSeleccionado = ref(null);
-const mesDialog = ref(null);
 const retiros = ref([]);
 const movimientoSearch = ref("");
 const networkSearch = ref("");
@@ -219,6 +218,13 @@ const mesSeleccionadoInfo = computed(() => {
   };
 });
 
+const mesSeleccionadoTitulo = computed(() => {
+  if (!mesSeleccionado.value) return "";
+  const fecha = new Date(mesSeleccionado.value);
+  const texto = fecha.toLocaleDateString("es-BO", { month: "long", year: "numeric" });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+});
+
 const cronologiaEvents = computed(() => {
   const events = [];
   const todasMembresias = Array.isArray(cronologiaMembresias.value) ? cronologiaMembresias.value : [];
@@ -242,7 +248,7 @@ const cronologiaEvents = computed(() => {
   hoy.setDate(1);
   hoy.setMonth(hoy.getMonth() + 1); // incluir mes actual
 
-  // Evento de uniÃ³n (se fusiona con Membresía inicial si coincide en fecha)
+  // Evento de unión (se fusiona con Membresía inicial si coincide en fecha)
   if (referido.value?.fechaUnion) {
     const fechaUnion = referido.value.fechaUnion;
     const membresiaUnion = membresiasOrdenadas.find((m) => m && esMismaFecha(m.fechaInicio, fechaUnion));
@@ -253,8 +259,8 @@ const cronologiaEvents = computed(() => {
       events.push({
         fecha: fechaUnion,
         tipo: "union",
-        titulo: esActivacion ? "Se uniÃ³ y activÃ³ Membresía" : "Se uniÃ³ a Vidayoung",
-        detalle: `${nombrePlan} Â· ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
+        titulo: esActivacion ? "Se unió y activó Membresía" : "Se unió a Vidayoung",
+        detalle: `${nombrePlan} · ${formatDate(membresiaUnion.fechaInicio)} a ${formatDate(membresiaUnion.fechaFin)}`,
         monto: membresiaUnion.precioPlan ? `Bs. ${money(membresiaUnion.precioPlan)}` : null,
         estado: membresiaUnion.estadoMembresia,
         icono: "UserRound"
@@ -263,14 +269,14 @@ const cronologiaEvents = computed(() => {
       events.push({
         fecha: fechaUnion,
         tipo: "union",
-        titulo: "Se uniÃ³ a Vidayoung",
+        titulo: "Se unió a Vidayoung",
         detalle: "Ingreso a la plataforma",
         icono: "UserRound"
       });
     }
   }
 
-  // Generar evento de Membresía por cada mes del sistema en el rango (Ãºnico por mes)
+  // Generar evento de Membresía por cada mes del sistema en el rango (único por mes)
   const mesesVistos = new Map();
   periodosSistema.forEach((p) => {
     if (!p.fechaInicio || !p.fechaFin) return;
@@ -282,12 +288,12 @@ const cronologiaEvents = computed(() => {
 
     while (actual <= fin) {
       const mk = mesKeyDesdeFecha(actual);
-      // Saltar meses antes de la fecha de uniÃ³n
+      // Saltar meses antes de la fecha de unión
       if (fechaInicioRango && actual < fechaInicioRango) {
         actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
         continue;
       }
-      // Saltar meses futuros (mÃ¡s allÃ¡ del mes actual)
+      // Saltar meses futuros (más allá del mes actual)
       if (actual > hoy) {
         actual = new Date(actual.getFullYear(), actual.getMonth() + 1, 1);
         continue;
@@ -323,7 +329,7 @@ const cronologiaEvents = computed(() => {
           fecha: new Date(actual),
           tipo: esActivacion ? "activacion" : "membresia",
           titulo: esActivacion ? `Activación: ${nombrePlan}` : nombrePlan,
-          detalle: `${membresiaMes.estadoMembresia || "Sin estado"} Â· ${formatDate(actual)} a ${formatDate(finMes)}`,
+          detalle: `${membresiaMes.estadoMembresia || "Sin estado"} · ${formatDate(actual)} a ${formatDate(finMes)}`,
           monto: membresiaMes.precioPlan ? `Bs. ${money(membresiaMes.precioPlan)}` : null,
           estado: membresiaMes.estadoMembresia,
           icono: "BadgeCheck"
@@ -339,7 +345,7 @@ const cronologiaEvents = computed(() => {
             fecha: new Date(actual),
             tipo: "activacion",
             titulo: `Activación: ${nombrePlanPorPV}`,
-            detalle: `PV propio del mes: ${money(pvMes)} Â· ${formatDate(actual)} a ${formatDate(finMes)}`,
+            detalle: `PV propio del mes: ${money(pvMes)} · ${formatDate(actual)} a ${formatDate(finMes)}`,
             monto: null,
             estado: "Calculada",
             icono: "BadgeCheck"
@@ -350,7 +356,7 @@ const cronologiaEvents = computed(() => {
             fecha: new Date(actual),
             tipo: "inactivo",
             titulo: "No activo",
-            detalle: `Sin Membresía ni PV suficiente Â· ${formatDate(actual)} a ${formatDate(finMes)}`,
+            detalle: `Sin Membresía ni PV suficiente · ${formatDate(actual)} a ${formatDate(finMes)}`,
             monto: null,
             estado: "Inactivo",
             icono: "X"
@@ -520,7 +526,7 @@ function esActivo(referido) {
   return new Date(referido.fechaFinMembresia).getTime() >= Date.now();
 }
 
-/** Cuanto aportÃ³ cada comprador a la persona consultada en el mes consultado (PV/QP/dinero). */
+/** Cuanto aportó cada comprador a la persona consultada en el mes consultado (PV/QP/dinero). */
 const aportesPorPersona = computed(() => {
   const mapa = new Map();
   movimientos.value.forEach((movimiento) => {
@@ -955,7 +961,7 @@ onMounted(loadBaseData);
                 <span class="summary-icon"><BadgeCheck :size="18" /></span>
                 <small>PV propio del mes</small>
                 <strong>{{ money(totals.pv) }} PV</strong>
-                <p>Generado por las compras propias del perÃ­odo seleccionado.</p>
+                <p>Generado por las compras propias del período seleccionado.</p>
               </article>
               <article class="summary-card vy-card" :class="{ warning: !retiroMensual.realizado }">
                 <span class="summary-icon"><Wallet :size="18" /></span>
@@ -1306,53 +1312,73 @@ onMounted(loadBaseData);
                 </div>
               </section>
 
-              <dialog
-                v-if="mesSeleccionadoInfo"
-                class="mes-detalle-dialog"
-                ref="mesDialog"
-                @click="($event.target === mesDialog) && cerrarMesDialog()"
-                @close="cerrarMesDialog()"
-              >
-                <header class="mes-detalle-header">
-                  <h3>
-                    <span>{{ formatDate(mesSeleccionadoInfo.inicio) }} a {{ formatDate(mesSeleccionadoInfo.fin) }}</span>
-                    <button class="vy-btn vy-btn-ghost" type="button" @click="cerrarMesDialog()"><X :size="18" /></button>
-                  </h3>
-                </header>
-                <div class="mes-info">
-                  <div class="mes-info-item">
-                    <span class="label">Membresía:</span>
-                    <span class="value">{{ mesSeleccionadoInfo.membresia ? (mesSeleccionadoInfo.membresia.tipo === 'ACTIVACION' ? `Activación: ${nombrePlanActivacion(mesSeleccionadoInfo.membresia)}` : membershipName(mesSeleccionadoInfo.membresia)) : mesSeleccionadoInfo.nombrePlanPorPV || 'Sin Membresía' }}</span>
-                  </div>
-                  <div class="mes-info-item">
-                    <span class="label">PV propio:</span>
-                    <span class="value">{{ money(mesSeleccionadoInfo.pvMes) }}</span>
-                  </div>
+              <Teleport to="body">
+                <div
+                  v-if="mesSeleccionadoInfo"
+                  class="modal-backdrop"
+                  @click.self="cerrarMesDialog()"
+                >
+                  <section
+                    class="mes-detalle-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="mes-detalle-title"
+                  >
+                    <header>
+                      <div>
+                        <span class="vy-eyebrow">Cronología</span>
+                        <h2 id="mes-detalle-title">{{ mesSeleccionadoTitulo }}</h2>
+                        <p>{{ formatDate(mesSeleccionadoInfo.inicio) }} a {{ formatDate(mesSeleccionadoInfo.fin) }}</p>
+                      </div>
+                      <button type="button" aria-label="Cerrar" @click="cerrarMesDialog()">
+                        <X :size="18" />
+                      </button>
+                    </header>
+
+                    <div class="mes-detalle-body">
+                      <div class="mes-info">
+                        <div class="mes-info-item">
+                          <span class="label">Membresía</span>
+                          <span class="value">{{ mesSeleccionadoInfo.membresia ? (mesSeleccionadoInfo.membresia.tipo === 'ACTIVACION' ? `Activación: ${nombrePlanActivacion(mesSeleccionadoInfo.membresia)}` : membershipName(mesSeleccionadoInfo.membresia)) : mesSeleccionadoInfo.nombrePlanPorPV || 'Sin Membresía' }}</span>
+                        </div>
+                        <div class="mes-info-item">
+                          <span class="label">PV propio</span>
+                          <span class="value">{{ money(mesSeleccionadoInfo.pvMes) }}</span>
+                        </div>
+                      </div>
+
+                      <h3 class="mes-detalle-subtitle">Compras del mes</h3>
+                      <div class="table-wrap">
+                        <table v-if="mesSeleccionadoInfo.compras.length">
+                          <thead>
+                            <tr>
+                              <th>Fecha</th>
+                              <th>Productos</th>
+                              <th>Estado</th>
+                              <th>Total</th>
+                              <th>PV/QP/CR</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="c in mesSeleccionadoInfo.compras" :key="c.id">
+                              <td>{{ formatDate(c.fechaCompra) }}</td>
+                              <td>{{ compraProductos(c) || "Sin detalle" }}</td>
+                              <td><span class="status-pill">{{ c.estadoCompra }}</span></td>
+                              <td>Bs. {{ money(c.subtotal) }}</td>
+                              <td>{{ money(c.totalPv) }} / {{ money(c.totalQp) }} / {{ money(c.totalCr) }}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <div v-else class="empty-box compact">No activo</div>
+                      </div>
+                    </div>
+
+                    <footer>
+                      <button class="vy-btn vy-btn-ghost" type="button" @click="cerrarMesDialog()">Cerrar</button>
+                    </footer>
+                  </section>
                 </div>
-                <div class="table-wrap">
-                  <table v-if="mesSeleccionadoInfo.compras.length">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Productos</th>
-                        <th>Estado</th>
-                        <th>Total</th>
-                        <th>PV/QP/CR</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="c in mesSeleccionadoInfo.compras" :key="c.id">
-                        <td>{{ formatDate(c.fechaCompra) }}</td>
-                        <td>{{ compraProductos(c) || "Sin detalle" }}</td>
-                        <td><span class="status-pill">{{ c.estadoCompra }}</span></td>
-                        <td>Bs. {{ money(c.subtotal) }}</td>
-                        <td>{{ money(c.totalPv) }} / {{ money(c.totalQp) }} / {{ money(c.totalCr) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div v-else class="empty-box compact">No activo</div>
-                </div>
-              </dialog>
+              </Teleport>
             </section>
           </template>
       </section>
@@ -1363,8 +1389,8 @@ onMounted(loadBaseData);
       <header class="benefits-header">
         <div>
           <h3 id="network-benefits-title">Beneficios de {{ fullName(selectedNetworkPerson.persona) }}</h3>
-          <p>Para {{ fullName(selectedPersona) }} Â· {{ selectedPeriodo?.nombre || periodoActivo?.nombre || "Periodo seleccionado" }}</p>
-          <p>Nivel {{ selectedNetworkPerson.level }} Â· {{ selectedNetworkPerson.activo ? "Activo" : "Inactivo" }} en la red actual</p>
+          <p>Para {{ fullName(selectedPersona) }} · {{ selectedPeriodo?.nombre || periodoActivo?.nombre || "Periodo seleccionado" }}</p>
+          <p>Nivel {{ selectedNetworkPerson.level }} · {{ selectedNetworkPerson.activo ? "Activo" : "Inactivo" }} en la red actual</p>
         </div>
         <button type="button" class="vy-btn vy-btn-ghost" aria-label="Cerrar beneficios" @click="benefitsDialog.close()"><X :size="18" /></button>
       </header>
@@ -1381,7 +1407,7 @@ onMounted(loadBaseData);
           <thead><tr><th>Fecha</th><th>Movimiento / detalle</th><th>Efectivo</th><th>Productos</th><th>PV</th><th>QP</th><th>CR</th></tr></thead>
           <tbody>
             <tr v-for="group in networkPersonMovimientos" :key="group.key">
-              <td>{{ formatDateTime(group.date) }}</td><td>{{ group.title }} Â· {{ group.subtitle || "Sin detalle" }}</td>
+              <td>{{ formatDateTime(group.date) }}</td><td>{{ group.title }} · {{ group.subtitle || "Sin detalle" }}</td>
               <td>Bs. {{ money(group.dinero) }}</td><td>Bs. {{ money(group.productos) }}</td>
               <td>{{ money(group.pv) }}</td><td>{{ money(group.qp) }}</td><td>{{ money(group.cr) }}</td>
             </tr>
@@ -1595,28 +1621,28 @@ td { color: var(--vy-ink-2); font-weight: 700; }
 .timeline-item.seleccionado { background: rgba(242, 135, 5, 0.08); border-radius: 8px; cursor: pointer; }
 .timeline-item { cursor: pointer; }
 .timeline-item:hover { background: rgba(242, 135, 5, 0.06); border-radius: 8px; }
-.mes-detalle-header { margin-bottom: 10px; }
-.mes-detalle-header h3 { margin: 0; font-size: 18px; font-weight: 900; }
-.mes-detalle-header h3 span { margin-right: 10px; }
-.mes-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.mes-info-item { padding: 10px; border: 1px solid var(--vy-line); border-radius: 10px; background: var(--vy-surface-2); }
-.mes-info-item .label { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; display: block; margin-bottom: 3px; }
-.mes-info-item .value { color: var(--vy-ink); font-size: 13px; font-weight: 900; }
-.mes-detalle-dialog { position: fixed; inset: 0; z-index: 140; display: flex; align-items: center; justify-content: center; padding: 32px; background: rgba(31, 26, 20, 0.6); backdrop-filter: blur(8px); }
-.mes-detalle-dialog > .vy-card { width: min(860px, 92vw); max-height: calc(100vh - 40px); overflow-y: auto; padding: 0; border-radius: 24px; border: 1px solid var(--vy-line); background: var(--vy-surface); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3); color: var(--vy-ink); overflow: hidden; }
-.mes-detalle-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 22px 28px 16px; border-bottom: 1px solid var(--vy-line-2); }
-.mes-detalle-header h3 { margin: 0; font-size: 20px; font-weight: 900; color: var(--vy-ink); }
-.mes-detalle-header h3 span { margin-right: 8px; color: var(--vy-ink-2); font-size: 15px; }
-.mes-detalle-header h3 span:first-child { color: var(--vy-ink); font-size: 17px; font-weight: 950; }
-.mes-detalle-header button { width: 36px; height: 36px; border-radius: 10px; background: var(--vy-surface-2); color: var(--vy-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--vy-line); transition: background 0.2s; }
-.mes-detalle-header button:hover { background: var(--vy-orange-deep); color: #fff; }
-.mes-detalle-dialog .mes-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; padding: 0 28px; }
-.mes-detalle-dialog .mes-info-item { padding: 16px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
-.mes-detalle-dialog .mes-info-item .label { color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px; }
-.mes-detalle-dialog .mes-info-item .value { color: var(--vy-ink); font-size: 15px; font-weight: 950; }
-.mes-detalle-dialog .table-wrap { margin: 0 28px 28px; border: 1px solid var(--vy-line); border-radius: 12px; overflow: hidden; }
-.mes-detalle-dialog table { font-size: 13px; width: 100%; }
-.mes-detalle-dialog th { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vy-ink-3); background: var(--vy-surface-2); padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--vy-line-2); }
-.mes-detalle-dialog td { font-size: 13px; color: var(--vy-ink-2); border-bottom-color: var(--vy-line-2); padding: 12px 16px; }
-.mes-detalle-dialog tr:last-child td { border-bottom: none; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 140; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(31, 26, 20, 0.42); backdrop-filter: blur(5px); }
+.mes-detalle-modal { width: min(880px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; padding: 22px; border: 1px solid var(--vy-line); border-radius: 18px; background: var(--vy-surface); box-shadow: var(--vy-shadow-lg); color: var(--vy-ink); font-family: var(--font-sans); letter-spacing: -0.01em; }
+.mes-detalle-modal > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--vy-line-2); }
+.mes-detalle-modal > header h2 { margin: 4px 0 0; font-family: var(--font-display); font-size: 22px; font-weight: 800; line-height: 1.2; letter-spacing: -0.025em; color: var(--vy-ink); }
+.mes-detalle-modal > header p { margin: 3px 0 0; color: var(--vy-ink-3); font-size: 12px; font-weight: 800; }
+.mes-detalle-modal > header button { flex-shrink: 0; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 10px; background: var(--vy-surface-2); color: var(--vy-ink-3); cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+.mes-detalle-modal > header button:hover { background: var(--vy-orange-deep); color: #fff; }
+.mes-detalle-body { margin-top: 18px; overflow-y: auto; }
+.mes-detalle-modal .mes-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.mes-detalle-modal .mes-info-item { padding: 14px 16px; border: 1px solid var(--vy-line); border-radius: 12px; background: var(--vy-surface-2); }
+.mes-detalle-modal .mes-info-item .label { display: block; margin-bottom: 6px; color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+.mes-detalle-modal .mes-info-item .value { color: var(--vy-ink); font-size: 15px; font-weight: 900; }
+.mes-detalle-subtitle { margin: 0 0 10px; color: var(--vy-ink-3); font-family: var(--font-sans); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+.mes-detalle-modal .table-wrap { border: 1px solid var(--vy-line); border-radius: 12px; overflow: auto; }
+.mes-detalle-modal table { width: 100%; font-size: 13px; }
+.mes-detalle-modal th { padding: 14px 16px; border-bottom: 1px solid var(--vy-line-2); background: var(--vy-surface-2); color: var(--vy-ink-3); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; }
+.mes-detalle-modal td { padding: 12px 16px; border-bottom: 1px solid var(--vy-line-2); color: var(--vy-ink-2); font-size: 13px; }
+.mes-detalle-modal tr:last-child td { border-bottom: none; }
+.mes-detalle-modal > footer { display: flex; justify-content: flex-end; padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--vy-line-2); }
+.mes-detalle-modal > footer .vy-btn { border-radius: 12px; font-weight: 800; }
+@media (max-width: 640px) {
+  .modal-backdrop { padding: 14px; align-items: flex-start; }
+  .mes-detalle-modal { max-height: calc(100vh - 28px); padding: 18px; }
+}
 </style>
