@@ -17,6 +17,7 @@ const loading = ref(false);
 const processing = ref(false);
 const error = ref("");
 const saldos = ref([]);
+const pvPropioPorPersona = ref({});
 const retirosProcesados = ref([]);
 const productos = ref([]);
 const periodos = ref([]);
@@ -49,34 +50,47 @@ const selectedPeriodo = computed(() =>
 const isPeriodoActivo = computed(() => selectedPeriodo.value?.estadoPeriodo === "ACTIVO");
 const canRegisterWithdrawals = computed(() => selectedPeriodo.value?.estadoPeriodo !== "CERRADO");
 const canCloseMonth = computed(() => isPeriodoActivo.value && !loading.value && saldos.value.length === 0);
+const PV_PROPIO_MINIMO = 200;
+function pvPropioDe(personaId) {
+  if (personaId == null) return 0;
+  return Number(pvPropioPorPersona.value[String(personaId)] || 0);
+}
+function cumplePvPropio(personaId) {
+  return pvPropioDe(personaId) >= PV_PROPIO_MINIMO;
+}
 const filteredSaldos = computed(() => {
   const term = searchTerm.value.trim().toLowerCase();
   return saldos.value
     .filter((saldo) => Number(saldo.saldoDinero || 0) + Number(saldo.efectivoRecompensasDisponible || 0) > 0)
+    .filter((saldo) => cumplePvPropio(saldo.personaId))
     .filter((saldo) => !term || `${saldo.nombres || ""} ${saldo.apellidos || ""} ${saldo.documento || ""}`.toLowerCase().includes(term));
 });
 const retiroRows = computed(() =>
-  retirosProcesados.value.map((retiro) => ({
-    ...retiro,
-    rowType: "RETIRADO",
-    rowKey: `retiro-${retiro.id}`,
-    nombres: retiro.nombres,
-    apellidos: retiro.apellidos,
-    documento: retiro.documento,
-    rangoNombre: retiro.rangoNombre,
-    rangoQpMinimo: retiro.rangoQpMinimo,
-    saldoDinero: retiro.montoDesdeBilletera,
-    efectivoRecompensasDisponible: retiro.montoDesdeRecompensas,
-    saldoProductos: retiro.montoProductos,
-    saldoPv: 0,
-    saldoQp: 0,
-    saldoCr: 0,
-    origen: "RETIRO_PROCESADO"
-  }))
+  retirosProcesados.value
+    .filter((retiro) => cumplePvPropio(retiro.personaId))
+    .map((retiro) => ({
+      ...retiro,
+      rowType: "RETIRADO",
+      rowKey: `retiro-${retiro.id}`,
+      nombres: retiro.nombres,
+      apellidos: retiro.apellidos,
+      documento: retiro.documento,
+      rangoNombre: retiro.rangoNombre,
+      rangoQpMinimo: retiro.rangoQpMinimo,
+      saldoDinero: retiro.montoDesdeBilletera,
+      efectivoRecompensasDisponible: retiro.montoDesdeRecompensas,
+      saldoProductos: retiro.montoProductos,
+      saldoPv: 0,
+      saldoQp: 0,
+      saldoCr: 0,
+      pvPropio: pvPropioDe(retiro.personaId),
+      origen: "RETIRO_PROCESADO"
+    }))
 );
 const allRows = computed(() => [
   ...filteredSaldos.value.map((saldo) => ({
     ...saldo,
+    pvPropio: pvPropioDe(saldo.personaId),
     rowType: "PENDIENTE",
     rowKey: `saldo-${saldo.personaId}-${saldo.origen}`
   })),
@@ -100,9 +114,10 @@ const totals = computed(() =>
       referidos: acc.referidos + Number(saldo.efectivoRecompensasDisponible || 0),
       productos: acc.productos + Number(saldo.saldoProductos || 0),
       pv: acc.pv + Number(saldo.saldoPv || 0),
+      pvPropio: acc.pvPropio + pvPropioDe(saldo.personaId),
       qp: acc.qp + Number(saldo.saldoQp || 0)
     }),
-    { dinero: 0, compras: 0, referidos: 0, productos: 0, pv: 0, qp: 0 }
+    { dinero: 0, compras: 0, referidos: 0, productos: 0, pv: 0, pvPropio: 0, qp: 0 }
   )
 );
 const billeteraSeleccionada = computed(() => selectedWallet.value?.billetera || {});
@@ -499,6 +514,26 @@ async function loadPeriodoOptions() {
   }
 }
 
+function construirPvPropio(comprasData) {
+  const mapa = {};
+  const inicio = selectedPeriodo.value?.fechaInicio ? String(selectedPeriodo.value.fechaInicio).slice(0, 10) : null;
+  const fin = selectedPeriodo.value?.fechaFin ? String(selectedPeriodo.value.fechaFin).slice(0, 10) : null;
+
+  (Array.isArray(comprasData) ? comprasData : []).forEach((compra) => {
+    if (!compra || String(compra.estadoCompra || "").toUpperCase() === "ANULADA") return;
+    const personaId = compra?.persona?.id ?? compra?.personaId;
+    if (personaId == null) return;
+    if (inicio && fin && compra?.fechaCompra) {
+      const fecha = String(compra.fechaCompra).slice(0, 10);
+      if (fecha < inicio || fecha > fin) return;
+    }
+    const key = String(personaId);
+    mapa[key] = (mapa[key] || 0) + Number(compra.totalPv || 0);
+  });
+
+  return mapa;
+}
+
 async function loadSaldos() {
   loading.value = true;
   error.value = "";
@@ -509,12 +544,14 @@ async function loadSaldos() {
       await initPeriodoSelect2();
     }
     const query = selectedPeriodoId.value ? `?periodoId=${selectedPeriodoId.value}` : "";
-    const [data, retirosData] = await Promise.all([
+    const [data, retirosData, comprasData] = await Promise.all([
       apiRequest(`/api/billeteras/saldos${query}`),
-      apiRequest(`/api/billeteras/retiros${query}`)
+      apiRequest(`/api/billeteras/retiros${query}`),
+      apiRequest(`/api/compras${query}`)
     ]);
     saldos.value = Array.isArray(data) ? data : [];
     retirosProcesados.value = Array.isArray(retirosData) ? retirosData : [];
+    pvPropioPorPersona.value = construirPvPropio(comprasData);
     page.value = Math.min(page.value, totalPages.value);
   } catch (exception) {
     error.value = exception.message || "No se pudieron cargar los saldos de billeteras.";
@@ -838,7 +875,7 @@ function nextPage() {
 
 function exportExcel() {
   if (!allRows.value.length) return;
-  const headers = ["Persona", "Documento", "Rango", "Efectivo total", "Dinero compras", "Dinero referidos", "Productos", "PV", "QP", "Estado retiro"];
+  const headers = ["Persona", "Documento", "Rango", "Efectivo total", "Dinero compras", "Dinero referidos", "Productos", "PV", "PV propio", "QP", "Estado retiro"];
   const rows = allRows.value.map((saldo) => [
     `"${`${saldo.nombres || ""} ${saldo.apellidos || ""}`.trim().replaceAll('"', '""')}"`,
     `"${String(saldo.documento || "Sin documento").replaceAll('"', '""')}"`,
@@ -848,6 +885,7 @@ function exportExcel() {
     Number(saldo.efectivoRecompensasDisponible || 0).toFixed(2).replace(".", ","),
     Number(saldo.saldoProductos || 0).toFixed(2).replace(".", ","),
     Number(saldo.saldoPv || 0).toFixed(2).replace(".", ","),
+    Number((saldo.pvPropio ?? pvPropioDe(saldo.personaId)) || 0).toFixed(2).replace(".", ","),
     Number(saldo.saldoQp || 0).toFixed(2).replace(".", ","),
     saldo.rowType === "RETIRADO" ? "Retirado" : "Pendiente"
   ]);
@@ -860,6 +898,7 @@ function exportExcel() {
     Number(totals.value.referidos || 0).toFixed(2).replace(".", ","),
     Number(totals.value.productos || 0).toFixed(2).replace(".", ","),
     Number(totals.value.pv || 0).toFixed(2).replace(".", ","),
+    Number(totals.value.pvPropio || 0).toFixed(2).replace(".", ","),
     Number(totals.value.qp || 0).toFixed(2).replace(".", ","),
     '""'
   ];
@@ -932,7 +971,7 @@ onBeforeUnmount(() => {
           <div class="vy-eyebrow">Administracion</div>
           <h1>Retiros de billeteras</h1>
           <p>
-            Personas con saldos disponibles para consulta y retiros.
+            Personas con dinero por cobrar y PV propio mayor o igual a 200 para consulta y retiros.
             <strong v-if="selectedPeriodo">Mostrando {{ selectedPeriodo.nombre }}.</strong>
           </p>
         </div>
@@ -971,7 +1010,7 @@ onBeforeUnmount(() => {
           <div class="balance-icon"><WalletCards :size="26" /></div>
           <span>Efectivo disponible</span>
           <strong>Bs. {{ money(totals.dinero) }}</strong>
-          <p>{{ filteredSaldos.length }} personas con saldo.</p>
+          <p>{{ filteredSaldos.length }} personas con dinero por cobrar.</p>
         </article>
         <article class="metric-card">
           <span class="metric-icon"><WalletCards :size="20" /></span>
@@ -1014,7 +1053,7 @@ onBeforeUnmount(() => {
         <header class="section-header">
           <div>
             <h2>Retiros por persona</h2>
-            <p>Consulta pendientes y retiros procesados del mes seleccionado.</p>
+            <p>Personas con dinero por cobrar y PV propio mayor o igual a 200 en el mes seleccionado.</p>
           </div>
           <div style="display:flex;gap:10px;align-items:center;">
             <button class="refresh-action" type="button" :disabled="!allRows.length" @click="exportExcel" title="Exportar a Excel">
@@ -1040,6 +1079,7 @@ onBeforeUnmount(() => {
                 <th>Referidos</th>
                 <th>Productos</th>
                 <th>PV</th>
+                <th>PV propio</th>
                 <th>QP</th>
                 <th>Estado</th>
                 <th></th>
@@ -1064,6 +1104,7 @@ onBeforeUnmount(() => {
                 <td>Bs. {{ money(saldo.efectivoRecompensasDisponible) }}</td>
                 <td>Bs. {{ money(saldo.saldoProductos) }}</td>
                 <td>{{ money(saldo.saldoPv) }}</td>
+                <td>{{ money(saldo.pvPropio ?? pvPropioDe(saldo.personaId)) }}</td>
                 <td>{{ money(saldo.saldoQp) }}</td>
                 <td>
                   <span class="withdrawal-status" :class="saldo.rowType === 'RETIRADO' ? 'processed' : 'pending'">
@@ -1095,7 +1136,7 @@ onBeforeUnmount(() => {
                 </td>
               </tr>
               <tr v-if="!allRows.length && !loading">
-                <td colspan="11">No hay pendientes ni retiros procesados para el mes seleccionado.</td>
+                <td colspan="12">No hay personas con dinero por cobrar y PV propio mayor o igual a 200 en el mes seleccionado.</td>
               </tr>
             </tbody>
           </table>
