@@ -22,12 +22,21 @@ const busquedaPatrocinio = ref("");
 const paginaCompras = ref(1);
 const paginaPatrocinio = ref(1);
 const filasPorPagina = 8;
+const pvPropio = ref(0);
 
 const personaId = computed(() => Number(route.params.personaId));
 const periodoId = computed(() => route.query.periodoId ? Number(route.query.periodoId) : null);
 const esRetiro = computed(() => route.params.modo === "retiro");
 const esRetiroProcesado = computed(() => Boolean(route.query.retiroId));
 const billetera = computed(() => wallet.value?.billetera || {});
+const periodoActual = computed(() => wallet.value?.periodoActivo || null);
+const periodoEtiqueta = computed(() => {
+  const periodo = periodoActual.value;
+  if (!periodo) return "Periodo seleccionado";
+  if (periodo.nombre) return periodo.nombre;
+  if (periodo.mes && periodo.gestion?.anio) return `${periodo.mes}/${periodo.gestion.anio}`;
+  return "Periodo seleccionado";
+});
 const detalleEfectivo = computed(() => wallet.value?.detalleEfectivoMensual || []);
 const efectivoDisponible = computed(() =>
   Number(billetera.value.saldoDinero || 0) + Number(wallet.value?.efectivoRecompensasDisponible || 0)
@@ -92,12 +101,34 @@ function buscarPatrocinio() {
   paginaPatrocinio.value = 1;
 }
 
+async function cargarPvPropio() {
+  try {
+    const query = periodoId.value ? `?periodoId=${periodoId.value}` : "";
+    const compras = await apiRequest(`/api/compras/persona/${personaId.value}${query}`);
+    const periodo = periodoActual.value;
+    const inicio = periodo?.fechaInicio ? String(periodo.fechaInicio).slice(0, 10) : null;
+    const fin = periodo?.fechaFin ? String(periodo.fechaFin).slice(0, 10) : null;
+    pvPropio.value = (Array.isArray(compras) ? compras : [])
+      .filter((compra) => String(compra?.estadoCompra || "").toUpperCase() !== "ANULADA")
+      .filter((compra) => {
+        if (!inicio || !fin || !compra?.fechaCompra) return true;
+        const fecha = String(compra.fechaCompra).slice(0, 10);
+        return fecha >= inicio && fecha <= fin;
+      })
+      .reduce((total, compra) => total + Number(compra?.totalPv || 0), 0);
+  } catch (exception) {
+    pvPropio.value = 0;
+  }
+}
+
 async function cargar() {
   loading.value = true;
   error.value = "";
+  pvPropio.value = 0;
   try {
     const query = periodoId.value ? `?periodoId=${periodoId.value}` : "";
     wallet.value = await apiRequest(`/api/billeteras/persona/${personaId.value}${query}`);
+    await cargarPvPropio();
     if (esRetiroProcesado.value) {
       const retiros = await apiRequest(`/api/billeteras/retiros${query}`);
       retiro.value = (Array.isArray(retiros) ? retiros : []).find((item) => Number(item.id) === Number(route.query.retiroId)) || null;
@@ -168,6 +199,7 @@ onMounted(cargar);
       <template v-else>
         <section class="summary-grid">
           <article><small>Efectivo disponible</small><strong>Bs. {{ money(efectivoDisponible) }}</strong><span>Compras y recompensas mensuales</span></article>
+          <article><small>PV propio del mes</small><strong>{{ money(pvPropio) }} PV</strong><span>{{ periodoEtiqueta }}</span></article>
           <article><small>Patrocinio niveles 2+</small><strong>Bs. {{ money(dineroPatrocinioFiltrado) }}</strong><span>{{ nivelFiltro ? `Solo nivel ${nivelFiltro}` : "Todos los niveles" }}</span></article>
           <article><small>Productos nivel 1</small><strong>Bs. {{ money(wallet?.productosRecompensasDisponible) }}</strong><span>Se retiran desde su módulo específico</span></article>
           <article v-if="retiro"><small>Retiro procesado</small><strong>Bs. {{ money(retiro.montoDinero) }}</strong><span>{{ formatDateTime(retiro.fechaRetiro) }}</span></article>
