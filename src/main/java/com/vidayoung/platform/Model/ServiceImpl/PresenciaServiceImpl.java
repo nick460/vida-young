@@ -1,8 +1,13 @@
 package com.vidayoung.platform.Model.ServiceImpl;
 
+import com.vidayoung.platform.Dto.HistorialAccesoResponse;
 import com.vidayoung.platform.Dto.PresenciaResponse;
+import com.vidayoung.platform.Model.Dao.HistorialAccesoDao;
 import com.vidayoung.platform.Model.Dao.PresenciaUsuarioDao;
 import com.vidayoung.platform.Model.Dao.UsuarioDao;
+import com.vidayoung.platform.Model.Entity.HistorialAcceso;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.PresenciaUsuario;
 import com.vidayoung.platform.Model.Entity.Usuario;
@@ -19,6 +24,7 @@ import org.springframework.stereotype.Service;
 public class PresenciaServiceImpl implements PresenciaService {
 
     private final PresenciaUsuarioDao presenciaDao;
+    private final HistorialAccesoDao historialDao;
     private final UsuarioDao usuarioDao;
 
     @Override
@@ -54,8 +60,36 @@ public class PresenciaServiceImpl implements PresenciaService {
             if (usuario.getPersona() != null) {
                 presenciaDao.findByPersonaId(usuario.getPersona().getId())
                         .ifPresent(presenciaDao::delete);
+                historialDao.findFirstByPersonaIdAndFechaSalidaIsNullOrderByFechaIngresoDesc(usuario.getPersona().getId())
+                        .ifPresent(acceso -> {
+                            acceso.setFechaSalida(LocalDateTime.now());
+                            historialDao.save(acceso);
+                        });
             }
         });
+    }
+
+    @Override
+    @Transactional
+    public void registrarIngreso(String username, String ip, String userAgent, String rutaInicial) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        Usuario usuario = usuarioDao.findByUsername(username)
+                .filter(u -> Auditoria.ESTADO_ACTIVO.equals(u.getEstado()))
+                .orElse(null);
+        if (usuario == null || usuario.getPersona() == null) {
+            return;
+        }
+        HistorialAcceso acceso = HistorialAcceso.builder()
+                .persona(usuario.getPersona())
+                .username(usuario.getUsername())
+                .fechaIngreso(LocalDateTime.now())
+                .ip(truncar(ip, 45))
+                .userAgent(truncar(userAgent, 300))
+                .rutaInicial(truncar(rutaInicial, 200))
+                .build();
+        historialDao.save(acceso);
     }
 
     @Override
@@ -91,6 +125,35 @@ public class PresenciaServiceImpl implements PresenciaService {
     @Override
     public long contarEnLinea(int minutos) {
         return listarEnLinea(minutos).size();
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<HistorialAccesoResponse> listarHistorial(int limite) {
+        int size = limite < 1 ? 100 : Math.min(limite, 500);
+        return historialDao.findAll(PageRequest.of(0, size, Sort.by(Sort.Direction.DESC, "fechaIngreso"))).stream()
+                .filter(a -> Auditoria.ESTADO_ACTIVO.equals(a.getEstado()))
+                .filter(a -> a.getPersona() != null)
+                .map(a -> {
+                    Usuario usuario = a.getUsername() == null ? null : usuarioDao.findByUsername(a.getUsername()).orElse(null);
+                    List<String> roles = usuario == null || usuario.getRoles() == null
+                            ? List.of()
+                            : usuario.getRoles().stream().map(r -> r.getNombre()).toList();
+                    return new HistorialAccesoResponse(
+                            a.getId(),
+                            a.getPersona().getId(),
+                            a.getPersona().getNombres(),
+                            a.getPersona().getApellidos(),
+                            a.getUsername(),
+                            roles,
+                            a.getFechaIngreso(),
+                            a.getFechaSalida(),
+                            a.getIp(),
+                            a.getUserAgent(),
+                            a.getRutaInicial()
+                    );
+                })
+                .toList();
     }
 
     private String truncar(String valor, int max) {

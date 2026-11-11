@@ -19,6 +19,10 @@ export async function contarEnLinea(minutos = 2) {
   return apiRequest(`/api/presencia/count?minutos=${Number(minutos) || 2}`);
 }
 
+export async function obtenerHistorialIngresos(limite = 100) {
+  return apiRequest(`/api/presencia/historial?limite=${Number(limite) || 100}`);
+}
+
 export async function marcarSalida() {
   try {
     await apiRequest("/api/presencia/salir", { method: "DELETE" });

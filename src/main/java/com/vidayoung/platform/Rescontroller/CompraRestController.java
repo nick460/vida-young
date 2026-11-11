@@ -3,6 +3,7 @@ package com.vidayoung.platform.Rescontroller;
 import com.vidayoung.platform.Model.Entity.BeneficioActivacionCompra;
 import com.vidayoung.platform.Model.Entity.Compra;
 import com.vidayoung.platform.Model.Service.CompraService;
+import com.vidayoung.platform.util.ImageWebpUtil;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -198,16 +199,28 @@ public class CompraRestController {
         }
 
         Files.createDirectories(PAYMENT_UPLOAD_DIR);
-        String extension = StringUtils.getFilenameExtension(comprobante.getOriginalFilename());
-        String safeExtension = extension == null ? "pdf" : extension.toLowerCase(Locale.ROOT);
-        String fileName = "comprobante-" + UUID.randomUUID() + "." + safeExtension;
-        Path destino = PAYMENT_UPLOAD_DIR.resolve(fileName).normalize();
-        comprobante.transferTo(destino);
+        boolean esImagen = ImageWebpUtil.isImageContentType(contentType) && !"application/pdf".equalsIgnoreCase(contentType);
+        String fileName;
+        String tipoGuardado;
+        Path destino;
+        if (esImagen) {
+            fileName = "comprobante-" + UUID.randomUUID() + ".webp";
+            destino = PAYMENT_UPLOAD_DIR.resolve(fileName).normalize();
+            ImageWebpUtil.saveAsWebp(comprobante, destino);
+            tipoGuardado = "image/webp";
+        } else {
+            String extension = StringUtils.getFilenameExtension(comprobante.getOriginalFilename());
+            String safeExtension = extension == null ? "pdf" : extension.toLowerCase(Locale.ROOT);
+            fileName = "comprobante-" + UUID.randomUUID() + "." + safeExtension;
+            destino = PAYMENT_UPLOAD_DIR.resolve(fileName).normalize();
+            comprobante.transferTo(destino);
+            tipoGuardado = contentType;
+        }
 
         return new ComprobanteGuardado(
                 "/uploads/comprobantes/" + fileName,
                 comprobante.getOriginalFilename(),
-                contentType
+                tipoGuardado
         );
     }
 

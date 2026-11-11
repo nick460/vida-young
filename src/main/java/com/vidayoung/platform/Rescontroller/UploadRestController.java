@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import com.vidayoung.platform.util.ImageWebpUtil;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,11 +39,9 @@ public class UploadRestController {
         }
 
         Files.createDirectories(LANDING_UPLOAD_DIR);
-        String extension = StringUtils.getFilenameExtension(imagen.getOriginalFilename());
-        String safeExtension = extension == null ? "jpg" : extension.toLowerCase(Locale.ROOT);
-        String fileName = "landing-" + UUID.randomUUID() + "." + safeExtension;
+        String fileName = "landing-" + UUID.randomUUID() + ".webp";
         Path destino = LANDING_UPLOAD_DIR.resolve(fileName).normalize();
-        imagen.transferTo(destino);
+        ImageWebpUtil.saveAsWebp(imagen, destino);
 
         return ResponseEntity.ok(Map.of("url", "/uploads/landings/" + fileName));
     }

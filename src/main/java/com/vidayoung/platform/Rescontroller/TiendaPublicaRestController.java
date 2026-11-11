@@ -5,6 +5,7 @@ import com.vidayoung.platform.Model.Entity.ProductoDescuentoCliente;
 import com.vidayoung.platform.Model.Entity.TipoClientePublico;
 import com.vidayoung.platform.Model.Entity.Usuario;
 import com.vidayoung.platform.Model.Service.TiendaPublicaService;
+import com.vidayoung.platform.util.ImageWebpUtil;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -182,16 +183,27 @@ public class TiendaPublicaRestController {
         }
 
         Files.createDirectories(PAYMENT_UPLOAD_DIR);
-        String extension = StringUtils.getFilenameExtension(comprobante.getOriginalFilename());
-        String safeExtension = extension == null ? "pdf" : extension.toLowerCase(Locale.ROOT);
-        String fileName = "comprobante-publico-" + UUID.randomUUID() + "." + safeExtension;
-        Path destino = PAYMENT_UPLOAD_DIR.resolve(fileName).normalize();
-        comprobante.transferTo(destino);
+        boolean esImagen = ImageWebpUtil.isImageContentType(contentType) && !"application/pdf".equalsIgnoreCase(contentType);
+        String fileName;
+        String tipoGuardado;
+        if (esImagen) {
+            fileName = "comprobante-publico-" + UUID.randomUUID() + ".webp";
+            Path destino = PAYMENT_UPLOAD_DIR.resolve(fileName).normalize();
+            ImageWebpUtil.saveAsWebp(comprobante, destino);
+            tipoGuardado = "image/webp";
+        } else {
+            String extension = StringUtils.getFilenameExtension(comprobante.getOriginalFilename());
+            String safeExtension = extension == null ? "pdf" : extension.toLowerCase(Locale.ROOT);
+            fileName = "comprobante-publico-" + UUID.randomUUID() + "." + safeExtension;
+            Path destino = PAYMENT_UPLOAD_DIR.resolve(fileName).normalize();
+            comprobante.transferTo(destino);
+            tipoGuardado = contentType;
+        }
 
         return new ComprobanteGuardado(
                 "/uploads/comprobantes/" + fileName,
                 comprobante.getOriginalFilename(),
-                contentType
+                tipoGuardado
         );
     }
 

@@ -8,9 +8,12 @@ import com.vidayoung.platform.Model.Dao.UsuarioDao;
 import com.vidayoung.platform.Model.Entity.Auditoria;
 import com.vidayoung.platform.Model.Entity.Referido;
 import com.vidayoung.platform.Model.Entity.Usuario;
+import com.vidayoung.platform.Model.Service.PresenciaService;
 import com.vidayoung.platform.Model.Service.UsuarioService;
+import com.vidayoung.platform.util.ImageWebpUtil;
 import com.vidayoung.platform.Security.CustomUserDetailsService;
 import com.vidayoung.platform.Security.JwtService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.List;
@@ -55,10 +58,11 @@ public class AuthRestController {
     private final UsuarioDao usuarioDao;
     private final ReferidoDao referidoDao;
     private final UsuarioService usuarioService;
+    private final PresenciaService presenciaService;
     private final CustomUserDetailsService userDetailsService;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
@@ -69,6 +73,13 @@ public class AuthRestController {
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
+
+        presenciaService.registrarIngreso(
+                userDetails.getUsername(),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent"),
+                null
+        );
 
         return ResponseEntity.ok(new LoginResponse(
                 token,
@@ -81,7 +92,7 @@ public class AuthRestController {
 
     @PostMapping("/impersonate/{usuarioId}")
     @PreAuthorize("hasAnyAuthority('ADMIN', 'ADMINISTRACION')")
-    public ResponseEntity<LoginResponse> impersonate(@PathVariable Long usuarioId) {
+    public ResponseEntity<LoginResponse> impersonate(@PathVariable Long usuarioId, HttpServletRequest httpRequest) {
         Usuario usuario = usuarioDao.findById(usuarioId)
                 .filter(item -> Auditoria.ESTADO_ACTIVO.equals(item.getEstado()))
                 .filter(item -> Boolean.TRUE.equals(item.getActivo()))
@@ -96,6 +107,13 @@ public class AuthRestController {
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
+
+        presenciaService.registrarIngreso(
+                userDetails.getUsername(),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent"),
+                null
+        );
 
         return ResponseEntity.ok(new LoginResponse(
                 token,
@@ -129,11 +147,9 @@ public class AuthRestController {
         Usuario usuario = buscarUsuarioAutenticado(userDetails);
         Files.createDirectories(PROFILE_UPLOAD_DIR);
 
-        String extension = StringUtils.getFilenameExtension(foto.getOriginalFilename());
-        String safeExtension = extension == null ? "jpg" : extension.toLowerCase(Locale.ROOT);
-        String fileName = "usuario-" + usuario.getId() + "-" + UUID.randomUUID() + "." + safeExtension;
+        String fileName = "usuario-" + usuario.getId() + "-" + UUID.randomUUID() + ".webp";
         Path destino = PROFILE_UPLOAD_DIR.resolve(fileName).normalize();
-        foto.transferTo(destino);
+        ImageWebpUtil.saveAsWebp(foto, destino);
 
         Usuario actualizado = usuarioService.actualizarFotoPerfil(usuario.getId(), "/uploads/perfiles/" + fileName);
         return ResponseEntity.ok(toProfileResponse(actualizado));

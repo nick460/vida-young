@@ -4,6 +4,7 @@ import com.vidayoung.platform.Model.Entity.Plan;
 import com.vidayoung.platform.Model.Entity.PlanNivel;
 import com.vidayoung.platform.Model.Entity.PlanProducto;
 import com.vidayoung.platform.Model.Service.PlanService;
+import com.vidayoung.platform.util.ImageWebpUtil;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -111,11 +112,9 @@ public class PlanRestController {
                 .map(plan -> {
                     try {
                         Files.createDirectories(PLAN_UPLOAD_DIR);
-                        String extension = StringUtils.getFilenameExtension(imagen.getOriginalFilename());
-                        String safeExtension = extension == null ? "jpg" : extension.toLowerCase(Locale.ROOT);
-                        String fileName = "plan-" + id + "-" + UUID.randomUUID() + "." + safeExtension;
+                        String fileName = "plan-" + id + "-" + UUID.randomUUID() + ".webp";
                         Path destino = PLAN_UPLOAD_DIR.resolve(fileName).normalize();
-                        imagen.transferTo(destino);
+                        ImageWebpUtil.saveAsWebp(imagen, destino);
 
                         plan.setImagenUrl("/uploads/planes/" + fileName);
                         return ResponseEntity.ok(planService.guardar(plan));

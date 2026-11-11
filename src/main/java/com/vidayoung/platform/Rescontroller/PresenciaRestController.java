@@ -1,5 +1,6 @@
 package com.vidayoung.platform.Rescontroller;
 
+import com.vidayoung.platform.Dto.HistorialAccesoResponse;
 import com.vidayoung.platform.Dto.PresenciaResponse;
 import com.vidayoung.platform.Model.Service.PresenciaService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -62,5 +63,11 @@ public class PresenciaRestController {
     @PreAuthorize("hasAuthority('ADMIN')")
     public ResponseEntity<Map<String, Long>> count(@RequestParam(defaultValue = "2") int minutos) {
         return ResponseEntity.ok(Map.of("online", presenciaService.contarEnLinea(minutos)));
+    }
+
+    @GetMapping("/historial")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<List<HistorialAccesoResponse>> historial(@RequestParam(defaultValue = "100") int limite) {
+        return ResponseEntity.ok(presenciaService.listarHistorial(limite));
     }
 }

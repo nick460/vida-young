@@ -2,6 +2,7 @@ package com.vidayoung.platform.Rescontroller;
 
 import com.vidayoung.platform.Model.Entity.Producto;
 import com.vidayoung.platform.Model.Service.ProductoService;
+import com.vidayoung.platform.util.ImageWebpUtil;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -108,11 +109,9 @@ public class ProductoRestController {
                 .map(producto -> {
                     try {
                         Files.createDirectories(PRODUCT_UPLOAD_DIR);
-                        String extension = StringUtils.getFilenameExtension(imagen.getOriginalFilename());
-                        String safeExtension = extension == null ? "jpg" : extension.toLowerCase(Locale.ROOT);
-                        String fileName = "producto-" + id + "-" + UUID.randomUUID() + "." + safeExtension;
+                        String fileName = "producto-" + id + "-" + UUID.randomUUID() + ".webp";
                         Path destino = PRODUCT_UPLOAD_DIR.resolve(fileName).normalize();
-                        imagen.transferTo(destino);
+                        ImageWebpUtil.saveAsWebp(imagen, destino);
 
                         String url = "/uploads/productos/" + fileName;
                         switch (tipoImagen) {

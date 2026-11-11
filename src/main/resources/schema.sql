@@ -980,3 +980,22 @@ CREATE TABLE IF NOT EXISTS presencias_usuarios (
 );
 
 CREATE INDEX IF NOT EXISTS idx_presencias_ultimo_latido ON presencias_usuarios (ultimo_latido DESC);
+
+CREATE TABLE IF NOT EXISTS historial_accesos (
+    id BIGSERIAL PRIMARY KEY,
+    persona_id BIGINT NOT NULL REFERENCES personas(id),
+    username VARCHAR(50),
+    fecha_ingreso TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_salida TIMESTAMP,
+    ip VARCHAR(45),
+    user_agent VARCHAR(300),
+    ruta_inicial VARCHAR(200),
+    estado VARCHAR(30) NOT NULL DEFAULT 'ACTIVO',
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_registro VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+    usuario_modificacion VARCHAR(50) DEFAULT 'SYSTEM'
+);
+
+CREATE INDEX IF NOT EXISTS idx_historial_accesos_fecha_ingreso ON historial_accesos (fecha_ingreso DESC);
+CREATE INDEX IF NOT EXISTS idx_historial_accesos_persona ON historial_accesos (persona_id);

@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { RefreshCw, Search, Users, Wifi } from "lucide-vue-next";
-import { contarEnLinea, obtenerEnLinea } from "../services/presenciaService.js";
+import { contarEnLinea, obtenerEnLinea, obtenerHistorialIngresos } from "../services/presenciaService.js";
 
+const vista = ref("online");
 const loading = ref(false);
 const error = ref("");
 const usuarios = ref([]);
@@ -11,6 +12,11 @@ const query = ref("");
 const ventanaMinutos = ref(2);
 const ultimaActualizacion = ref(null);
 
+const loadingHistorial = ref(false);
+const errorHistorial = ref("");
+const historial = ref([]);
+const ultimaActualizacionHistorial = ref(null);
+
 let intervalo = null;
 
 const filtrados = computed(() => {
@@ -18,6 +24,14 @@ const filtrados = computed(() => {
   if (!term) return usuarios.value;
   return usuarios.value.filter((u) =>
     `${u.nombres || ""} ${u.apellidos || ""} ${u.username || ""} ${(u.roles || []).join(" ")}`.toLowerCase().includes(term)
+  );
+});
+
+const historialFiltrado = computed(() => {
+  const term = query.value.trim().toLowerCase();
+  if (!term) return historial.value;
+  return historial.value.filter((u) =>
+    `${u.nombres || ""} ${u.apellidos || ""} ${u.username || ""} ${(u.roles || []).join(" ")} ${u.ip || ""}`.toLowerCase().includes(term)
   );
 });
 
@@ -59,9 +73,32 @@ async function cargar() {
   }
 }
 
+async function cargarHistorial() {
+  loadingHistorial.value = true;
+  errorHistorial.value = "";
+  try {
+    const lista = await obtenerHistorialIngresos(200);
+    historial.value = Array.isArray(lista) ? lista : [];
+    ultimaActualizacionHistorial.value = new Date();
+  } catch (e) {
+    errorHistorial.value = "No se pudo cargar el historial de ingresos. Verifica tu sesión de administrador.";
+  } finally {
+    loadingHistorial.value = false;
+  }
+}
+
+function cambiarVista(nueva) {
+  vista.value = nueva;
+  if (nueva === "historial" && !historial.value.length && !loadingHistorial.value) {
+    cargarHistorial();
+  }
+}
+
 onMounted(() => {
   cargar();
-  intervalo = setInterval(cargar, 15000);
+  intervalo = setInterval(() => {
+    if (vista.value === "online") cargar();
+  }, 15000);
 });
 
 onUnmounted(() => {
@@ -93,9 +130,14 @@ onUnmounted(() => {
       </div>
     </section>
 
+    <div class="view-tabs">
+      <button type="button" :class="['tab-button', vista === 'online' ? 'active' : '']" @click="cambiarVista('online')">En línea</button>
+      <button type="button" :class="['tab-button', vista === 'historial' ? 'active' : '']" @click="cambiarVista('historial')">Historial de ingresos</button>
+    </div>
+
     <p v-if="error" class="online-error">{{ error }}</p>
 
-    <section class="online-panel">
+    <section v-if="vista === 'online'" class="online-panel">
       <div class="toolbar">
         <div class="search-box">
           <Search :size="16" />
@@ -141,6 +183,60 @@ onUnmounted(() => {
         </table>
       </div>
     </section>
+
+     <section v-if="vista === 'historial'" class="online-panel">
+       <div class="toolbar">
+         <div class="search-box">
+           <Search :size="16" />
+           <input v-model.trim="query" type="text" placeholder="Buscar por nombre, usuario o IP..." />
+         </div>
+         <div class="header-actions">
+           <button type="button" class="refresh-button" :disabled="loadingHistorial" @click="cargarHistorial">
+             <RefreshCw :size="16" /> Actualizar
+           </button>
+         </div>
+         <small v-if="ultimaActualizacionHistorial">Última actualización: {{ formatoFecha(ultimaActualizacionHistorial) }}</small>
+       </div>
+
+       <p v-if="errorHistorial" class="online-error">{{ errorHistorial }}</p>
+
+       <div v-if="loadingHistorial && !historial.length" class="empty-state">Cargando historial...</div>
+       <div v-else-if="!historialFiltrado.length" class="empty-state">
+         <Users :size="22" />
+         <p>Sin ingresos registrados.</p>
+       </div>
+
+       <div v-else class="table-wrap">
+         <table class="online-table">
+           <thead>
+             <tr>
+               <th>Usuario</th>
+               <th>Roles</th>
+               <th>Ingreso</th>
+               <th>Salida</th>
+               <th>IP</th>
+               <th>Navegador</th>
+             </tr>
+           </thead>
+           <tbody>
+             <tr v-for="h in historialFiltrado" :key="h.id">
+               <td>
+                 <strong>{{ h.nombres }} {{ h.apellidos }}</strong>
+                 <small>@{{ h.username }}</small>
+               </td>
+               <td>
+                 <span v-for="rol in (h.roles || [])" :key="rol" class="role-chip">{{ rol }}</span>
+                 <span v-if="!(h.roles || []).length" class="muted">-</span>
+               </td>
+               <td class="muted">{{ formatoFecha(h.fechaIngreso) }}</td>
+               <td class="muted">{{ h.fechaSalida ? formatoFecha(h.fechaSalida) : "En sesión" }}</td>
+               <td class="muted">{{ h.ip || "-" }}</td>
+               <td class="muted historial-ua">{{ h.userAgent || "-" }}</td>
+             </tr>
+           </tbody>
+         </table>
+       </div>
+     </section>
   </main>
 </template>
 
@@ -283,6 +379,32 @@ onUnmounted(() => {
 }
 .muted {
   color: var(--vy-ink-3);
+}
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.tab-button {
+  border: 1px solid var(--vy-line);
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  color: var(--vy-ink-2);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tab-button.active {
+  background: var(--vy-orange-deep, #c2410c);
+  color: #fff;
+  border-color: transparent;
+}
+.historial-ua {
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .empty-state {
   text-align: center;
