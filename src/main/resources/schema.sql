@@ -812,6 +812,7 @@ CREATE TABLE IF NOT EXISTS compras (
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
     descuento_monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
     descuento_concepto VARCHAR(180),
+    promocion_aguinaldo BOOLEAN NOT NULL DEFAULT FALSE,
     total_pv NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_qp NUMERIC(12, 2) NOT NULL DEFAULT 0,
     total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -853,6 +854,7 @@ ALTER TABLE compras
     ADD COLUMN IF NOT EXISTS comprobante_pago_tipo VARCHAR(80),
     ADD COLUMN IF NOT EXISTS descuento_monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS descuento_concepto VARCHAR(180),
+    ADD COLUMN IF NOT EXISTS promocion_aguinaldo BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS total_cr NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS periodo_id BIGINT REFERENCES periodos_gestion(id);
 

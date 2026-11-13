@@ -666,7 +666,7 @@ watch(productForm, () => {
             </label>
             <label class="toggle-field full-field">
               <input v-model="productForm.promocion" type="checkbox" />
-              <span>Marcar como promocion (aparece en la venta en promocion de /ventanilla)</span>
+              <span>Marcar como promocion (se resalta con etiqueta Promocion en inventario y venta interna)</span>
             </label>
             <section class="image-field full-field">
               <label>

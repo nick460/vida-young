@@ -59,7 +59,8 @@ public interface CompraService {
             String descuentoConcepto,
             String comprobantePagoUrl,
             String comprobantePagoNombre,
-            String comprobantePagoTipo
+            String comprobantePagoTipo,
+            Boolean promocionAguinaldo
     ) {
     }
 }

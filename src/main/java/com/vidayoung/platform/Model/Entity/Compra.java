@@ -69,6 +69,10 @@ public class Compra extends Auditoria {
     @Column(name = "descuento_concepto", length = 180)
     private String descuentoConcepto;
 
+    @Column(name = "promocion_aguinaldo", nullable = false)
+    @Builder.Default
+    private Boolean promocionAguinaldo = Boolean.FALSE;
+
     @Column(name = "total_pv", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal totalPv = BigDecimal.ZERO;

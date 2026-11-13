@@ -154,6 +154,12 @@ Estados: `PENDIENTE → VALIDADA/CONFIRMADA (procesan) | RECHAZADA | ANULADA`. `
 5. `POST /{compraId}/anular?motivo` → `anularCompra()`: solo `VALIDADA`. `revertirMovimientosCompra()` (resta saldos, si `saldo<0` error "ya fue utilizado", crea movimiento `ANULACION_COMPRA` negativo, marca `ELIMINADO`) + `revertirBeneficiosCompra()` + `cartera.registrarEgreso(ANULACION_COMPRA)` + marca `ANULADA`.
 6. Admin: `PUT /{compraId}/admin-reconstruir` → `reconstruirCompraAdmin()`: anula lógicamente la vieja (conserva fecha/periodo/validación), crea nueva `PENDIENTE`, recalcula y si era procesada la re-valida/reprocesa. `GET /{compraId}/beneficios`, `GET /{compraId}/movimientos` (une `COMPRA + COMPRA_RED + BENEFICIO/AJUSTE/ANULACION + CARTERA`).
 
+**Promo Aguinaldo (`compras.promocion_aguinaldo=true`)** — venta especial desde `/ventanilla`:
+- En el modal "Promo Aguinaldo" se listan **todos** los productos con precio unificado de **Bs. 120**; los productos con precio menor conservan su precio (`precio = min(precio, 120)`).
+- `recalcularCompra()` fuerza `pv=qp=cr=0` y descuento 0: **solo se entrega el producto**.
+- `procesarCompraValidada()` registra únicamente el ingreso en cartera de empresa (`VENTA_INTERNA`, concepto "Ingreso por Promo Aguinaldo"). **No** acredita `saldoPv/PvPropio/Qp/Cr`, no activa membresía, no sube volumen de red (9 niveles) y no genera `BeneficioActivacionCompra` ni pago retroactivo de uplines.
+- `reiniciarRecompensasCompra()` ignora estas compras (no hay nada que regenerar). Al anular se revierte solo el ingreso de cartera.
+
 ### 4.4 Beneficios por Activación — el pago por compras de la red (`CompraServiceImpl.java`, `BilleteraServiceImpl.java`)
 Constante: `BilleteraService.NIVELES_TOTALES=10`.
 

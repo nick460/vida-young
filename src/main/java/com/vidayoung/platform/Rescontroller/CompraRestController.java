@@ -184,7 +184,8 @@ public class CompraRestController {
                 request.getDescuentoConcepto(),
                 comprobante == null ? null : comprobante.url(),
                 comprobante == null ? null : comprobante.nombreOriginal(),
-                comprobante == null ? null : comprobante.contentType()
+                comprobante == null ? null : comprobante.contentType(),
+                request.getPromocionAguinaldo()
         );
     }
 
@@ -246,6 +247,8 @@ public class CompraRestController {
         private java.math.BigDecimal descuentoMonto;
 
         private String descuentoConcepto;
+
+        private Boolean promocionAguinaldo;
     }
 
     @Getter

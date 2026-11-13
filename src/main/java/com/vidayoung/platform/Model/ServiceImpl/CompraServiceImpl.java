@@ -49,6 +49,8 @@ import org.springframework.stereotype.Service;
 public class CompraServiceImpl implements CompraService {
     private static final String REFERENCIA_COMPRA_RED = "COMPRA_RED";
     private static final int NIVELES_ALCANCE_RED = 9;
+    /** Precio unificado de la Promo Aguinaldo (los productos de menor precio conservan el suyo). */
+    private static final BigDecimal PRECIO_PROMO_AGUINALDO = new BigDecimal("120.00");
 
     private static final Set<String> ESTADOS_COMPRA_VALIDOS = Set.of(
             Compra.ESTADO_COMPRA_PENDIENTE,
@@ -96,6 +98,7 @@ public class CompraServiceImpl implements CompraService {
                 .referenciaPago(normalizarTexto(pago == null ? null : pago.referenciaPago()))
                 .descuentoMonto(BigDecimal.ZERO)
                 .descuentoConcepto(normalizarTexto(pago == null ? null : pago.descuentoConcepto()))
+                .promocionAguinaldo(Boolean.TRUE.equals(pago == null ? null : pago.promocionAguinaldo()))
                 .comprobantePagoUrl(normalizarTexto(pago == null ? null : pago.comprobantePagoUrl()))
                 .comprobantePagoNombre(normalizarTexto(pago == null ? null : pago.comprobantePagoNombre()))
                 .comprobantePagoTipo(normalizarTexto(pago == null ? null : pago.comprobantePagoTipo()))
@@ -140,6 +143,9 @@ public class CompraServiceImpl implements CompraService {
         compra.setCuentaPago(normalizarTexto(pago == null ? null : pago.cuentaPago()));
         compra.setCodigoPago(normalizarTexto(pago == null ? null : pago.codigoPago()));
         compra.setReferenciaPago(normalizarTexto(pago == null ? null : pago.referenciaPago()));
+        if (pago != null && pago.promocionAguinaldo() != null) {
+            compra.setPromocionAguinaldo(pago.promocionAguinaldo());
+        }
         compra.getDetalles().clear();
         recalcularCompra(compra, items, pago);
 
@@ -257,7 +263,7 @@ public class CompraServiceImpl implements CompraService {
 
         boolean procesada = Compra.ESTADO_COMPRA_VALIDADA.equals(compra.getEstadoCompra())
                 || Compra.ESTADO_COMPRA_CONFIRMADA.equals(compra.getEstadoCompra());
-        if (!procesada) {
+        if (!procesada || Boolean.TRUE.equals(compra.getPromocionAguinaldo())) {
             return 0;
         }
 
@@ -622,6 +628,9 @@ public class CompraServiceImpl implements CompraService {
                 .comprobantePagoTipo(vieja.getComprobantePagoTipo())
                 .descuentoMonto(BigDecimal.ZERO)
                 .descuentoConcepto(null)
+                .promocionAguinaldo(pago != null && pago.promocionAguinaldo() != null
+                        ? pago.promocionAguinaldo()
+                        : Boolean.TRUE.equals(vieja.getPromocionAguinaldo()))
                 .subtotal(BigDecimal.ZERO)
                 .totalPv(BigDecimal.ZERO)
                 .totalQp(BigDecimal.ZERO)
@@ -686,6 +695,7 @@ public class CompraServiceImpl implements CompraService {
         BigDecimal totalPv = BigDecimal.ZERO;
         BigDecimal totalQp = BigDecimal.ZERO;
         BigDecimal totalCr = BigDecimal.ZERO;
+        boolean promoAguinaldo = Boolean.TRUE.equals(compra.getPromocionAguinaldo());
 
         for (ItemCompraRequest item : items) {
             int cantidad = item.cantidad() == null ? 0 : item.cantidad();
@@ -701,6 +711,14 @@ public class CompraServiceImpl implements CompraService {
             BigDecimal pv = zeroIfNull(producto.getPv());
             BigDecimal qp = zeroIfNull(producto.getQp());
             BigDecimal cr = zeroIfNull(producto.getCr());
+            if (promoAguinaldo) {
+                // Promo Aguinaldo: precio unificado (los productos mas economicos conservan su precio)
+                // y sin PV, QP ni CR: solo se entrega el producto.
+                precio = precio.min(PRECIO_PROMO_AGUINALDO);
+                pv = BigDecimal.ZERO;
+                qp = BigDecimal.ZERO;
+                cr = BigDecimal.ZERO;
+            }
             BigDecimal detalleSubtotal = precio.multiply(BigDecimal.valueOf(cantidad));
 
             compra.getDetalles().add(CompraDetalle.builder()
@@ -720,14 +738,18 @@ public class CompraServiceImpl implements CompraService {
             totalCr = totalCr.add(cr.multiply(BigDecimal.valueOf(cantidad)));
         }
 
-        BigDecimal descuentoMonto = zeroIfNull(pago == null ? null : pago.descuentoMonto());
+        BigDecimal descuentoMonto = promoAguinaldo
+                ? BigDecimal.ZERO
+                : zeroIfNull(pago == null ? null : pago.descuentoMonto());
         if (descuentoMonto.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("El descuento no puede ser negativo.");
         }
         if (descuentoMonto.compareTo(subtotal) > 0) {
             throw new IllegalArgumentException("El descuento no puede ser mayor al total de la venta.");
         }
-        String descuentoConcepto = normalizarTexto(pago == null ? null : pago.descuentoConcepto());
+        String descuentoConcepto = promoAguinaldo
+                ? null
+                : normalizarTexto(pago == null ? null : pago.descuentoConcepto());
         if (descuentoMonto.compareTo(BigDecimal.ZERO) > 0 && descuentoConcepto == null) {
             throw new IllegalArgumentException("Debe ingresar el concepto del descuento.");
         }
@@ -741,6 +763,26 @@ public class CompraServiceImpl implements CompraService {
     }
 
     private void procesarCompraValidada(Compra compra) {
+        if (Boolean.TRUE.equals(compra.getPromocionAguinaldo())) {
+            // Promo Aguinaldo: se entrega unicamente el producto. No genera PV, QP, CR,
+            // PV propio, volumen de red ni recompensas de dinero para el comprador ni sus uplines.
+            carteraEmpresaService.registrarIngreso(
+                    "VENTA_INTERNA",
+                    compra.getId(),
+                    zeroIfNull(compra.getSubtotal()),
+                    "Ingreso por Promo Aguinaldo #" + compra.getId()
+            );
+            notificacionService.notificarPersona(
+                    compra.getPersona().getId(),
+                    Notificacion.TIPO_COMPRA,
+                    "Compra validada",
+                    "Tu compra #" + compra.getId() + " de Promo Aguinaldo fue validada. "
+                            + "Solo incluye producto.",
+                    "shop"
+            );
+            return;
+        }
+
         int totalProductos = compra.getDetalles().stream()
                 .map(CompraDetalle::getCantidad)
                 .filter(value -> value != null)

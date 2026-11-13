@@ -123,9 +123,7 @@ const filteredPersonas = computed(() => {
 
 const filteredProducts = computed(() => {
   const text = productQuery.value.trim().toLowerCase();
-  const base = ventaPromoMode.value
-    ? productos.value.filter((producto) => Boolean(producto.promocion))
-    : productos.value;
+  const base = productos.value;
   if (!text) return base;
   return base.filter((producto) => [
     producto.nombre,
@@ -170,6 +168,7 @@ const visibleCompras = computed(() => {
         compra.codigoPago,
         compra.metodoPago,
         compra.estadoCompra,
+        compra.promocionAguinaldo ? "promo aguinaldo" : "",
         persona.nombres,
         persona.apellidos,
         persona.documento,
@@ -219,6 +218,10 @@ const modalOpen = computed(() =>
 
 const saleSubtotal = computed(() =>
   ventaItems.value.reduce((sum, item) => sum + Number(item.precio || 0) * Number(item.cantidad || 0), 0)
+);
+
+const productosVisibles = computed(() =>
+  ventaPromoMode.value ? filteredProducts.value : filteredProducts.value.slice(0, 8)
 );
 
 const rawDiscountAmount = computed(() => Number(discountAmount.value || 0));
@@ -318,6 +321,16 @@ function usuarioDePersona(persona) {
 
 function isClubRoyaleProduct(producto) {
   return Number(producto?.cr || 0) > 0;
+}
+
+const PRECIO_PROMO_AGUINALDO = 120;
+
+function promoAguinaldoPrecio(producto) {
+  return Math.min(Number(producto?.precio || 0), PRECIO_PROMO_AGUINALDO);
+}
+
+function esPromoAguinaldo(compra) {
+  return Boolean(compra?.promocionAguinaldo);
 }
 
 function touchPublicField(field) {
@@ -716,7 +729,7 @@ function openPublicSaleModal() {
 
 function openEditSaleModal(compra) {
   editingCompra.value = compra;
-  ventaPromoMode.value = false;
+  ventaPromoMode.value = esPromoAguinaldo(compra);
   selectedPersonaId.value = String(compra.persona?.id || "");
   cajaCode.value = compra.codigoPago || generateCajaCode();
   discountAmount.value = Number(compra.descuentoMonto || 0);
@@ -772,7 +785,7 @@ function buildReceiptHtml(compra) {
         <span class="qty">${Number(detalle.cantidad || 0)}</span>
         <div class="product-info">
           <strong>${escapeHtml(detalle.producto?.nombre || "Producto")}</strong>
-          <span>PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)} / CR ${money(detalle.crUnitario)}</span>
+          <span>${compra.promocionAguinaldo ? `Promo Aguinaldo · Bs. ${money(detalle.precioUnitario)} c/u (solo producto, sin PV, QP ni CR)` : `PV ${money(detalle.pvUnitario)} / QP ${money(detalle.qpUnitario)} / CR ${money(detalle.crUnitario)}`}</span>
         </div>
         <strong class="amount">Bs. ${money(detalle.subtotal)}</strong>
       </div>
@@ -846,6 +859,7 @@ function buildReceiptHtml(compra) {
       <div class="company-meta">DISTRIBUIDOR: CASA MATRIZ</div>
       <h1>Comprobante de compra</h1>
       <div class="receipt-id">Compra #${escapeHtml(compra.id)} - ${escapeHtml(compra.estadoCompra || "Sin estado")}</div>
+      ${compra.promocionAguinaldo ? '<div class="receipt-id">PROMO AGUINALDO - SOLO PRODUCTO (SIN PV, QP NI CR)</div>' : ""}
     </section>
 
     <div class="divider"></div>
@@ -933,6 +947,11 @@ async function downloadReceiptPdf(compra) {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.text(`Compra #${compra.id} - ${compra.estadoCompra}`, margin + 4, y + 39);
+  if (compra.promocionAguinaldo) {
+    doc.setTextColor(126, 34, 206);
+    doc.setFontSize(8);
+    doc.text("PROMO AGUINALDO - SOLO PRODUCTO (SIN PV, QP NI CR)", margin, y + 48);
+  }
 
   doc.setTextColor(74, 65, 53);
   doc.setFont("helvetica", "bold");
@@ -1000,9 +1019,13 @@ async function downloadReceiptPdf(compra) {
     const nextY = addPdfText(doc, productName, margin + 3, y + 6, { maxWidth: 80, lineHeight: 4 });
     doc.text(String(detalle.cantidad || 0), 113, y + 6, { align: "right" });
     doc.text(`Bs. ${money(detalle.precioUnitario)}`, 144, y + 6, { align: "right" });
-    doc.text(`PV ${money(detalle.pvUnitario)}`, 151, y + 5);
-    doc.text(`QP ${money(detalle.qpUnitario)}`, 151, y + 10);
-    doc.text(`CR ${money(detalle.crUnitario)}`, 151, y + 15);
+    if (compra.promocionAguinaldo) {
+      doc.text("Solo producto", 151, y + 6);
+    } else {
+      doc.text(`PV ${money(detalle.pvUnitario)}`, 151, y + 5);
+      doc.text(`QP ${money(detalle.qpUnitario)}`, 151, y + 10);
+      doc.text(`CR ${money(detalle.crUnitario)}`, 151, y + 15);
+    }
     doc.text(`Bs. ${money(detalle.subtotal)}`, 178, y + 6, { align: "right" });
     doc.setDrawColor(240, 234, 219);
     doc.line(margin, Math.max(nextY, y + 20), pageWidth - margin, Math.max(nextY, y + 20));
@@ -1115,10 +1138,10 @@ function addProduct(producto) {
     id: producto.id,
     nombre: producto.nombre,
     sku: producto.sku,
-    precio: Number(producto.precio || 0),
-    pv: Number(producto.pv || 0),
-    qp: Number(producto.qp || 0),
-    cr: Number(producto.cr || 0),
+    precio: ventaPromoMode.value ? promoAguinaldoPrecio(producto) : Number(producto.precio || 0),
+    pv: ventaPromoMode.value ? 0 : Number(producto.pv || 0),
+    qp: ventaPromoMode.value ? 0 : Number(producto.qp || 0),
+    cr: ventaPromoMode.value ? 0 : Number(producto.cr || 0),
     cantidad: 1
   });
 }
@@ -1313,7 +1336,8 @@ async function saveCajaSale() {
       codigoPago: cajaCode.value,
       referenciaPago: `Venta por ventanilla codigo ${cajaCode.value}`,
       descuentoMonto: discountAmountNumber.value,
-      descuentoConcepto: discountConcept.value.trim() || null
+      descuentoConcepto: discountConcept.value.trim() || null,
+      promocionAguinaldo: ventaPromoMode.value
     };
     const isEditing = Boolean(editingCompra.value?.id);
     let response;
@@ -1404,6 +1428,14 @@ async function updateCompraEstado(compra, estadoCompra) {
       body: JSON.stringify({ estadoCompra })
     });
     if (estadoCompra === "VALIDADA") {
+      if (esPromoAguinaldo(compra)) {
+        await showSuccess(
+          "Compra validada",
+          `Compra #${compra.id} de Promo Aguinaldo validada. Solo se entrega el producto.`
+        );
+        await loadVentasPeriodo();
+        return;
+      }
       let detalle = "Se notificó a todas las personas que recibieron QP y beneficios de esta compra.";
       try {
         const beneficios = await apiRequest(`/api/compras/${compra.id}/beneficios`);
@@ -1681,6 +1713,7 @@ onMounted(() => {
                   <td>
                     <strong>#{{ compra.id }}</strong>
                     <small v-if="compra.codigoPago">Caja {{ compra.codigoPago }}</small>
+                    <em v-if="esPromoAguinaldo(compra)" class="promo-badge">Promo Aguinaldo</em>
                   </td>
                   <td>
                     <strong>{{ fullName(compra.persona) }}</strong>
@@ -2021,7 +2054,7 @@ onMounted(() => {
       </button>
       <button class="floating-sale-button promo" type="button" @click="openPromoSaleModal">
         <BadgePercent :size="20" />
-        <span>Promocion</span>
+        <span>Promo Aguinaldo</span>
       </button>
       <button class="floating-sale-button" type="button" @click="openSaleModal(false)">
         <Plus :size="20" />
@@ -2035,8 +2068,8 @@ onMounted(() => {
           <header>
             <div>
               <span class="vy-eyebrow">Ventanilla</span>
-              <h2>{{ editingCompra ? `Modificar venta #${editingCompra.id}` : (ventaPromoMode ? "Nueva venta en promocion" : "Nueva venta") }}</h2>
-              <p>{{ editingCompra ? "Ajusta productos, cantidades o descuento antes de validar." : (ventaPromoMode ? "Venta interna con pago en caja. Solo productos marcados en promocion." : "Genera una compra pendiente con pago en caja.") }}</p>
+              <h2>{{ editingCompra ? `Modificar venta #${editingCompra.id}` : (ventaPromoMode ? "Promo Aguinaldo" : "Nueva venta") }}</h2>
+              <p>{{ editingCompra ? "Ajusta productos, cantidades o descuento antes de validar." : (ventaPromoMode ? "Precio unificado de Bs. 120 (los productos de menor precio conservan el suyo). Solo se entrega el producto: sin PV, QP, CR ni recompensas." : "Genera una compra pendiente con pago en caja.") }}</p>
             </div>
             <button type="button" aria-label="Cerrar" @click="closeSaleModal">
               <X :size="18" />
@@ -2046,7 +2079,7 @@ onMounted(() => {
           <section class="sale-modal-body">
             <div v-if="ventaPromoMode && !editingCompra" class="promo-mode-banner">
               <BadgePercent :size="18" />
-              <span>Modo <strong>promocion</strong>: solo se listan productos marcados como promocion en /inventario. El procedimiento de venta y validacion es el mismo.</span>
+              <span>Modo <strong>Promo Aguinaldo</strong>: se listan todos los productos a un precio unificado de <strong>Bs. 120</strong> (los que cuestan menos conservan su precio). Esta venta solo entrega el producto: <strong>no genera PV, QP, CR, PV propio ni recompensas de dinero</strong>.</span>
             </div>
             <div class="sale-card">
               <label class="field">
@@ -2073,7 +2106,7 @@ onMounted(() => {
 
               <div class="product-picker">
                 <button
-                  v-for="producto in filteredProducts.slice(0, 8)"
+                  v-for="producto in productosVisibles"
                   :key="producto.id"
                   type="button"
                   @click="addProduct(producto)"
@@ -2081,13 +2114,14 @@ onMounted(() => {
                   <span>
                     <strong>{{ producto.nombre }}</strong>
                     <small>{{ producto.sku }} - {{ producto.categoria || "Producto" }}</small>
-                    <em v-if="isClubRoyaleProduct(producto)" class="club-royale-badge">Producto Club Royale</em>
-                    <em v-if="producto.promocion" class="promo-badge">Promocion</em>
+                    <em v-if="isClubRoyaleProduct(producto) && !ventaPromoMode" class="club-royale-badge">Producto Club Royale</em>
+                    <em v-if="ventaPromoMode" class="promo-badge">Promo Aguinaldo</em>
+                    <em v-else-if="producto.promocion" class="promo-badge">Promocion</em>
                   </span>
-                  <b>Bs. {{ money(producto.precio) }}</b>
+                  <b>Bs. {{ money(ventaPromoMode ? promoAguinaldoPrecio(producto) : producto.precio) }}</b>
                 </button>
                 <div v-if="!filteredProducts.length" class="product-picker-empty">
-                  {{ ventaPromoMode ? "No hay productos marcados en promocion. Marcalos en /inventario." : "No hay productos para mostrar." }}
+                  No hay productos para mostrar.
                 </div>
               </div>
 
@@ -2095,8 +2129,10 @@ onMounted(() => {
                 <div v-for="item in ventaItems" :key="item.id" class="sale-item">
                   <div>
                     <strong>{{ item.nombre }}</strong>
-                    <small>Bs. {{ money(item.precio) }} - PV {{ money(item.pv) }} - QP {{ money(item.qp) }} - CR {{ money(item.cr) }}</small>
-                    <em v-if="isClubRoyaleProduct(item)" class="club-royale-badge">Producto Club Royale</em>
+                    <small v-if="ventaPromoMode">Bs. {{ money(item.precio) }} - Solo producto (sin PV, QP ni CR)</small>
+                    <small v-else>Bs. {{ money(item.precio) }} - PV {{ money(item.pv) }} - QP {{ money(item.qp) }} - CR {{ money(item.cr) }}</small>
+                    <em v-if="ventaPromoMode" class="promo-badge">Promo Aguinaldo</em>
+                    <em v-else-if="isClubRoyaleProduct(item)" class="club-royale-badge">Producto Club Royale</em>
                   </div>
                   <div class="quantity-stepper">
                     <button type="button" aria-label="Disminuir cantidad" @click="decrementQuantity(item)">-</button>
@@ -2108,7 +2144,7 @@ onMounted(() => {
                 </div>
               </div>
 
-              <section class="discount-box">
+              <section v-if="!ventaPromoMode" class="discount-box">
                 <div class="discount-grid">
                   <label class="field">
                     <span>Monto descuento</span>
@@ -2131,7 +2167,8 @@ onMounted(() => {
                 <div>
                   <small>Total a pagar</small>
                   <strong>Bs. {{ money(saleTotal) }}</strong>
-                  <span>PV {{ money(salePv) }} - QP {{ money(saleQp) }} - CR {{ money(saleCr) }}</span>
+                  <span v-if="ventaPromoMode">Promo Aguinaldo - sin PV, QP ni CR</span>
+                  <span v-else>PV {{ money(salePv) }} - QP {{ money(saleQp) }} - CR {{ money(saleCr) }}</span>
                 </div>
                 <button class="vy-btn vy-btn-primary" type="button" :disabled="saving || !!discountError" @click="saveCajaSale">
                   <ShoppingBag :size="16" /> {{ editingCompra ? "Guardar cambios" : "Registrar venta" }}
@@ -2437,6 +2474,7 @@ onMounted(() => {
               <span class="vy-eyebrow">Comprobante del sistema</span>
               <h2>Compra #{{ receiptModalCompra.id }}</h2>
               <p>{{ receiptModalCompra.estadoCompra }} · {{ receiptModalCompra.metodoPago || "Sin metodo" }}</p>
+              <em v-if="esPromoAguinaldo(receiptModalCompra)" class="promo-badge">Promo Aguinaldo</em>
             </div>
             <button type="button" aria-label="Cerrar" @click="closeReceiptModal">
               <X :size="18" />
@@ -2476,7 +2514,7 @@ onMounted(() => {
                       <th>SKU</th>
                       <th>Cant.</th>
                       <th>Precio</th>
-                      <th>Volumen</th>
+                      <th>{{ esPromoAguinaldo(receiptModalCompra) ? "Detalle" : "Volumen" }}</th>
                       <th>Subtotal</th>
                     </tr>
                   </thead>
@@ -2486,7 +2524,8 @@ onMounted(() => {
                       <td>{{ detalle.producto?.sku || "" }}</td>
                       <td>{{ detalle.cantidad }}</td>
                       <td>Bs. {{ money(detalle.precioUnitario) }}</td>
-                      <td>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</td>
+                      <td v-if="esPromoAguinaldo(receiptModalCompra)">Solo producto</td>
+                      <td v-else>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</td>
                       <td>Bs. {{ money(detalle.subtotal) }}</td>
                     </tr>
                   </tbody>
@@ -2518,6 +2557,7 @@ onMounted(() => {
               <span class="vy-eyebrow">Detalle completo</span>
               <h2>Compra #{{ detalleModalCompra.id }}</h2>
               <p>{{ detalleModalCompra.estadoCompra }} · {{ fullName(detalleModalCompra.persona) }} · {{ formatDateTime(detalleModalCompra.fechaCompra) }}</p>
+              <em v-if="esPromoAguinaldo(detalleModalCompra)" class="promo-badge">Promo Aguinaldo</em>
             </div>
             <button type="button" aria-label="Cerrar" @click="closeDetallesModal">
               <X :size="18" />
@@ -2535,7 +2575,7 @@ onMounted(() => {
                       <th>SKU</th>
                       <th>Cant.</th>
                       <th>Precio</th>
-                      <th>Volumen</th>
+                      <th>{{ esPromoAguinaldo(detalleModalCompra) ? "Detalle" : "Volumen" }}</th>
                       <th>Subtotal</th>
                     </tr>
                   </thead>
@@ -2545,7 +2585,8 @@ onMounted(() => {
                       <td>{{ detalle.producto?.sku || "" }}</td>
                       <td>{{ detalle.cantidad }}</td>
                       <td>Bs. {{ money(detalle.precioUnitario) }}</td>
-                      <td>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</td>
+                      <td v-if="esPromoAguinaldo(detalleModalCompra)">Solo producto</td>
+                      <td v-else>PV {{ money(detalle.pvUnitario) }} / QP {{ money(detalle.qpUnitario) }} / CR {{ money(detalle.crUnitario) }}</td>
                       <td>Bs. {{ money(detalle.subtotal) }}</td>
                     </tr>
                   </tbody>

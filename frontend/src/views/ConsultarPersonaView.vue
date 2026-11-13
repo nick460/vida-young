@@ -1194,10 +1194,10 @@ onMounted(loadBaseData);
                   <tbody>
                     <tr v-for="compra in compras" :key="compra.id">
                       <td>{{ formatDate(compra.fechaCompra) }}</td>
-                      <td><span class="status-pill">{{ compra.estadoCompra }}</span></td>
+                      <td><span class="status-pill">{{ compra.estadoCompra }}</span><span v-if="compra.promocionAguinaldo" class="promo-aguinaldo-chip">Promo Aguinaldo</span></td>
                       <td>{{ compraProductos(compra) || "Sin detalle" }}</td>
                       <td>Bs. {{ money(compra.subtotal) }}</td>
-                      <td>{{ money(compra.totalPv) }} / {{ money(compra.totalQp) }} / {{ money(compra.totalCr) }}</td>
+                      <td>{{ compra.promocionAguinaldo ? "Solo producto" : `${money(compra.totalPv)} / ${money(compra.totalQp)} / ${money(compra.totalCr)}` }}</td>
                     </tr>
                     <tr v-if="!compras.length">
                       <td colspan="5">No hay compras registradas.</td>
@@ -1363,9 +1363,9 @@ onMounted(loadBaseData);
                             <tr v-for="c in mesSeleccionadoInfo.compras" :key="c.id">
                               <td>{{ formatDate(c.fechaCompra) }}</td>
                               <td>{{ compraProductos(c) || "Sin detalle" }}</td>
-                              <td><span class="status-pill">{{ c.estadoCompra }}</span></td>
-                              <td>Bs. {{ money(c.subtotal) }}</td>
-                              <td>{{ money(c.totalPv) }} / {{ money(c.totalQp) }} / {{ money(c.totalCr) }}</td>
+                               <td><span class="status-pill">{{ c.estadoCompra }}</span><span v-if="c.promocionAguinaldo" class="promo-aguinaldo-chip">Promo Aguinaldo</span></td>
+                               <td>Bs. {{ money(c.subtotal) }}</td>
+                               <td>{{ c.promocionAguinaldo ? "Solo producto" : `${money(c.totalPv)} / ${money(c.totalQp)} / ${money(c.totalCr)}` }}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -1645,4 +1645,5 @@ td { color: var(--vy-ink-2); font-weight: 700; }
   .modal-backdrop { padding: 14px; align-items: flex-start; }
   .mes-detalle-modal { max-height: calc(100vh - 28px); padding: 18px; }
 }
+.promo-aguinaldo-chip { display: inline-flex; align-items: center; margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(126, 34, 206, 0.3); color: #7e22ce; font-size: 10px; font-weight: 900; text-transform: uppercase; white-space: nowrap; }
 </style>
